@@ -1,46 +1,46 @@
-# Huong dan Dong gop
+# Hướng dẫn Đóng góp
 
-Cam on ban da quan tam den du an Smart Campus! Tai lieu nay huong dan cach dong gop code vao du an.
+Cảm ơn bạn đã quan tâm đến dự án Smart Campus! Tài liệu này hướng dẫn cách đóng góp code vào dự án.
 
-## Quy trinh dong gop
+## Quy trình đóng góp
 
-### 1. Tao branch moi
+### 1. Tạo branch mới
 
 ```bash
-# Cap nhat develop moi nhat
+# Cập nhật nhánh develop mới nhất
 git checkout develop
 git pull origin develop
 
-# Tao branch moi
-git checkout -b feature/<ten-tinh-nang>
-# hoac
-git checkout -b fix/<ten-bug>
+# Tạo branch mới
+git checkout -b feature/<tên-tính-năng>
+# hoặc
+git checkout -b fix/<tên-bug>
 ```
 
-### 2. Quy tac dat ten branch
+### 2. Quy tắc đặt tên branch
 
-| Loai | Format | Vi du |
+| Loại | Format | Ví dụ |
 |------|--------|-------|
-| Tinh nang moi | `feature/<ten>` | `feature/auth`, `feature/schedule-view` |
-| Sua loi | `fix/<ten>` | `fix/login-crash`, `fix/gpa-calculation` |
-| Hotfix | `hotfix/<ten>` | `hotfix/security-patch` |
-| Docs | `docs/<ten>` | `docs/api-guide` |
+| Tính năng mới | `feature/<tên>` | `feature/auth`, `feature/schedule-view` |
+| Sửa lỗi | `fix/<tên>` | `fix/login-crash`, `fix/gpa-calculation` |
+| Hotfix | `hotfix/<tên>` | `hotfix/security-patch` |
+| Tài liệu | `docs/<tên>` | `docs/api-guide` |
 
-### 3. Viet code
+### 3. Viết code
 
-- Tuan thu [Quy tac lap trinh](docs/CONVENTIONS.md)
-- Viet test cho logic quan trong
-- Dam bao lint pass: `pnpm lint`
+- Tuân thủ [Quy tắc lập trình](docs/CONVENTIONS.md)
+- Viết test cho logic quan trọng
+- Đảm bảo lint pass: `pnpm lint`
 - Format code: `pnpm format`
 
 ### 4. Commit message
 
-Su dung [Conventional Commits](https://www.conventionalcommits.org/):
+Sử dụng [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>(<scope>): <mo ta>
+<type>(<scope>): <mô tả>
 
-Vi du:
+Ví dụ:
 feat(auth): add JWT refresh token rotation
 fix(schedule): correct timezone offset in calendar view
 docs(api): update authentication endpoint docs
@@ -48,47 +48,47 @@ test(grades): add unit tests for GPA calculation
 chore(deps): upgrade expo to v52
 ```
 
-**Types cho phep:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `revert`, `ci`, `build`
+**Types cho phép:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `revert`, `ci`, `build`
 
-**Scopes cho phep:** `api`, `mobile`, `shared`, `auth`, `schedule`, `grades`, `notifications`, `users`, `chatbot`, `events`, `attendance`, `navigation`, `deps`, `config`, `ci`, `docs`
+**Scopes cho phép:** `api`, `mobile`, `shared`, `auth`, `schedule`, `grades`, `notifications`, `users`, `chatbot`, `events`, `attendance`, `navigation`, `deps`, `config`, `ci`, `docs`
 
-### 5. Tao Pull Request
+### 5. Tạo Pull Request
 
-1. Push branch len remote:
+1. Push branch lên remote:
    ```bash
-   git push -u origin feature/<ten-tinh-nang>
+   git push -u origin feature/<tên-tính-năng>
    ```
 
-2. Tao Pull Request tren GitHub:
+2. Tạo Pull Request trên GitHub:
    - Base branch: `develop`
-   - Dien day du mo ta theo template
-   - Lien ket voi Issue tuong ung
-   - Gan reviewer
+   - Điền đầy đủ mô tả theo template
+   - Liên kết với Issue tương ứng
+   - Gán reviewer
 
-3. Cho review va sua theo feedback
+3. Chờ review và sửa theo feedback
 
 ### 6. Review checklist
 
-Truoc khi request review, kiem tra:
+Trước khi request review, kiểm tra:
 
-- [ ] Code chay duoc, khong co loi
-- [ ] Lint va format pass (`pnpm lint && pnpm format:check`)
-- [ ] Da viet test (neu can)
-- [ ] Khong commit file `.env`, secrets, hoac file khong can thiet
-- [ ] Commit messages dung format
-- [ ] PR description ro rang
+- [ ] Code chạy được, không có lỗi
+- [ ] Lint và format pass (`pnpm lint && pnpm format:check`)
+- [ ] Đã viết test (nếu cần)
+- [ ] Không commit file `.env`, secrets, hoặc file không cần thiết
+- [ ] Commit messages đúng format
+- [ ] PR description rõ ràng
 
-## Quy trinh Review
+## Quy trình Review
 
-- Moi PR can **toi thieu 1 approve** tu reviewer
-- Reviewer nen review trong vong **24 gio**
-- Su dung "Request changes" neu can sua, "Approve" neu OK
-- Merge bang **Squash and Merge** vao `develop`
+- Mỗi PR cần **tối thiểu 1 approve** từ reviewer
+- Reviewer nên review trong vòng **24 giờ**
+- Sử dụng "Request changes" nếu cần sửa, "Approve" nếu OK
+- Merge bằng **Squash and Merge** vào `develop`
 
-## Bao loi
+## Báo lỗi
 
-Neu phat hien loi, tao Issue moi voi template "Bug Report" tren GitHub.
+Nếu phát hiện lỗi, tạo Issue mới với template "Bug Report" trên GitHub.
 
-## De xuat tinh nang
+## Đề xuất tính năng
 
-Muon de xuat tinh nang moi? Tao Issue voi template "Feature Request".
+Muốn đề xuất tính năng mới? Tạo Issue với template "Feature Request".

@@ -1,34 +1,34 @@
-# Quy tac Ung xu
+# Quy tắc Ứng xử
 
-## Cam ket cua chung toi
+## Cam kết của chúng tôi
 
-Chung toi cam ket tao moi truong tham gia du an coi mo, than thien, da dang va an toan cho moi nguoi.
+Chúng tôi cam kết tạo môi trường tham gia dự án cởi mở, thân thiện, đa dạng và an toàn cho mọi người.
 
-## Tieu chuan
+## Tiêu chuẩn
 
-Hanh vi dong gop vao moi truong tich cuc:
+Hành vi đóng góp vào môi trường tích cực:
 
-- Su dung ngon ngu than thien va hoa nha
-- Ton trong cac quan diem va kinh nghiem khac nhau
-- Chap nhan phe binh mang tinh xay dung
-- Tap trung vao nhung gi tot nhat cho cong dong
-- The hien su dong cam voi cac thanh vien khac
+- Sử dụng ngôn ngữ thân thiện và hoà nhã
+- Tôn trọng các quan điểm và kinh nghiệm khác nhau
+- Chấp nhận phê bình mang tính xây dựng
+- Tập trung vào những gì tốt nhất cho cộng đồng
+- Thể hiện sự đồng cảm với các thành viên khác
 
-Hanh vi khong duoc chap nhan:
+Hành vi không được chấp nhận:
 
-- Su dung ngon ngu hoac hinh anh khong phu hop
-- Troll, binh luan xuc pham hoac tan cong ca nhan
-- Quay roi cong khai hoac rieng tu
-- Cong bo thong tin ca nhan cua nguoi khac ma khong duoc phep
+- Sử dụng ngôn ngữ hoặc hình ảnh không phù hợp
+- Troll, bình luận xúc phạm hoặc tấn công cá nhân
+- Quấy rối công khai hoặc riêng tư
+- Công bố thông tin cá nhân của người khác mà không được phép
 
-## Trach nhiem
+## Trách nhiệm
 
-Nguoi quan ly du an co trach nhiem lam ro cac tieu chuan va thuc hien hanh dong khac phuc phu hop khi can.
+Người quản lý dự án có trách nhiệm làm rõ các tiêu chuẩn và thực hiện hành động khắc phục phù hợp khi cần.
 
-## Pham vi
+## Phạm vi
 
-Quy tac nay ap dung trong tat ca khong gian du an va khi mot ca nhan dai dien cho du an trong khong gian cong cong.
+Quy tắc này áp dụng trong tất cả không gian dự án và khi một cá nhân đại diện cho dự án trong không gian công cộng.
 
-## Thuc thi
+## Thực thi
 
-Cac truong hop hanh vi khong phu hop co the duoc bao cao cho nhom du an. Tat ca khieu nai se duoc xem xet va dieu tra.
+Các trường hợp hành vi không phù hợp có thể được báo cáo cho nhóm dự án. Tất cả khiếu nại sẽ được xem xét và điều tra.

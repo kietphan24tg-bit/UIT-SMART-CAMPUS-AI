@@ -1,0 +1,18 @@
+appId: vn.edu.uit.smartcampus
+name: Profile - Dang xuat
+tags:
+  - requires-auth
+---
+- launchApp
+
+- tapOn:
+    text: "Ca nhan"
+    timeout: 5000
+
+- tapOn: "Dang xuat"
+
+# Sau khi logout, quay ve man hinh login
+- assertVisible:
+    text: "Smart Campus"
+    timeout: 5000
+- assertVisible: "UIT - Dang nhap"

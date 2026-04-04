@@ -1,0 +1,17 @@
+appId: vn.edu.uit.smartcampus
+name: Auth - Chuyen giua Login va Register
+---
+- launchApp:
+    clearState: true
+
+- assertVisible: "Smart Campus"
+- assertVisible: "Chua co tai khoan? Dang ky"
+
+# Chuyen sang man hinh dang ky
+- tapOn: "Chua co tai khoan? Dang ky"
+- assertVisible: "Tao tai khoan"
+- assertVisible: "Da co tai khoan? Dang nhap"
+
+# Quay lai man hinh dang nhap
+- tapOn: "Da co tai khoan? Dang nhap"
+- assertVisible: "UIT - Dang nhap"

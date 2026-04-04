@@ -14,3 +14,4 @@ Thuyet minh day du cho du an Smart Campus - UIT Super App.
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Huong dan deploy backend va mobile |
 | [FEATURES.md](FEATURES.md) | Danh sach tinh nang, user stories |
 | [API.md](API.md) | Huong dan su dung va thiet ke API |
+| [TESTING.md](TESTING.md) | Chien luoc kiem thu, patterns, huong dan viet test |

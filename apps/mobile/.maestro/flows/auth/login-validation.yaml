@@ -1,0 +1,17 @@
+appId: vn.edu.uit.smartcampus
+name: Login - Validation loi khi de trong
+---
+- launchApp:
+    clearState: true
+
+- assertVisible: "Smart Campus"
+
+# Bam dang nhap khi chua nhap gi
+- tapOn: "Dang nhap"
+- assertVisible: "Vui long nhap day du thong tin"
+
+# Nhap chi email, khong nhap password
+- tapOn: "Email"
+- inputText: "student@gm.uit.edu.vn"
+- tapOn: "Dang nhap"
+- assertVisible: "Vui long nhap day du thong tin"

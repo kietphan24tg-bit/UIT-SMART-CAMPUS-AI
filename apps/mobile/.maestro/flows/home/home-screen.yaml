@@ -1,0 +1,25 @@
+appId: vn.edu.uit.smartcampus
+name: Home - Hien thi man hinh chinh
+tags:
+  - requires-auth
+---
+- launchApp
+
+- assertVisible:
+    text: "Trang chu"
+    timeout: 5000
+
+# Kiem tra greeting
+- assertVisible: "Xin chao"
+- assertVisible: "Smart Campus UIT"
+
+# Kiem tra quick action cards
+- assertVisible: "Thoi khoa bieu"
+- assertVisible: "Diem / GPA"
+- assertVisible: "AI Chatbot"
+- assertVisible: "Su kien"
+- assertVisible: "Thu vien"
+- assertVisible: "Ban do"
+
+# Kiem tra notifications section
+- assertVisible: "Thong bao moi"

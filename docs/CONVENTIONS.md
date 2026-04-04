@@ -1,19 +1,19 @@
-# Quy tac Lap trinh
+# Quy tắc Lập trình
 
-## 1. Naming Conventions
+## 1. Quy ước Đặt tên
 
 ### Chung
-| Loai | Convention | Vi du |
+| Loại | Convention | Ví dụ |
 |------|-----------|-------|
-| Bien | camelCase | `userName`, `isActive` |
-| Hang so | UPPER_SNAKE_CASE | `MAX_LIMIT`, `API_PREFIX` |
+| Biến | camelCase | `userName`, `isActive` |
+| Hằng số | UPPER_SNAKE_CASE | `MAX_LIMIT`, `API_PREFIX` |
 | Function | camelCase | `getUser()`, `calculateGPA()` |
 | Class | PascalCase | `AuthService`, `UserController` |
 | Interface/Type | PascalCase | `ApiResponse`, `UserProfile` |
 | Enum | PascalCase (key: UPPER_SNAKE) | `UserRole.STUDENT` |
 
-### File naming
-| Loai | Convention | Vi du |
+### Đặt tên file
+| Loại | Convention | Ví dụ |
 |------|-----------|-------|
 | Component (RN) | PascalCase | `ScheduleCard.tsx` |
 | Screen (RN) | kebab-case | `index.tsx`, `[id].tsx` |
@@ -24,14 +24,14 @@
 
 ## 2. TypeScript
 
-### Strict mode bat buoc
+### Strict mode bắt buộc
 - `strict: true` trong tsconfig
-- Khong dung `any` - su dung `unknown` roi type narrowing
-- Su dung `type imports` khi chi import type: `import type { User } from '...'`
+- Không dùng `any` — sử dụng `unknown` rồi type narrowing
+- Sử dụng `type imports` khi chỉ import type: `import type { User } from '...'`
 
 ### Interface vs Type
-- Dung `interface` cho object shapes co the extend
-- Dung `type` cho union types, utility types, aliases
+- Dùng `interface` cho object shapes có thể extend
+- Dùng `type` cho union types, utility types, aliases
 
 ```typescript
 // Interface cho object shapes
@@ -40,14 +40,14 @@ interface User {
   email: string;
 }
 
-// Type cho unions va aliases
+// Type cho unions và aliases
 type UserRole = 'student' | 'lecturer' | 'admin';
 type Nullable<T> = T | null;
 ```
 
 ## 3. React Native (Mobile)
 
-### Component Structure
+### Cấu trúc Component
 ```typescript
 // 1. Imports
 import { StyleSheet, View, Text } from 'react-native';
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
 
 ### State Management (Zustand)
 ```typescript
-// stores/<ten>-store.ts
+// stores/<tên>-store.ts
 interface SomeState {
   data: Item[];
   loading: boolean;
@@ -103,7 +103,7 @@ export const useSomeStore = create<SomeState>((set) => ({
 
 ### React Query cho Server State
 ```typescript
-// Dung React Query cho data tu API
+// Dùng React Query cho data từ API
 const { data, isLoading } = useQuery({
   queryKey: ['schedules', semesterId],
   queryFn: () => scheduleApi.getSchedule(semesterId),
@@ -113,9 +113,9 @@ const { data, isLoading } = useQuery({
 ## 4. NestJS (Backend)
 
 ### Module Pattern
-- Moi feature la 1 NestJS Module doc lap
-- Service chua business logic, Controller chi handle HTTP
-- Su dung Dependency Injection
+- Mỗi feature là 1 NestJS Module độc lập
+- Service chứa business logic, Controller chỉ handle HTTP
+- Sử dụng Dependency Injection
 
 ### DTO Validation
 ```typescript
@@ -134,8 +134,8 @@ export class CreateUserDto {
 }
 ```
 
-### API Response Format
-Tat ca response tu API phai theo format:
+### Định dạng API Response
+Tất cả response từ API phải theo format:
 ```json
 {
   "success": true,
@@ -146,18 +146,18 @@ Tat ca response tu API phai theo format:
 }
 ```
 
-### Error Handling
-- Su dung NestJS built-in exceptions: `NotFoundException`, `UnauthorizedException`, ...
-- Global `HttpExceptionFilter` tu dong format error response
-- Khong dung try/catch trong controller (de cho filter xu ly)
+### Xử lý lỗi
+- Sử dụng NestJS built-in exceptions: `NotFoundException`, `UnauthorizedException`, ...
+- Global `HttpExceptionFilter` tự động format error response
+- Không dùng try/catch trong controller (để cho filter xử lý)
 
 ### API Versioning
-- Tat ca endpoint bat dau voi `/api/v1/`
-- RESTful naming: danh tu so nhieu (`/users`, `/schedules`, `/grades`)
+- Tất cả endpoint bắt đầu với `/api/v1/`
+- RESTful naming: danh từ số nhiều (`/users`, `/schedules`, `/grades`)
 
-## 5. Import Order
+## 5. Thứ tự Import
 
-Thu tu import trong moi file:
+Thứ tự import trong mỗi file:
 
 ```typescript
 // 1. Node built-in modules
@@ -177,17 +177,17 @@ import { DatabaseModule } from '../../database/database.module';
 import { AuthService } from './auth.service';
 ```
 
-ESLint `import/order` rule se tu dong enforce thu tu nay.
+ESLint `import/order` rule sẽ tự động enforce thứ tự này.
 
-## 6. Git Conventions
+## 6. Quy ước Git
 
-### Branch naming
-- `feature/<ten>` - Tinh nang moi
-- `fix/<ten>` - Sua loi
-- `hotfix/<ten>` - Sua loi khan cap
-- `docs/<ten>` - Cap nhat tai lieu
+### Đặt tên branch
+- `feature/<tên>` — Tính năng mới
+- `fix/<tên>` — Sửa lỗi
+- `hotfix/<tên>` — Sửa lỗi khẩn cấp
+- `docs/<tên>` — Cập nhật tài liệu
 
 ### Commit message
 Conventional Commits format: `<type>(<scope>): <description>`
 
-Xem chi tiet tai [CONTRIBUTING.md](../CONTRIBUTING.md).
+Xem chi tiết tại [CONTRIBUTING.md](../CONTRIBUTING.md).

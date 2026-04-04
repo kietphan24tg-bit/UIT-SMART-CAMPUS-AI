@@ -1,0 +1,13 @@
+appId: vn.edu.uit.smartcampus
+name: Profile - Xem thong tin ca nhan
+tags:
+  - requires-auth
+---
+- launchApp
+
+- tapOn:
+    text: "Ca nhan"
+    timeout: 5000
+
+# Kiem tra thong tin hien thi
+- assertVisible: "Dang xuat"

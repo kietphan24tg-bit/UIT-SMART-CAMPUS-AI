@@ -1,0 +1,5 @@
+# Maestro E2E Testing Configuration
+# https://maestro.mobile.dev/
+
+appId: vn.edu.uit.smartcampus
+name: Smart Campus E2E Tests

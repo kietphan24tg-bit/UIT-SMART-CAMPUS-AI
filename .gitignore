@@ -37,6 +37,7 @@ apps/mobile/ios/
 # Testing
 coverage/
 *.lcov
+e2e-results.xml
 
 # Prisma
 apps/api/prisma/migrations/*.sql.bak

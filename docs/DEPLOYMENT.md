@@ -1,23 +1,23 @@
-# Huong dan Deploy
+# Hướng dẫn Deploy
 
-## Tong quan
+## Tổng quan
 
-| Thanh phan | Noi deploy | Chi phi |
+| Thành phần | Nơi deploy | Chi phí |
 |---|---|---|
-| Backend API | Docker + VPS (DigitalOcean/AWS) | ~$12/thang |
-| Database | Supabase hoac Neon (PostgreSQL managed) | Free tier |
-| Mobile App | Expo EAS Build | Free tier (30 builds/thang) |
-| Push Notifications | Firebase Cloud Messaging | Free |
-| CI/CD | GitHub Actions | Free (public repo) |
+| Backend API | Docker + VPS (DigitalOcean/AWS) | ~$12/tháng |
+| Database | Supabase hoặc Neon (PostgreSQL managed) | Free tier |
+| Mobile App | Expo EAS Build | Free tier (30 builds/tháng) |
+| Push Notifications | Firebase Cloud Messaging | Miễn phí |
+| CI/CD | GitHub Actions | Miễn phí (public repo) |
 
 ## Backend Deployment
 
-### Option 1: Docker + VPS
+### Phương án 1: Docker + VPS
 
 #### 1. Setup VPS
-- Tao VPS tren DigitalOcean (Droplet $12/thang) hoac AWS EC2 (free tier)
+- Tạo VPS trên DigitalOcean (Droplet $12/tháng) hoặc AWS EC2 (free tier)
 - OS: Ubuntu 22.04 LTS
-- Cai dat Docker va Docker Compose
+- Cài đặt Docker và Docker Compose
 
 #### 2. Build Docker image
 ```bash
@@ -26,22 +26,22 @@ docker build -t smart-campus-api .
 ```
 
 #### 3. Docker Compose Production
-Su dung file `infrastructure/docker/docker-compose.prod.yml`:
+Sử dụng file `infrastructure/docker/docker-compose.prod.yml`:
 ```bash
 cd infrastructure/docker
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 #### 4. Nginx Reverse Proxy
-Config Nginx de proxy requests tu domain den Docker container:
-- HTTP -> HTTPS redirect
+Cấu hình Nginx để proxy requests từ domain đến Docker container:
+- HTTP → HTTPS redirect
 - SSL certificate (Let's Encrypt)
 - Proxy pass to port 3000
 
-### Option 2: Supabase (Database + Auth)
-Neu muon don gian hon, co the dung Supabase cho:
+### Phương án 2: Supabase (Database + Auth)
+Nếu muốn đơn giản hơn, có thể dùng Supabase cho:
 - PostgreSQL database (free tier: 500MB)
-- Authentication (tuy chon)
+- Authentication (tuỳ chọn)
 - File Storage
 - Realtime subscriptions
 
@@ -49,7 +49,7 @@ Neu muon don gian hon, co the dung Supabase cho:
 
 ### Expo EAS Build
 
-#### 1. Cai dat EAS CLI
+#### 1. Cài đặt EAS CLI
 ```bash
 npm install -g eas-cli
 eas login
@@ -62,7 +62,7 @@ cd apps/mobile
 # Android APK cho testing
 eas build --platform android --profile preview
 
-# iOS (can Apple Developer account)
+# iOS (cần Apple Developer account)
 eas build --platform ios --profile preview
 ```
 
@@ -75,7 +75,7 @@ eas build --platform android --profile production
 eas build --platform ios --profile production
 ```
 
-#### 4. Submit len store
+#### 4. Submit lên store
 ```bash
 eas submit --platform android
 eas submit --platform ios
@@ -85,50 +85,50 @@ eas submit --platform ios
 
 ### GitHub Actions Workflows
 
-#### CI (tren moi Pull Request)
+#### CI (trên mỗi Pull Request)
 1. Checkout code
 2. Setup Node.js + pnpm
 3. Install dependencies
-4. Run lint
-5. Run tests
+4. Chạy lint
+5. Chạy tests
 6. Build check
 
-#### CD - Backend (khi merge vao main)
+#### CD — Backend (khi merge vào main)
 1. Build Docker image
-2. Push len Container Registry
-3. Deploy len VPS (SSH)
+2. Push lên Container Registry
+3. Deploy lên VPS (SSH)
 
-#### CD - Mobile (khi tao release tag)
+#### CD — Mobile (khi tạo release tag)
 1. Trigger EAS Build
 2. Build Android + iOS
-3. (Optional) Auto submit len store
+3. (Tuỳ chọn) Auto submit lên store
 
-## Environment Variables
+## Biến môi trường
 
 ### Development
-- Copy `.env.example` thanh `.env.local` trong `apps/api/`
-- Khong commit file `.env.local`
+- Copy `.env.example` thành `.env.local` trong `apps/api/`
+- Không commit file `.env.local`
 
 ### Staging
-- Su dung GitHub Secrets cho CI/CD
+- Sử dụng GitHub Secrets cho CI/CD
 - Database: Supabase/Neon staging instance
 
 ### Production
-- Tat ca secrets luu trong GitHub Secrets hoac VPS environment
+- Tất cả secrets lưu trong GitHub Secrets hoặc VPS environment
 - Database: Managed PostgreSQL (Supabase/Neon/AWS RDS)
-- Change `JWT_SECRET` khac voi dev!
+- Thay đổi `JWT_SECRET` khác với dev!
 
-## SSL/Domain Setup
+## Cài đặt SSL/Domain
 
 ### Domain
-1. Mua domain (namecheap, cloudflare, ...)
-2. Tro DNS A record ve IP cua VPS
-3. Sub-domain goi y:
-   - `api.smartcampus.uit.edu.vn` - Backend API
-   - `smartcampus.uit.edu.vn` - Landing page (optional)
+1. Mua domain (Namecheap, Cloudflare, ...)
+2. Trỏ DNS A record về IP của VPS
+3. Sub-domain gợi ý:
+   - `api.smartcampus.uit.edu.vn` — Backend API
+   - `smartcampus.uit.edu.vn` — Landing page (tuỳ chọn)
 
 ### SSL Certificate
-Su dung Certbot (Let's Encrypt) de tao SSL mien phi:
+Sử dụng Certbot (Let's Encrypt) để tạo SSL miễn phí:
 ```bash
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d api.smartcampus.uit.edu.vn

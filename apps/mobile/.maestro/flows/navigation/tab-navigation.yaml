@@ -1,0 +1,27 @@
+appId: vn.edu.uit.smartcampus
+name: Navigation - Chuyen tab
+tags:
+  - requires-auth
+---
+- launchApp
+
+# Tab Trang chu (default)
+- assertVisible:
+    text: "Trang chu"
+    timeout: 5000
+
+# Chuyen sang tab Thoi khoa bieu
+- tapOn: "Thoi khoa bieu"
+- assertVisible: "Thoi khoa bieu"
+
+# Chuyen sang tab Thong bao
+- tapOn: "Thong bao"
+- assertVisible: "Thong bao"
+
+# Chuyen sang tab Ca nhan
+- tapOn: "Ca nhan"
+- assertVisible: "Dang xuat"
+
+# Quay lai tab Trang chu
+- tapOn: "Trang chu"
+- assertVisible: "Smart Campus UIT"

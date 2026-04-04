@@ -1,0 +1,30 @@
+appId: vn.edu.uit.smartcampus
+name: Register - Dang ky tai khoan
+---
+- launchApp:
+    clearState: true
+
+- tapOn: "Chua co tai khoan? Dang ky"
+
+- assertVisible: "Tao tai khoan"
+
+- tapOn: "Ho"
+- inputText: "Nguyen Van"
+
+- tapOn: "Ten"
+- inputText: "Test"
+
+- tapOn: "MSSV (8 so)"
+- inputText: "22529999"
+
+- tapOn: "Email"
+- inputText: "test.e2e@gm.uit.edu.vn"
+
+- tapOn: "Mat khau (8+ ky tu, 1 hoa, 1 so)"
+- inputText: "TestPass123"
+
+- tapOn: "Dang ky"
+
+- assertVisible:
+    text: "Trang chu"
+    timeout: 5000

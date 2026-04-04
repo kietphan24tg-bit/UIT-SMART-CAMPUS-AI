@@ -1,0 +1,17 @@
+appId: vn.edu.uit.smartcampus
+name: Login - Sai thong tin dang nhap
+---
+- launchApp:
+    clearState: true
+
+- tapOn: "Email"
+- inputText: "wrong@uit.edu.vn"
+
+- tapOn: "Mat khau"
+- inputText: "WrongPassword1"
+
+- tapOn: "Dang nhap"
+
+- assertVisible:
+    text: "Email hoac mat khau khong dung"
+    timeout: 5000
