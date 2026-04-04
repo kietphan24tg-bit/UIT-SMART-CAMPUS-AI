@@ -15,7 +15,7 @@
 
 ## Giới thiệu
 
-**Smart Campus** là super app giúp số hoá toàn bộ hoạt động học tập và sinh hoạt của sinh viên UIT — từ xem thời khoá biểu, tra cứu điểm, nhận thông báo, đến chatbot AI hỗ trợ 24/7.
+**UIT Smart Campus** là super app giúp số hoá toàn bộ hoạt động học tập và sinh hoạt của sinh viên UIT — từ xem thời khoá biểu, tra cứu điểm, nhận thông báo, đến chatbot AI hỗ trợ 24/7.
 
 ### 8 nhóm tính năng — 3 giai đoạn phát triển
 
