@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
@@ -69,7 +69,7 @@ export class AuthService {
     const payload = { sub: userId, role };
     const accessToken = this.jwtService.sign(payload);
 
-    const refreshTokenValue = uuidv4();
+    const refreshTokenValue = randomUUID();
     const refreshExpDays = parseInt(
       this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d').replace('d', ''),
       10,

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -54,6 +55,36 @@ export class NotificationsService {
     return this.prisma.notification.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true },
+    });
+  }
+
+  async createSystemNotifications(
+    title: string,
+    body: string,
+    type = 'general',
+    data?: Record<string, unknown>,
+    roles?: string[],
+  ) {
+    const users = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        ...(roles?.length ? { role: { in: roles as never[] } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (users.length === 0) {
+      return { count: 0 };
+    }
+
+    return this.prisma.notification.createMany({
+      data: users.map((user) => ({
+        userId: user.id,
+        title,
+        body,
+        type,
+        data: data as Prisma.InputJsonValue | undefined,
+      })),
     });
   }
 }

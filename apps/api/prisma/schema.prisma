@@ -14,29 +14,50 @@ enum Role {
   super_admin
 }
 
+enum SubscriptionStatus {
+  inactive
+  pending
+  active
+  expired
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  cancelled
+  expired
+}
+
+enum ParkingSessionStatus {
+  active
+  completed
+}
+
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  passwordHash    String   @map("password_hash")
-  studentId       String?  @unique @map("student_id")
-  firstName       String   @map("first_name")
-  lastName        String   @map("last_name")
-  avatarUrl       String?  @map("avatar_url")
-  role            Role     @default(student)
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  studentId       String?   @unique @map("student_id")
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  avatarUrl       String?   @map("avatar_url")
+  role            Role      @default(student)
   faculty         String?
   major           String?
-  yearOfAdmission Int?     @map("year_of_admission")
+  yearOfAdmission Int?      @map("year_of_admission")
   phone           String?
   dateOfBirth     DateTime? @map("date_of_birth")
   address         String?
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  refreshTokens  RefreshToken[]
-  scheduleItems  ScheduleItem[]
-  grades         Grade[]
-  notifications  Notification[]
+  refreshTokens RefreshToken[]
+  scheduleItems ScheduleItem[]
+  grades        Grade[]
+  notifications Notification[]
+  vehicles      Vehicle[]
 
   @@map("users")
 }
@@ -85,7 +106,7 @@ model Course {
 model ScheduleItem {
   id         String   @id @default(uuid())
   userId     String   @map("user_id")
-  courseId    String   @map("course_id")
+  courseId   String   @map("course_id")
   semesterId String   @map("semester_id")
   instructor String
   room       String
@@ -104,18 +125,18 @@ model ScheduleItem {
 }
 
 model Grade {
-  id           String   @id @default(uuid())
-  userId       String   @map("user_id")
-  courseId      String   @map("course_id")
-  semesterId   String   @map("semester_id")
-  midterm      Float?
-  finalExam    Float?   @map("final_exam")
-  assignment   Float?
-  totalScore   Float?   @map("total_score")
-  letterGrade  String?  @map("letter_grade")
-  gradePoint   Float?   @map("grade_point")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  courseId    String   @map("course_id")
+  semesterId  String   @map("semester_id")
+  midterm     Float?
+  finalExam   Float?   @map("final_exam")
+  assignment  Float?
+  totalScore  Float?   @map("total_score")
+  letterGrade String?  @map("letter_grade")
+  gradePoint  Float?   @map("grade_point")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   course   Course   @relation(fields: [courseId], references: [id])
@@ -139,4 +160,131 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+model Vehicle {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  plateNumber String   @unique @map("plate_number")
+  rfidTag     String   @unique @map("rfid_tag")
+  label       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription        ParkingSubscription?
+  parkingSessions     ParkingSession[]
+  paymentTransactions PaymentTransaction[]
+
+  @@index([userId])
+  @@map("vehicles")
+}
+
+model ParkingSubscription {
+  id            String             @id @default(uuid())
+  vehicleId      String             @unique @map("vehicle_id")
+  monthlyFee     Int                @default(40000) @map("monthly_fee")
+  status         SubscriptionStatus @default(inactive)
+  startDate      DateTime?          @map("start_date")
+  endDate        DateTime?          @map("end_date")
+  lastPaymentAt  DateTime?          @map("last_payment_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  vehicle  Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  payments PaymentTransaction[]
+
+  @@map("parking_subscriptions")
+}
+
+model PaymentTransaction {
+  id              String        @id @default(uuid())
+  vehicleId        String        @map("vehicle_id")
+  subscriptionId   String?       @map("subscription_id")
+  provider         String
+  providerOrderId  String        @unique @map("provider_order_id")
+  requestId        String?       @unique @map("request_id")
+  amount           Int
+  status           PaymentStatus @default(pending)
+  checkoutUrl      String?       @map("checkout_url")
+  requestPayload   Json?         @map("request_payload")
+  responsePayload  Json?         @map("response_payload")
+  paidAt           DateTime?     @map("paid_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  vehicle      Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  subscription ParkingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, status])
+  @@map("payment_transactions")
+}
+
+model ParkingSession {
+  id                   String               @id @default(uuid())
+  vehicleId            String               @map("vehicle_id")
+  gateId               String               @map("gate_id")
+  status               ParkingSessionStatus @default(active)
+  recognizedEntryPlate String               @map("recognized_entry_plate")
+  recognizedExitPlate  String?              @map("recognized_exit_plate")
+  entryTime            DateTime             @default(now()) @map("entry_time")
+  exitTime             DateTime?            @map("exit_time")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, status])
+  @@index([gateId, status])
+  @@map("parking_sessions")
+}
+
+model ParkingSlot {
+  id          String   @id @default(uuid())
+  gateId      String   @map("gate_id")
+  zone        String   @default("Main")
+  slotNumber  String   @map("slot_number")
+  isOccupied  Boolean  @default(false) @map("is_occupied")
+  vehiclePlate String? @map("vehicle_plate")
+  lastUpdated DateTime @default(now()) @map("last_updated")
+
+  @@unique([gateId, slotNumber])
+  @@index([gateId, isOccupied])
+  @@map("parking_slots")
+}
+
+model TelemetrySnapshot {
+  id           String   @id @default(uuid())
+  gateId       String   @map("gate_id")
+  deviceIp     String?  @map("device_ip")
+  slotBitmap   String?  @map("slot_bitmap")
+  slots        Json
+  temperature  Float?
+  humidity     Float?
+  rainDetected Boolean  @default(false) @map("rain_detected")
+  fireDetected Boolean  @default(false) @map("fire_detected")
+  reportedAt   DateTime @map("reported_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  fireAlerts FireAlert[]
+
+  @@index([gateId, reportedAt])
+  @@map("telemetry_snapshots")
+}
+
+model FireAlert {
+  id                String   @id @default(uuid())
+  gateId            String   @map("gate_id")
+  telemetrySnapshotId String? @map("telemetry_snapshot_id")
+  message           String
+  isResolved        Boolean  @default(false) @map("is_resolved")
+  reportedAt        DateTime @map("reported_at")
+  resolvedAt        DateTime? @map("resolved_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  telemetrySnapshot TelemetrySnapshot? @relation(fields: [telemetrySnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([gateId, reportedAt])
+  @@map("fire_alerts")
 }

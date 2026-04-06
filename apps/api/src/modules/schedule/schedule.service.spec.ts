@@ -50,7 +50,7 @@ describe('ScheduleService', () => {
       const result = await service.getSchedule('user-1', 'sem-1');
 
       expect(result).toHaveLength(1);
-      expect(result[0].room).toBe('A101');
+      expect(result[0]?.room).toBe('A101');
       expect(prisma.scheduleItem.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { userId: 'user-1', semesterId: 'sem-1' },

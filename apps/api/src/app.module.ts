@@ -5,7 +5,10 @@ import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GradesModule } from './modules/grades/grades.module';
+import { IotModule } from './modules/iot/iot.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ParkingModule } from './modules/parking/parking.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -22,6 +25,9 @@ import { UsersModule } from './modules/users/users.module';
     ScheduleModule,
     GradesModule,
     NotificationsModule,
+    ParkingModule,
+    IotModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

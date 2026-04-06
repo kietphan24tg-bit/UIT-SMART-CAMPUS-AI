@@ -19,7 +19,11 @@ export function useApiMutation<TData, TVariables>(
 
   return useMutation<TData, Error, TVariables>({
     mutationFn: (variables) =>
-      apiClient[method](url, variables) as Promise<TData>,
+      apiClient.request({
+        url,
+        method,
+        data: variables,
+      }) as Promise<TData>,
     onSuccess: () => {
       invalidateKeys?.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });

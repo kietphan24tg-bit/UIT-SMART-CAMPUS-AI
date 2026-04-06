@@ -23,6 +23,34 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ORIGIN = '*';
+
+  @IsString()
+  @IsOptional()
+  APP_BASE_URL = 'http://localhost:3000';
+
+  @IsString()
+  @IsOptional()
+  IOT_SHARED_SECRET = 'change-me';
+
+  @IsString()
+  @IsOptional()
+  MOMO_PARTNER_CODE = '';
+
+  @IsString()
+  @IsOptional()
+  MOMO_ACCESS_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  MOMO_SECRET_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  MOMO_REDIRECT_URL = 'http://localhost:3000/api/v1/payments/momo/mock-return';
+
+  @IsString()
+  @IsOptional()
+  MOMO_IPN_URL = 'http://localhost:3000/api/v1/payments/momo/webhook';
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -36,5 +64,6 @@ export function validate(config: Record<string, unknown>) {
   if (errors.length > 0) {
     throw new Error(errors.toString());
   }
+
   return validatedConfig;
 }

@@ -1,9 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
 
 const QUICK_ACTIONS = [
+  {
+    icon: 'car-sport' as const,
+    label: 'Parking',
+    color: '#1E40AF',
+    route: '/parking',
+  },
   { icon: 'calendar' as const, label: 'Thoi khoa bieu', color: '#3B82F6' },
   { icon: 'school' as const, label: 'Diem / GPA', color: '#10B981' },
   { icon: 'chatbubble' as const, label: 'AI Chatbot', color: '#8B5CF6' },
@@ -14,6 +21,7 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
 
   return (
     <ScrollView style={styles.container}>
@@ -26,7 +34,15 @@ export default function HomeScreen() {
 
       <View style={styles.grid}>
         {QUICK_ACTIONS.map((action) => (
-          <Pressable key={action.label} style={styles.card}>
+          <Pressable
+            key={action.label}
+            style={styles.card}
+            onPress={() => {
+              if (action.route) {
+                router.push(action.route as never);
+              }
+            }}
+          >
             <View style={[styles.iconContainer, { backgroundColor: action.color + '15' }]}>
               <Ionicons name={action.icon} size={28} color={action.color} />
             </View>
