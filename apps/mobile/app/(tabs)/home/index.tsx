@@ -1,139 +1,321 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { MetricGrid, RoleTaskSection } from '@/components/tasks';
+import {
+  ContentStack,
+  EmptyState,
+  Screen,
+  SectionCard,
+  StatusBadge,
+  TopHero,
+} from '@/components/ui';
+import { useDashboardSnapshot } from '@/hooks/use-dashboard-snapshot';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
-
-const QUICK_ACTIONS = [
-  {
-    icon: 'car-sport' as const,
-    label: 'Parking',
-    color: '#1E40AF',
-    route: '/parking',
-  },
-  { icon: 'calendar' as const, label: 'Thoi khoa bieu', color: '#3B82F6' },
-  { icon: 'school' as const, label: 'Diem / GPA', color: '#10B981' },
-  { icon: 'chatbubble' as const, label: 'AI Chatbot', color: '#8B5CF6' },
-  { icon: 'megaphone' as const, label: 'Su kien', color: '#F59E0B' },
-  { icon: 'book' as const, label: 'Thu vien', color: '#EF4444' },
-  { icon: 'map' as const, label: 'Ban do', color: '#06B6D4' },
-];
+import { useAppTheme } from '@/theme';
+import {
+  formatDateTime,
+  formatGpaValue,
+  getDashboardHeroSummary,
+  getGreetingName,
+  getRoleLabel,
+  getRoleQuickActions,
+  getTelemetryHealthLabel,
+  isAdminRole,
+} from '@/utils/app';
+import { getHomeRoleModel } from '@/utils/role-ui';
 
 export default function HomeScreen() {
-  const user = useAuthStore((s) => s.user);
+  const theme = useAppTheme();
+  const layout = useResponsiveLayout();
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const dashboard = useDashboardSnapshot(user?.role);
+  const quickActions = getRoleQuickActions(user?.role);
+  const roleModel = getHomeRoleModel(dashboard.data.role, dashboard.data);
+  const quickColumns = layout.getGridColumns({
+    minItemWidth: 150,
+    gap: 12,
+    maxColumns: layout.isTablet ? 3 : 2,
+  });
+  const quickCardWidth = layout.getGridItemWidth({ columns: quickColumns, gap: 12 });
+
+  const emergencyTone =
+    dashboard.data.telemetryHealth === 'fire-alert'
+      ? 'danger'
+      : dashboard.data.telemetryHealth === 'stale' || dashboard.data.telemetryHealth === 'offline'
+        ? 'warning'
+        : 'info';
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>
-          Xin chao, {user?.firstName ?? 'Sinh vien'}!
-        </Text>
-        <Text style={styles.subGreeting}>Smart Campus UIT</Text>
-      </View>
+    <Screen
+      refreshControl={
+        <RefreshControl
+          refreshing={dashboard.isRefetching}
+          onRefresh={() => void dashboard.refetch()}
+          tintColor={theme.colors.primary}
+        />
+      }
+    >
+      <TopHero
+        eyebrow="Dashboard ca nhan hoa"
+        title={`Xin chao, ${getGreetingName(user)}!`}
+        subtitle={getDashboardHeroSummary(dashboard.data)}
+        badge={{ label: getRoleLabel(user?.role), tone: 'info' }}
+      />
 
-      <View style={styles.grid}>
-        {QUICK_ACTIONS.map((action) => (
-          <Pressable
-            key={action.label}
-            style={styles.card}
-            onPress={() => {
-              if (action.route) {
-                router.push(action.route as never);
-              }
-            }}
+      <ContentStack>
+        {dashboard.data.telemetryHealth !== 'online' ? (
+          <View
+            style={[
+              styles.banner,
+              layout.isCompact ? styles.bannerStacked : null,
+              {
+                backgroundColor:
+                  emergencyTone === 'danger'
+                    ? theme.colors.emergencySurface
+                    : theme.colors.warningSurface,
+                borderColor:
+                  emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning,
+              },
+            ]}
           >
-            <View style={[styles.iconContainer, { backgroundColor: action.color + '15' }]}>
-              <Ionicons name={action.icon} size={28} color={action.color} />
+            <Ionicons
+              name={emergencyTone === 'danger' ? 'warning-outline' : 'cloud-offline-outline'}
+              size={20}
+              color={emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning}
+            />
+            <View style={styles.bannerContent}>
+              <Text
+                style={[
+                  styles.bannerTitle,
+                  {
+                    color:
+                      emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning,
+                  },
+                ]}
+              >
+                {getTelemetryHealthLabel(dashboard.data.telemetryHealth)}
+              </Text>
+              <Text style={[styles.bannerText, { color: theme.colors.textMuted }]}>
+                {dashboard.data.telemetryHealth === 'fire-alert'
+                  ? 'Cam bien lua dang kich hoat tai khu parking. Uu tien kiem tra canh bao ngay.'
+                  : 'Du lieu parking chua duoc lam moi dung chu ky. App van giu snapshot gan nhat de ban theo doi.'}
+              </Text>
             </View>
-            <Text style={styles.cardLabel}>{action.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+          </View>
+        ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Thong bao moi</Text>
-        <View style={styles.emptyState}>
-          <Ionicons name="notifications-off-outline" size={48} color="#D1D5DB" />
-          <Text style={styles.emptyText}>Chua co thong bao moi</Text>
-        </View>
-      </View>
-    </ScrollView>
+        <MetricGrid items={roleModel.metrics} />
+
+        <SectionCard title="Thao tac nhanh" subtitle="Duong vao chinh thay doi theo tung role nhung van giu mot bo cuc UIT thong nhat.">
+          <View style={styles.quickGrid}>
+            {quickActions.map((action) => (
+              <View
+                key={action.id}
+                style={[
+                  styles.quickCard,
+                  { width: quickCardWidth },
+                  {
+                    backgroundColor: theme.colors.surfaceSubtle,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Ionicons name={action.icon as never} size={22} color={theme.colors.primary} />
+                <Text style={[styles.quickLabel, { color: theme.colors.text }]}>{action.label}</Text>
+                <Text
+                  style={[styles.quickLink, { color: theme.colors.primary }]}
+                  onPress={() => router.push(action.route as never)}
+                >
+                  Mo
+                </Text>
+              </View>
+            ))}
+          </View>
+        </SectionCard>
+
+        <RoleTaskSection
+          title={roleModel.focusTitle}
+          subtitle={roleModel.focusSubtitle}
+          tasks={roleModel.focusTasks}
+          onPressTask={(route) => router.push(route as never)}
+        />
+
+        {roleModel.supportTasks?.length ? (
+          <RoleTaskSection
+            title={roleModel.supportTitle || 'Tac vu ho tro'}
+            subtitle={roleModel.supportSubtitle}
+            tasks={roleModel.supportTasks}
+            onPressTask={(route) => router.push(route as never)}
+          />
+        ) : null}
+
+        {!isAdminRole(user?.role) ? (
+          <SectionCard
+            title="Buoi tiep theo"
+            subtitle="Thong tin buoi hoc hoac buoi day sap toi can duoc quet nhanh tren mobile."
+            actionLabel="Xem lich"
+            onActionPress={() => router.push('/schedule')}
+          >
+            {dashboard.data.nextClass ? (
+              <View style={styles.column}>
+                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.classTitle, { color: theme.colors.text }]}>
+                      {dashboard.data.nextClass.course.name}
+                    </Text>
+                    <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
+                      {dashboard.data.nextClass.course.code} · {dashboard.data.nextClass.instructor}
+                    </Text>
+                  </View>
+                  <StatusBadge label={`Phong ${dashboard.data.nextClass.room}`} tone="primary" />
+                </View>
+                <Text style={[styles.classTime, { color: theme.colors.primary }]}>
+                  {dashboard.data.nextClass.startTime} - {dashboard.data.nextClass.endTime}
+                </Text>
+              </View>
+            ) : (
+              <EmptyState
+                icon="calendar-clear-outline"
+                title="Hom nay chua co lich moi"
+                description="Khi co lich hoc hoac lich day, buoi gan nhat se xuat hien tai day de ban quyet dinh nhanh."
+              />
+            )}
+          </SectionCard>
+        ) : null}
+
+        <SectionCard
+          title={isAdminRole(user?.role) ? 'Parking & telemetry' : 'Parking + IoT'}
+          subtitle="Hero status, slot snapshot va telemetry cua bai xe UIT duoc giu gon de hop mobile phone va tablet."
+          actionLabel="Mo parking"
+          onActionPress={() => router.push('/parking')}
+        >
+          {dashboard.data.parking ? (
+            <View style={styles.column}>
+              <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <Text style={[styles.classTitle, { color: theme.colors.text }]}>
+                  {dashboard.data.parking.availableSlots}/{dashboard.data.parking.totalSlots} cho trong
+                </Text>
+                <StatusBadge
+                  label={getTelemetryHealthLabel(dashboard.data.telemetryHealth)}
+                  tone={emergencyTone}
+                />
+              </View>
+              <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
+                {dashboard.data.parking.activeSessions} session dang mo · cap nhat {formatDateTime(dashboard.data.parking.lastUpdated)}
+              </Text>
+              <View style={styles.sensorRow}>
+                <StatusBadge
+                  label={`Temp ${dashboard.data.parking.sensors.temperature ?? '--'}°C`}
+                  tone="info"
+                />
+                <StatusBadge
+                  label={`Humidity ${dashboard.data.parking.sensors.humidity ?? '--'}%`}
+                  tone="success"
+                />
+                <StatusBadge
+                  label={dashboard.data.parking.sensors.fireDetected ? 'Fire alert' : 'An toan'}
+                  tone={dashboard.data.parking.sensors.fireDetected ? 'danger' : 'success'}
+                />
+              </View>
+            </View>
+          ) : (
+            <EmptyState
+              icon="car-sport-outline"
+              title="Parking chua san sang"
+              description="App chua lay duoc snapshot bai xe o thoi diem hien tai. Ban van co the mo man parking chi tiet hoac thu tai lai."
+            />
+          )}
+        </SectionCard>
+
+        {!isAdminRole(user?.role) ? (
+          <SectionCard title="GPA hien tai" subtitle="Student-first block van duoc giu gon va ro rang trong dashboard.">
+            <Text style={[styles.classTitle, { color: theme.colors.text }]}>
+              {formatGpaValue(dashboard.data.gpa?.gpa)}
+            </Text>
+            <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
+              {dashboard.data.gpa?.totalCourses ?? 0} hoc phan · {dashboard.data.gpa?.totalCredits ?? 0} tin chi
+            </Text>
+          </SectionCard>
+        ) : null}
+      </ContentStack>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  header: {
-    backgroundColor: '#1E40AF',
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  subGreeting: {
-    fontSize: 14,
-    color: '#93C5FD',
-    marginTop: 4,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  banner: {
+    borderRadius: 20,
+    borderWidth: 1,
     padding: 16,
+    flexDirection: 'row',
     gap: 12,
   },
-  card: {
-    width: '47%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+  bannerStacked: {
+    flexDirection: 'column',
+  },
+  bannerContent: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  bannerText: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  quickLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  quickLink: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  column: {
+    gap: 12,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 12,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+  rowBetweenStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
-  cardLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  section: {
-    padding: 16,
-  },
-  sectionTitle: {
+  classTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
+    fontWeight: '800',
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: '#fff',
-    borderRadius: 16,
+  classMeta: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  emptyText: {
-    marginTop: 8,
-    color: '#9CA3AF',
-    fontSize: 14,
+  classTime: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sensorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
 });

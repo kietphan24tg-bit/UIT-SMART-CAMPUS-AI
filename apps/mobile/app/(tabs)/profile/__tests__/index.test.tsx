@@ -1,9 +1,9 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
-import { useAuthStore } from '@/stores/auth-store';
-
 import ProfileScreen from '../index';
+
+import { useAuthStore } from '@/stores/auth-store';
 
 jest.mock('@/stores/auth-store');
 
@@ -29,21 +29,16 @@ describe('ProfileScreen', () => {
   });
 
   it('should display user full name', () => {
-    const { getByText } = render(<ProfileScreen />);
+    const { getAllByText } = render(<ProfileScreen />);
 
-    expect(getByText('Nguyen An')).toBeTruthy();
+    expect(getAllByText('Nguyen An').length).toBeGreaterThan(0);
   });
 
-  it('should display student ID', () => {
+  it('should display account summary', () => {
     const { getByText } = render(<ProfileScreen />);
 
-    expect(getByText('22520001')).toBeTruthy();
-  });
-
-  it('should display email', () => {
-    const { getByText } = render(<ProfileScreen />);
-
-    expect(getByText('test@uit.edu.vn')).toBeTruthy();
+    expect(getByText(/22520001/)).toBeTruthy();
+    expect(getByText(/test@uit.edu.vn/)).toBeTruthy();
   });
 
   it('should display avatar initial from lastName', () => {
@@ -66,8 +61,8 @@ describe('ProfileScreen', () => {
       return selector(state);
     });
 
-    const { getByText } = render(<ProfileScreen />);
+    const { getAllByText } = render(<ProfileScreen />);
 
-    expect(getByText('Sinh vien')).toBeTruthy();
+    expect(getAllByText('UITer').length).toBeGreaterThan(0);
   });
 });

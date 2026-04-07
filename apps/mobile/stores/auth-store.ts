@@ -1,8 +1,8 @@
+import type { RegisterRequest } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { authApi } from '@/services/api/auth';
-import type { RegisterRequest } from '@smart-campus/shared';
 
 interface UserInfo {
   id: string;

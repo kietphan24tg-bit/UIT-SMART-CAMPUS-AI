@@ -2,6 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 
 import { useAuthStore } from '../auth-store';
 
+import { authApi } from '@/services/api/auth';
+
 jest.mock('@/services/api/auth', () => ({
   authApi: {
     login: jest.fn(),
@@ -9,8 +11,6 @@ jest.mock('@/services/api/auth', () => ({
     getMe: jest.fn(),
   },
 }));
-
-const { authApi } = require('@/services/api/auth');
 
 const mockUser = {
   id: 'user-1',

@@ -6,9 +6,9 @@ export default function NotFoundScreen() {
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />
       <View style={styles.container}>
-        <Text style={styles.title}>Trang nay khong ton tai</Text>
+        <Text style={styles.title}>Trang này không tồn tại</Text>
         <Link href="/" style={styles.link}>
-          <Text style={styles.linkText}>Quay ve trang chinh</Text>
+          <Text style={styles.linkText}>Quay về trang chính</Text>
         </Link>
       </View>
     </>

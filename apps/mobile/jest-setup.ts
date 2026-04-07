@@ -1,8 +1,8 @@
 import '@testing-library/jest-native/extend-expect';
 
 jest.mock('@expo/vector-icons', () => {
-  const React = require('react');
-  const { Text } = require('react-native');
+  const React = jest.requireActual('react');
+  const { Text } = jest.requireActual('react-native');
   return {
     Ionicons: ({ name, ...rest }: { name: string }) =>
       React.createElement(Text, rest, name),

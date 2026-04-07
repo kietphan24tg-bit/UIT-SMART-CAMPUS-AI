@@ -1,75 +1,94 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
+import { useAuthStore } from '@/stores/auth-store';
+import { useAppTheme } from '@/theme';
+import { getRoleScopedTabTitle } from '@/utils/app';
+
 export default function TabLayout() {
+  const theme = useAppTheme();
+  const layout = useResponsiveLayout();
+  const role = useAuthStore((state) => state.user?.role);
+  const roleScopedTitle = getRoleScopedTabTitle(role);
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#1E40AF',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textSoft,
         tabBarStyle: {
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          height: 60,
+          borderTopWidth: 0,
+          backgroundColor: theme.colors.tabBar,
+          height: layout.isCompact ? 64 : 70,
           paddingBottom: 8,
           paddingTop: 8,
+          shadowColor: theme.colors.shadow,
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: -4 },
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '700',
         },
-        headerStyle: {
-          backgroundColor: '#1E40AF',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
           title: 'Trang chu',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="schedule"
         options={{
-          title: 'Thoi khoa bieu',
+          title: roleScopedTitle,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons
+              name={roleScopedTitle === 'Van hanh' ? 'pulse-outline' : 'calendar-outline'}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="parking"
+        name="services"
         options={{
-          title: 'Parking',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car-sport-outline" size={size} color={color} />
-          ),
+          title: 'Dich vu',
+          tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="alerts"
         options={{
-          title: 'Thong bao',
+          title: 'Canh bao',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="notifications-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
+        name="parking"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Ca nhan',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
     </Tabs>

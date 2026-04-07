@@ -1,556 +1,380 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import type {
-  ParkingStatus,
-  ParkingSubscriptionStatus,
-  RegisteredVehicle,
-} from '@smart-campus/shared';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+
+import { MetricGrid } from '@/components/tasks';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-
-import { parkingApi } from '@/services/api';
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return 'Chua co';
-  }
-
-  return new Date(value).toLocaleString('vi-VN');
-}
-
-function getSubscriptionTone(status: ParkingSubscriptionStatus) {
-  switch (status) {
-    case 'active':
-      return { bg: '#DCFCE7', text: '#166534', label: 'Dang hoat dong' };
-    case 'expired':
-      return { bg: '#FEE2E2', text: '#991B1B', label: 'Da het han' };
-    case 'pending':
-      return { bg: '#FEF3C7', text: '#92400E', label: 'Dang cho xu ly' };
-    default:
-      return { bg: '#E5E7EB', text: '#374151', label: 'Chua kich hoat' };
-  }
-}
+  ContentStack,
+  EmptyState,
+  PrimaryButton,
+  Screen,
+  SectionCard,
+  SecondaryButton,
+  StatusBadge,
+  TopHero,
+} from '@/components/ui';
+import { useParkingOverview } from '@/hooks/use-parking-overview';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
+import { useAppTheme } from '@/theme';
+import {
+  formatCurrency,
+  formatDateTime,
+  formatSubscriptionDate,
+  getTelemetryHealthLabel,
+} from '@/utils/app';
+import { getPaymentStatusRecord } from '@/utils/role-ui';
 
 export default function ParkingScreen() {
-  const [status, setStatus] = useState<ParkingStatus | null>(null);
-  const [vehicles, setVehicles] = useState<RegisteredVehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [submittingVehicle, setSubmittingVehicle] = useState(false);
-  const [payingVehicleId, setPayingVehicleId] = useState<string | null>(null);
-  const [plateNumber, setPlateNumber] = useState('');
-  const [rfidTag, setRfidTag] = useState('');
-  const [label, setLabel] = useState('');
+  const theme = useAppTheme();
+  const layout = useResponsiveLayout();
+  const router = useRouter();
+  const parking = useParkingOverview();
+  const parkingStatus = parking.data?.status ?? null;
+  const vehicles = parking.data?.vehicles ?? [];
+  const paymentRecord = getPaymentStatusRecord(parking.data);
+  const slotColumns = layout.getGridColumns({
+    minItemWidth: 140,
+    gap: 10,
+    maxColumns: layout.isTablet ? 4 : 2,
+  });
+  const slotCardWidth = layout.getGridItemWidth({ columns: slotColumns, gap: 10 });
 
-  const availableRatio = useMemo(() => {
-    if (!status || !status.totalSlots) {
-      return '0/0';
-    }
-
-    return `${status.availableSlots}/${status.totalSlots}`;
-  }, [status]);
-
-  const loadData = useCallback(async (showRefresh = false) => {
-    try {
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const [parkingStatus, registeredVehicles] = await Promise.all([
-        parkingApi.getStatus(),
-        parkingApi.getVehicles(),
-      ]);
-
-      setStatus(parkingStatus);
-      setVehicles(registeredVehicles);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Khong tai du lieu parking';
-      Alert.alert('Parking', message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadData();
-    }, [loadData]),
-  );
-
-  const handleCreateVehicle = async () => {
-    if (!plateNumber.trim() || !rfidTag.trim()) {
-      Alert.alert('Parking', 'Vui long nhap bien so va RFID');
-      return;
-    }
-
-    try {
-      setSubmittingVehicle(true);
-      await parkingApi.createVehicle({
-        plateNumber,
-        rfidTag,
-        label: label.trim() || undefined,
-      });
-
-      setPlateNumber('');
-      setRfidTag('');
-      setLabel('');
-      await loadData(true);
-      Alert.alert('Parking', 'Dang ky xe thanh cong');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Khong the dang ky xe';
-      Alert.alert('Parking', message);
-    } finally {
-      setSubmittingVehicle(false);
-    }
-  };
-
-  const handlePay = async (vehicleId: string) => {
-    try {
-      setPayingVehicleId(vehicleId);
-      const checkout = await parkingApi.createMomoPayment(vehicleId);
-      await Linking.openURL(checkout.checkoutUrl);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Khong the tao thanh toan';
-      Alert.alert('Thanh toan', message);
-    } finally {
-      setPayingVehicleId(null);
-    }
-  };
-
-  if (loading && !status) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E40AF" />
-        <Text style={styles.loadingText}>Dang tai du lieu bai xe...</Text>
-      </View>
-    );
-  }
+  const healthTone =
+    parking.data?.telemetryHealth === 'fire-alert'
+      ? 'danger'
+      : parking.data?.telemetryHealth === 'offline' || parking.data?.telemetryHealth === 'stale'
+        ? 'warning'
+        : parking.data?.telemetryHealth === 'no-data'
+          ? 'info'
+          : 'success';
 
   return (
-    <ScrollView
-      style={styles.container}
+    <Screen
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => void loadData(true)}
-          tintColor="#1E40AF"
+          refreshing={parking.isRefetching}
+          onRefresh={() => void parking.refetch()}
+          tintColor={theme.colors.primary}
         />
       }
     >
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>UIT Campus Parking</Text>
-        <Text style={styles.heroSubtitle}>
-          Theo doi telemetry, slot trong va goi gui xe ngay tren app.
-        </Text>
-      </View>
-
-      <View style={styles.metricsRow}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{availableRatio}</Text>
-          <Text style={styles.metricLabel}>Cho trong</Text>
+      <TopHero
+        eyebrow="Flagship live status"
+        title="Parking + IoT"
+        subtitle="Theo doi cho trong A1-A4, telemetry moi nhat va cac state degraded dung theo snapshot + polling cua mobile."
+        badge={{
+          label: getTelemetryHealthLabel(parking.data?.telemetryHealth ?? 'offline'),
+          tone: healthTone,
+        }}
+      >
+        <View style={styles.heroMeta}>
+          <Text style={[styles.heroNumber, { color: theme.colors.heroText }]}>
+            {parkingStatus ? `${parkingStatus.availableSlots}/${parkingStatus.totalSlots}` : '--'}
+          </Text>
+          <Text style={[styles.heroCaption, { color: theme.colors.heroSubtext }]}>cho dang trong</Text>
         </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{status?.activeSessions ?? 0}</Text>
-          <Text style={styles.metricLabel}>Xe dang gui</Text>
-        </View>
-      </View>
+      </TopHero>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cam bien moi nhat</Text>
-        <View style={styles.sensorGrid}>
-          <View style={styles.sensorCard}>
-            <Text style={styles.sensorValue}>
-              {status?.sensors.temperature ?? '--'} C
-            </Text>
-            <Text style={styles.sensorLabel}>Nhiet do</Text>
-          </View>
-          <View style={styles.sensorCard}>
-            <Text style={styles.sensorValue}>
-              {status?.sensors.humidity ?? '--'} %
-            </Text>
-            <Text style={styles.sensorLabel}>Do am</Text>
-          </View>
-          <View style={styles.sensorCard}>
-            <Text style={styles.sensorValue}>
-              {status?.sensors.rainDetected ? 'Dang mua' : 'Kho rao'}
-            </Text>
-            <Text style={styles.sensorLabel}>Cam bien mua</Text>
-          </View>
+      <ContentStack>
+        {parking.data?.telemetryHealth === 'fire-alert' ? (
           <View
             style={[
-              styles.sensorCard,
-              status?.sensors.fireDetected ? styles.fireCard : null,
+              styles.alertBanner,
+              layout.isCompact ? styles.alertBannerStacked : null,
+              {
+                backgroundColor: theme.colors.emergencySurface,
+                borderColor: theme.colors.emergency,
+              },
             ]}
           >
-            <Text
-              style={[
-                styles.sensorValue,
-                status?.sensors.fireDetected ? styles.fireText : null,
-              ]}
-            >
-              {status?.sensors.fireDetected ? 'Phat hien lua' : 'An toan'}
-            </Text>
-            <Text style={styles.sensorLabel}>Canh bao lua</Text>
-          </View>
-        </View>
-        <Text style={styles.metaText}>
-          ESP32: {status?.sensors.deviceIp ?? 'Chua ghi nhan'}
-        </Text>
-        <Text style={styles.metaText}>
-          Cap nhat: {formatDate(status?.sensors.reportedAt ?? null)}
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Trang thai slot</Text>
-        <View style={styles.slotGrid}>
-          {(status?.slots ?? []).map((slot) => (
-            <View
-              key={slot.slotNumber}
-              style={[
-                styles.slotCard,
-                slot.isOccupied ? styles.slotBusy : styles.slotFree,
-              ]}
-            >
-              <Text style={styles.slotName}>{slot.slotNumber}</Text>
-              <Text style={styles.slotState}>
-                {slot.isOccupied ? 'Da co xe' : 'Trong'}
+            <Ionicons name="flame-outline" size={22} color={theme.colors.emergency} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.alertTitle, { color: theme.colors.emergency }]}>
+                Canh bao chay tai khu parking
+              </Text>
+              <Text style={[styles.alertBody, { color: theme.colors.textMuted }]}>
+                Uu tien xu ly su co truoc cac thao tac thong thuong. Snapshot gan nhat van duoc giu de khong mat ngu canh.
               </Text>
             </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Dang ky xe moi</Text>
-        <View style={styles.formCard}>
-          <TextInput
-            value={plateNumber}
-            onChangeText={setPlateNumber}
-            placeholder="Bien so xe"
-            autoCapitalize="characters"
-            style={styles.input}
-          />
-          <TextInput
-            value={rfidTag}
-            onChangeText={setRfidTag}
-            placeholder="Ma RFID"
-            autoCapitalize="characters"
-            style={styles.input}
-          />
-          <TextInput
-            value={label}
-            onChangeText={setLabel}
-            placeholder="Ghi chu (tu chon)"
-            style={styles.input}
-          />
-          <Pressable
-            style={[styles.primaryButton, submittingVehicle && styles.buttonDisabled]}
-            onPress={() => void handleCreateVehicle()}
-            disabled={submittingVehicle}
-          >
-            <Text style={styles.primaryButtonText}>
-              {submittingVehicle ? 'Dang luu...' : 'Dang ky xe'}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Xe da dang ky</Text>
-        {(vehicles ?? []).map((vehicle) => {
-          const tone = getSubscriptionTone(vehicle.subscription.status);
-          return (
-            <View key={vehicle.id} style={styles.vehicleCard}>
-              <View style={styles.vehicleHeader}>
-                <View>
-                  <Text style={styles.vehiclePlate}>{vehicle.plateNumber}</Text>
-                  <Text style={styles.vehicleLabel}>
-                    {vehicle.label || 'Khong co ghi chu'}
-                  </Text>
-                </View>
-                <View style={[styles.subscriptionBadge, { backgroundColor: tone.bg }]}>
-                  <Text style={[styles.subscriptionText, { color: tone.text }]}>
-                    {tone.label}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.vehicleMeta}>RFID: {vehicle.rfidTag}</Text>
-              <Text style={styles.vehicleMeta}>
-                Han goi: {formatDate(vehicle.subscription.endDate)}
-              </Text>
-              <Text style={styles.vehicleMeta}>
-                Phi thang: {vehicle.subscription.monthlyFee.toLocaleString('vi-VN')} VND
-              </Text>
-
-              <Pressable
-                style={[
-                  styles.secondaryButton,
-                  payingVehicleId === vehicle.id && styles.buttonDisabled,
-                ]}
-                onPress={() => void handlePay(vehicle.id)}
-                disabled={payingVehicleId === vehicle.id}
-              >
-                <Ionicons name="wallet-outline" size={18} color="#1E40AF" />
-                <Text style={styles.secondaryButtonText}>
-                  {payingVehicleId === vehicle.id
-                    ? 'Dang tao thanh toan...'
-                    : 'Thanh toan 40K/thang'}
-                </Text>
-              </Pressable>
-            </View>
-          );
-        })}
-
-        {vehicles.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="car-sport-outline" size={36} color="#94A3B8" />
-            <Text style={styles.emptyText}>
-              Ban chua dang ky xe nao tren UIT Campus.
-            </Text>
           </View>
         ) : null}
-      </View>
-    </ScrollView>
+
+        <MetricGrid
+          items={[
+            { label: 'Cho trong', value: `${parkingStatus?.availableSlots ?? '--'}`, helper: 'Available', tone: 'success' },
+            { label: 'Dang gui', value: `${parkingStatus?.activeSessions ?? '--'}`, helper: 'Active sessions', tone: 'info' },
+            { label: 'Da chiem', value: `${parkingStatus?.occupiedSlots ?? '--'}`, helper: 'Occupied', tone: 'warning' },
+            { label: 'Xe da dang ky', value: `${vehicles.length}`, helper: 'Vehicle summary', tone: 'primary' },
+          ]}
+        />
+
+        <SectionCard title="Tac vu chinh" subtitle="Long-form flows duoc tach rieng de khong lam roi overview.">
+          <View style={styles.actionStack}>
+            <PrimaryButton
+              label="Dang ky xe"
+              onPress={() => router.push('/parking/vehicle-registration')}
+            />
+            <SecondaryButton
+              label="Kiem tra payment status"
+              onPress={() => router.push('/parking/payment-status')}
+            />
+          </View>
+        </SectionCard>
+
+        <SectionCard title="Telemetry health" subtitle="Luon co last updated va trang thai degraded ro rang.">
+          {parkingStatus ? (
+            <View style={styles.column}>
+              <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <StatusBadge label={getTelemetryHealthLabel(parking.data?.telemetryHealth ?? 'offline')} tone={healthTone} />
+                <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                  {formatDateTime(parkingStatus.lastUpdated)}
+                </Text>
+              </View>
+              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                Gateway: {parkingStatus.gateId} · IP {parkingStatus.sensors.deviceIp || 'Chua xac dinh'}
+              </Text>
+              <View style={styles.sensorGrid}>
+                <StatusBadge label={`Temp ${parkingStatus.sensors.temperature ?? '--'}°C`} tone="info" />
+                <StatusBadge label={`Humidity ${parkingStatus.sensors.humidity ?? '--'}%`} tone="success" />
+                <StatusBadge label={parkingStatus.sensors.rainDetected ? 'Co mua' : 'Kho rao'} tone="warning" />
+                <StatusBadge label={parkingStatus.sensors.fireDetected ? 'Fire alert' : 'An toan'} tone={parkingStatus.sensors.fireDetected ? 'danger' : 'success'} />
+              </View>
+            </View>
+          ) : (
+            <EmptyState
+              icon="cloud-offline-outline"
+              title="Chua co snapshot parking"
+              description="Neu gateway chua gui telemetry, app se chuyen sang no data/offline thay vi hien thi trang thai gia."
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Trang thai slot A1-A4" subtitle="Slot grid ngan gon, de quet nhanh tren dien thoai.">
+          {parkingStatus?.slots?.length ? (
+            <View style={styles.slotGrid}>
+              {parkingStatus.slots.map((slot) => (
+                <View
+                  key={slot.slotNumber}
+                  style={[
+                    styles.slotCard,
+                    { width: slotCardWidth },
+                    {
+                      backgroundColor: slot.isOccupied
+                        ? theme.colors.dangerSurface
+                        : theme.colors.successSurface,
+                      borderColor: slot.isOccupied ? theme.colors.danger : theme.colors.success,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.slotName, { color: theme.colors.text }]}>{slot.slotNumber}</Text>
+                  <Text
+                    style={[
+                      styles.slotState,
+                      { color: slot.isOccupied ? theme.colors.danger : theme.colors.success },
+                    ]}
+                  >
+                    {slot.isOccupied ? 'Da co xe' : 'Dang trong'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <EmptyState
+              icon="car-outline"
+              title="Chua co du lieu slot"
+              description="Slot grid se hien thi ngay khi gateway bat dau gui trang thai A1-A4."
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Vehicle summary" subtitle="Overview chi hien summary, CTA payment da tach rieng thanh task screen.">
+          {vehicles.length > 0 ? (
+            <View style={styles.column}>
+              {vehicles.map((vehicle) => (
+                <View
+                  key={vehicle.id}
+                  style={[
+                    styles.vehicleCard,
+                    {
+                      backgroundColor: theme.colors.surfaceSubtle,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.vehiclePlate, { color: theme.colors.text }]}>
+                        {vehicle.plateNumber}
+                      </Text>
+                      <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                        RFID {vehicle.rfidTag} · {vehicle.label || 'Khong co ghi chu'}
+                      </Text>
+                    </View>
+                    <StatusBadge
+                      label={
+                        vehicle.subscription.status === 'active'
+                          ? 'Dang hieu luc'
+                          : vehicle.subscription.status === 'pending'
+                            ? 'Dang cho'
+                            : vehicle.subscription.status === 'expired'
+                              ? 'Da het han'
+                              : 'Chua kich hoat'
+                      }
+                      tone={
+                        vehicle.subscription.status === 'active'
+                          ? 'success'
+                          : vehicle.subscription.status === 'pending'
+                            ? 'warning'
+                            : vehicle.subscription.status === 'expired'
+                              ? 'danger'
+                              : 'info'
+                      }
+                    />
+                  </View>
+                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                    Han goi: {formatSubscriptionDate(vehicle.subscription.endDate)}
+                  </Text>
+                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                    Phi thang: {formatCurrency(vehicle.subscription.monthlyFee)} VND
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <EmptyState
+              icon="car-sport-outline"
+              title="Ban chua dang ky xe"
+              description="Khi chua co xe, app van hien day du parking status nhung thay CTA bang luong dang ky xe ro rang."
+              actionLabel="Dang ky xe"
+              onActionPress={() => router.push('/parking/vehicle-registration')}
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Payment snapshot" subtitle="Pending / success / failed duoc hien ro de backend noi status record rieng.">
+          {paymentRecord ? (
+            <View style={styles.column}>
+              <StatusBadge
+                label={
+                  paymentRecord.status === 'success'
+                    ? 'Thanh cong'
+                    : paymentRecord.status === 'pending'
+                      ? 'Dang cho'
+                      : 'Can thanh toan lai'
+                }
+                tone={
+                  paymentRecord.status === 'success'
+                    ? 'success'
+                    : paymentRecord.status === 'pending'
+                      ? 'warning'
+                      : 'danger'
+                }
+              />
+              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                {paymentRecord.provider} · {formatCurrency(paymentRecord.amount)} VND · {formatDateTime(paymentRecord.updatedAt)}
+              </Text>
+              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>{paymentRecord.note}</Text>
+              <SecondaryButton
+                label="Mo payment status"
+                onPress={() => router.push('/parking/payment-status')}
+              />
+            </View>
+          ) : (
+            <EmptyState
+              icon="wallet-outline"
+              title="Chua co payment status"
+              description="Module nay cho phep chot UI pending/success/failed truoc khi backend tra ve snapshot giao dich rieng."
+            />
+          )}
+        </SectionCard>
+      </ContentStack>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#475569',
-  },
-  hero: {
-    backgroundColor: '#1E40AF',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-  heroTitle: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: '700',
-  },
-  heroSubtitle: {
-    color: '#BFDBFE',
+  heroMeta: {
     marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
   },
-  metricsRow: {
+  heroNumber: {
+    fontSize: 34,
+    fontWeight: '900',
+  },
+  heroCaption: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  alertBanner: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
     flexDirection: 'row',
     gap: 12,
-    paddingHorizontal: 16,
-    marginTop: -18,
   },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+  alertBannerStacked: {
+    flexDirection: 'column',
   },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0F172A',
+  alertTitle: {
+    fontSize: 16,
+    fontWeight: '800',
   },
-  metricLabel: {
-    marginTop: 6,
+  alertBody: {
     fontSize: 13,
-    color: '#475569',
+    lineHeight: 18,
+    marginTop: 4,
   },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
+  actionStack: {
+    gap: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
+  column: {
+    gap: 12,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rowBetweenStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   sensorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-  },
-  sensorCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-  },
-  fireCard: {
-    backgroundColor: '#FEF2F2',
-  },
-  sensorValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  fireText: {
-    color: '#B91C1C',
-  },
-  sensorLabel: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#64748B',
-  },
-  metaText: {
-    marginTop: 8,
-    color: '#475569',
-    fontSize: 13,
+    gap: 8,
   },
   slotGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   slotCard: {
-    width: '48%',
+    borderWidth: 1,
     borderRadius: 18,
     padding: 16,
-  },
-  slotFree: {
-    backgroundColor: '#DCFCE7',
-  },
-  slotBusy: {
-    backgroundColor: '#FEE2E2',
+    gap: 6,
   },
   slotName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
   },
   slotState: {
-    marginTop: 6,
     fontSize: 13,
-    color: '#475569',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    gap: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-  },
-  primaryButton: {
-    backgroundColor: '#1E40AF',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
     fontWeight: '700',
   },
   vehicleCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    gap: 8,
-  },
-  vehicleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
   },
   vehiclePlate: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '800',
   },
-  vehicleLabel: {
-    marginTop: 4,
-    color: '#64748B',
+  metaText: {
     fontSize: 13,
-  },
-  vehicleMeta: {
-    color: '#334155',
-    fontSize: 13,
-  },
-  subscriptionBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  subscriptionText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryButtonText: {
-    color: '#1E40AF',
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  emptyState: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    marginTop: 10,
-    color: '#64748B',
-    textAlign: 'center',
+    lineHeight: 18,
   },
 });

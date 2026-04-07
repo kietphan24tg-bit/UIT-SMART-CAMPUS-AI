@@ -10,7 +10,19 @@ const prisma = new PrismaClient();
 async function main() {
   const passwordHash = await bcrypt.hash('Password123', 10);
 
-  const [admin, student] = await Promise.all([
+  const [superAdmin, admin, lecturer, student] = await Promise.all([
+    prisma.user.upsert({
+      where: { email: 'superadmin@uit.edu.vn' },
+      update: {},
+      create: {
+        email: 'superadmin@uit.edu.vn',
+        passwordHash,
+        firstName: 'Super',
+        lastName: 'Admin',
+        role: Role.super_admin,
+        isActive: true,
+      },
+    }),
     prisma.user.upsert({
       where: { email: 'admin@uit.edu.vn' },
       update: {},
@@ -20,6 +32,19 @@ async function main() {
         firstName: 'Admin',
         lastName: 'System',
         role: Role.admin,
+        isActive: true,
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: 'lecturer@uit.edu.vn' },
+      update: {},
+      create: {
+        email: 'lecturer@uit.edu.vn',
+        passwordHash,
+        firstName: 'Giang',
+        lastName: 'Vien',
+        role: Role.lecturer,
+        faculty: 'Khoa Cong nghe thong tin',
         isActive: true,
       },
     }),
@@ -97,7 +122,9 @@ async function main() {
   }
 
   console.warn('Seed completed:', {
+    superAdmin: superAdmin.email,
     admin: admin.email,
+    lecturer: lecturer.email,
     student: student.email,
     semester: semester.name,
     vehicle: vehicle.plateNumber,

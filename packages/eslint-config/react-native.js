@@ -18,7 +18,4 @@ module.exports = {
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
   },
-  env: {
-    'react-native/react-native': true,
-  },
 };
