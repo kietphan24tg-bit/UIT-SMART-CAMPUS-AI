@@ -1,9 +1,17 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import {
   PrismaClient,
   Role,
   SubscriptionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import dotenv from 'dotenv';
+
+dotenv.config({
+  path: existsSync(resolve(process.cwd(), '.env.local')) ? '.env.local' : '.env',
+});
 
 const prisma = new PrismaClient();
 

@@ -1,5 +1,7 @@
 import type { ParkingStatus, RegisteredVehicle, UserRole } from '@smart-campus/shared';
 
+export type { ParkingStatus, RegisteredVehicle, UserRole } from '@smart-campus/shared';
+
 export interface ScheduleRecord {
   id: string;
   instructor: string;
@@ -139,18 +141,35 @@ export interface AlertFeedItem {
   sensorContext?: string;
 }
 
+export type SupportState = 'live' | 'partial' | 'unsupported';
+export type VerificationSource =
+  | 'auth'
+  | 'users'
+  | 'schedule'
+  | 'grades'
+  | 'notifications'
+  | 'parking'
+  | 'iot'
+  | 'safety'
+  | 'payments'
+  | 'stitch'
+  | 'manual';
+
 export interface ServiceEntry {
   id: string;
   title: string;
   summary: string;
   category:
-    | 'Academic'
-    | 'Campus life'
-    | 'Campus utilities'
-    | 'Teaching tools'
-    | 'Admin tools';
+    | 'Học vụ'
+    | 'Đời sống campus'
+    | 'Tiện ích campus'
+    | 'Công cụ giảng dạy'
+    | 'Công cụ quản trị';
   icon: string;
-  availability: 'live' | 'preview';
+  supportState: SupportState;
+  isInteractive: boolean;
+  disabledReason?: string;
+  lastVerifiedSource: VerificationSource;
   primaryAction: string;
   route: string;
   description: string;
@@ -184,7 +203,11 @@ export interface RoleTaskItem {
   meta: string;
   statusLabel: string;
   tone: StatusTone;
-  route: string;
+  route?: string;
+  supportState: SupportState;
+  isInteractive: boolean;
+  disabledReason?: string;
+  lastVerifiedSource: VerificationSource;
 }
 
 export interface LecturerDashboardSnapshot {
@@ -320,6 +343,9 @@ export interface TaskActionDescriptor {
   helper?: string;
   externalUrl?: string;
   disabled?: boolean;
+  supportState?: SupportState;
+  disabledReason?: string;
+  lastVerifiedSource?: VerificationSource;
 }
 
 export interface TaskInfoRow {
@@ -335,6 +361,10 @@ export interface TaskRecord {
   statusLabel?: string;
   tone?: StatusTone;
   route?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  supportState?: SupportState;
+  lastVerifiedSource?: VerificationSource;
 }
 
 export interface TaskSectionConfig {
@@ -364,11 +394,18 @@ export interface TaskScreenConfig {
   primaryAction?: TaskActionDescriptor;
   secondaryActions?: TaskActionDescriptor[];
   layout?: 'default' | 'narrow';
+  supportState?: SupportState;
+  disabledReason?: string;
+  lastVerifiedSource?: VerificationSource;
 }
 
 export interface ServiceBlueprint {
   id: string;
   audience: UserRole;
+  supportState: SupportState;
+  isInteractive: boolean;
+  disabledReason?: string;
+  lastVerifiedSource: VerificationSource;
   readinessLabel: string;
   readinessTone: StatusTone;
   contractRows: TaskInfoRow[];

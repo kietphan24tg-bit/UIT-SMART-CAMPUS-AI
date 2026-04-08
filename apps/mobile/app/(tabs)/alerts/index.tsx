@@ -3,12 +3,19 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { ContentStack, EmptyState, Screen, SectionCard, StatusBadge, TopHero } from '@/components/ui';
+import {
+  ContentStack,
+  EmptyState,
+  Screen,
+  SectionCard,
+  StatusBadge,
+  TopHero,
+} from '@/components/ui';
 import { useAlertFeed } from '@/hooks/use-alert-feed';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { formatDateTime, getRoleLabel, getSeverityLabel } from '@/utils/app';
+import { formatDateTime, getRoleLabel, getSeverityLabel, isAdminRole } from '@/utils/app';
 
 type FilterKey = 'all' | 'unread' | 'emergency';
 
@@ -18,18 +25,20 @@ export default function AlertsScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const router = useRouter();
   const alerts = useAlertFeed(role);
+  const feedItems = alerts.data ?? [];
   const [filter, setFilter] = useState<FilterKey>('all');
   const feedColumns = layout.isTablet ? 2 : 1;
   const feedItemWidth = layout.getGridItemWidth({ columns: feedColumns, gap: 10 });
 
   const filteredItems = useMemo(() => {
+    const items = alerts.data ?? [];
     if (filter === 'unread') {
-      return alerts.data.filter((item) => !item.isRead);
+      return items.filter((item) => !item.isRead);
     }
     if (filter === 'emergency') {
-      return alerts.data.filter((item) => item.severity === 'critical');
+      return items.filter((item) => item.severity === 'critical');
     }
-    return alerts.data;
+    return items;
   }, [alerts.data, filter]);
 
   const emergencyItems = filteredItems.filter((item) => item.severity === 'critical');
@@ -46,35 +55,46 @@ export default function AlertsScreen() {
       }
     >
       <TopHero
-        eyebrow="Alerts center"
-        title="Canh bao & thong bao"
-        subtitle="Gom mot cho cho canh bao khan, thong bao hoc vu va cap nhat he thong cua UIT Smart Campus."
+        eyebrow="Cảnh báo"
+        title="Cảnh báo và thông báo"
+        subtitle={
+          isAdminRole(role)
+            ? 'Gồm fire alert từ gateway và thông báo hệ thống.'
+            : 'Thông báo học vụ, nhắc việc và cảnh báo theo quyền hiện tại.'
+        }
         badge={{ label: getRoleLabel(role), tone: 'info' }}
       />
 
       <ContentStack>
         <SectionCard
-          title="Bo loc nhanh"
-          subtitle={`${alerts.data.length} muc gan nhat dang co trong feed.`}
-          actionLabel="Doc tat ca"
+          title="Bộ lọc nhanh"
+          subtitle={`${feedItems.length} mục trong feed hiện tại.`}
+          actionLabel="Đọc tất cả"
           onActionPress={() => void alerts.markAllAsRead()}
         >
           <View style={styles.filterRow}>
-            <FilterChip label="Tat ca" active={filter === 'all'} onPress={() => setFilter('all')} />
-            <FilterChip label="Chua doc" active={filter === 'unread'} onPress={() => setFilter('unread')} />
-            <FilterChip label="Khan cap" active={filter === 'emergency'} onPress={() => setFilter('emergency')} />
+            <FilterChip label="Tất cả" active={filter === 'all'} onPress={() => setFilter('all')} />
+            <FilterChip label="Chưa đọc" active={filter === 'unread'} onPress={() => setFilter('unread')} />
+            <FilterChip label="Khẩn cấp" active={filter === 'emergency'} onPress={() => setFilter('emergency')} />
           </View>
         </SectionCard>
 
         {alerts.isError ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="Khong tai duoc alert feed"
-            description="UI da co error/offline state ro rang. Ban co the pull-to-refresh hoac thu lai sau."
+            title="Không tải được danh sách cảnh báo"
+            description="Kéo xuống để thử lại."
           />
         ) : null}
 
-        <SectionCard title="Khan cap" subtitle="Uu tien hien thi truoc voi ngu canh sensor khi co.">
+        <SectionCard
+          title="Khẩn cấp"
+          subtitle={
+            isAdminRole(role)
+              ? 'Ưu tiên fire alert ở đầu danh sách.'
+              : 'Các mục quan trọng sẽ hiển thị ở phần đầu.'
+          }
+        >
           {emergencyItems.length > 0 ? (
             <View style={styles.feed}>
               {emergencyItems.map((item) => (
@@ -100,13 +120,13 @@ export default function AlertsScreen() {
           ) : (
             <EmptyState
               icon="shield-checkmark-outline"
-              title="Khong co canh bao khan"
-              description="Fire alerts danh cho admin va super admin se xuat hien o day, trong khi nguoi dung khac van thay thong bao thuong ben duoi."
+              title="Không có mục khẩn cấp"
+              description="Khi có cảnh báo nghiêm trọng, mục liên quan sẽ xuất hiện tại đây."
             />
           )}
         </SectionCard>
 
-        <SectionCard title="Thong bao gan day" subtitle="Bao gom hoc vu, he thong va nhac viec.">
+        <SectionCard title="Thông báo gần đây" subtitle="Gồm học vụ, hệ thống và nhắc việc.">
           {normalItems.length > 0 ? (
             <View style={styles.feed}>
               {normalItems.map((item) => (
@@ -135,8 +155,8 @@ export default function AlertsScreen() {
           ) : (
             <EmptyState
               icon="notifications-off-outline"
-              title="Khong co thong bao phu hop bo loc"
-              description="UI van giu state empty ro rang cho all / unread / emergency tren moi role."
+              title="Không có thông báo phù hợp bộ lọc"
+              description="Đổi bộ lọc hoặc kéo xuống để làm mới."
             />
           )}
         </SectionCard>

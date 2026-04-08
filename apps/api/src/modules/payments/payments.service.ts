@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import {
   ForbiddenException,
   Injectable,
@@ -6,13 +8,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '@prisma/client';
-import { createHmac } from 'node:crypto';
 import type { PaymentCheckout } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 
 const MONTHLY_FEE_VND = 40000;
 const MOMO_SANDBOX_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/create';
+
+function resolveMonthlyFee(value: number | null | undefined) {
+  return typeof value === 'number' && value > 0 ? value : MONTHLY_FEE_VND;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -31,11 +36,11 @@ export class PaymentsService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException('Khong tim thay xe');
+      throw new NotFoundException('Không tìm thấy xe');
     }
 
     if (vehicle.userId !== userId) {
-      throw new ForbiddenException('Ban khong co quyen thanh toan cho xe nay');
+      throw new ForbiddenException('Bạn không có quyền thanh toán cho xe này');
     }
 
     const subscription =
@@ -47,6 +52,7 @@ export class PaymentsService {
           status: 'inactive',
         },
       }));
+    const amount = resolveMonthlyFee(subscription.monthlyFee);
 
     const now = Date.now();
     const orderId = `MOMO-${now}-${vehicle.id.slice(0, 8)}`;
@@ -59,7 +65,7 @@ export class PaymentsService {
         provider: 'momo',
         providerOrderId: orderId,
         requestId,
-        amount: subscription.monthlyFee || MONTHLY_FEE_VND,
+        amount,
         status: 'pending',
         requestPayload: {
           orderId,
@@ -98,7 +104,7 @@ export class PaymentsService {
   async handleMomoWebhook(payload: Record<string, unknown>) {
     const orderId = String(payload.orderId || payload.requestId || '');
     if (!orderId) {
-      throw new NotFoundException('Webhook khong co orderId');
+      throw new NotFoundException('Webhook không có orderId');
     }
 
     const transaction =
@@ -110,7 +116,7 @@ export class PaymentsService {
       }));
 
     if (!transaction) {
-      throw new NotFoundException('Khong tim thay giao dich');
+      throw new NotFoundException('Không tìm thấy giao dịch');
     }
 
     if (transaction.status === 'paid') {
@@ -152,7 +158,7 @@ export class PaymentsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException('Khong tim thay giao dich mock');
+      throw new NotFoundException('Không tìm thấy giao dịch mock');
     }
 
     await this.markTransactionPaid(transactionId, {
@@ -205,7 +211,7 @@ export class PaymentsService {
     const requestType = 'captureWallet';
     const requestId = transaction.requestId || transaction.providerOrderId;
     const extraData = '';
-    const orderInfo = `Thanh toan gui xe thang cho ${plateNumber}`;
+    const orderInfo = `Thanh toán gửi xe tháng cho ${plateNumber}`;
 
     const rawSignature = [
       `accessKey=${accessKey}`,
@@ -245,7 +251,7 @@ export class PaymentsService {
       body: JSON.stringify(requestPayload),
     });
 
-    const responseData = (await response.json()) as Record<string, unknown>;
+    const responseData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     const checkoutUrl = String(responseData.payUrl || responseData.deeplink || '');
 
     if (!response.ok || Number(responseData.resultCode ?? -1) !== 0 || !checkoutUrl) {
@@ -257,7 +263,7 @@ export class PaymentsService {
         },
       });
       throw new InternalServerErrorException(
-        String(responseData.message || 'Khong tao duoc link thanh toan MoMo'),
+        String(responseData.message || 'Không tạo được link thanh toán MoMo'),
       );
     }
 
@@ -281,11 +287,11 @@ export class PaymentsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException('Khong tim thay giao dich');
+      throw new NotFoundException('Không tìm thấy giao dịch');
     }
 
     if (!transaction.subscriptionId) {
-      throw new NotFoundException('Giao dich chua duoc lien ket voi goi gui xe');
+      throw new NotFoundException('Giao dịch chưa được liên kết với gói gửi xe');
     }
 
     const now = new Date();

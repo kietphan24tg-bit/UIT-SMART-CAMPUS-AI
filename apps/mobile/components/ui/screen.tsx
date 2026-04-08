@@ -32,10 +32,12 @@ export function Screen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {children}
+          <View style={styles.inner}>{children}</View>
         </ScrollView>
       ) : (
-        <View style={[styles.content, contentContainerStyle]}>{children}</View>
+        <View style={[styles.content, contentContainerStyle]}>
+          <View style={styles.inner}>{children}</View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -50,5 +52,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 32,
+  },
+  inner: {
+    gap: 0,
   },
 });

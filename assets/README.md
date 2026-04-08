@@ -1,19 +1,20 @@
 # Assets
 
-Thư mục chứa tài nguyên dùng chung cho toàn dự án (logo, hình ảnh branding, icons, v.v.).
+Thu muc chua tai nguyen dung chung cho toan du an (logo, hinh anh branding, icons, v.v.).
 
-## Cấu trúc
+## Cau truc
 
-```
+```text
 assets/
-├── images/                          # Hình ảnh, logo
-│   └── Logo UIT_Full_TV-01.svg      # Logo UIT chính thức
-└── README.md
+  images/
+    LogoUIT 1-02.png        # UIT mark (logo)
+    Logo UIT_Full_TV.png    # UIT lockup (full)
+  README.md
 ```
 
-## Quy tắc
+## Quy tac
 
-- **Logo & branding** → `assets/images/`
-- **Mobile-specific assets** (app icon, splash) → `apps/mobile/assets/`
-- Đặt tên file rõ ràng, dùng kebab-case hoặc giữ tên gốc nếu là file chính thức
-- Ưu tiên dùng SVG cho logo/icon (scalable, nhẹ)
+- Logo & branding -> `assets/images/`
+- Mobile-specific assets (app icon, splash, adaptive icon) -> `apps/mobile/assets/`
+- Neu co ban SVG chinh thuc thi uu tien SVG; hien tai project dang su dung bo PNG duoc cung cap.
+

@@ -1,17 +1,21 @@
-# Tai lieu du an Smart Campus
+# Tài liệu dự án Smart Campus
 
-Thuyet minh day du cho du an Smart Campus - UIT Super App.
+Thuyết minh đầy đủ cho dự án Smart Campus - UIT Super App.
 
-## Muc luc
+## Mục lục
 
-| Tai lieu | Mo ta |
+| Tài liệu | Mô tả |
 |----------|-------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Kien truc he thong, tech stack, data flow |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Huong dan cai dat va chay du an |
-| [CONVENTIONS.md](CONVENTIONS.md) | Quy tac lap trinh, naming, patterns |
-| [WORKFLOW.md](WORKFLOW.md) | Quy trinh lam viec nhom, Git workflow |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Kiến trúc hệ thống, tech stack, data flow |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Hướng dẫn cài đặt và chạy dự án |
+| [CONVENTIONS.md](CONVENTIONS.md) | Quy tắc lập trình, naming, patterns |
+| [WORKFLOW.md](WORKFLOW.md) | Quy trình làm việc nhóm, Git workflow |
 | [DATABASE.md](DATABASE.md) | Database schema, ERD, migrations |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Huong dan deploy backend va mobile |
-| [FEATURES.md](FEATURES.md) | Danh sach tinh nang, user stories |
-| [API.md](API.md) | Huong dan su dung va thiet ke API |
-| [TESTING.md](TESTING.md) | Chien luoc kiem thu, patterns, huong dan viet test |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Hướng dẫn deploy backend và mobile |
+| [FEATURES.md](FEATURES.md) | Danh sách tính năng, user stories |
+| [API.md](API.md) | Hướng dẫn sử dụng và thiết kế API |
+| [TESTING.md](TESTING.md) | Chiến lược kiểm thử, patterns, hướng dẫn viết test |
+| [BACKEND_PARALLEL_PLAN.md](BACKEND_PARALLEL_PLAN.md) | Kế hoạch triển khai backend theo phase song song với UI/UX |
+| [UI_UX_QC_LOOP.md](UI_UX_QC_LOOP.md) | Quy trình lặp QC UI/UX bám sát checklist skill đã cung cấp |
+| [UI_UX_DESIGN_BRIEF.md](UI_UX_DESIGN_BRIEF.md) | Audit tính năng, information architecture, UI/UX requirements, Google Play readiness |
+| [GOOGLE_STITCH_PROMPT.md](GOOGLE_STITCH_PROMPT.md) | Prompt copy-paste để đưa thẳng vào Google Stitch |

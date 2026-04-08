@@ -17,14 +17,33 @@ export function useResponsiveLayout() {
   const viewportWidth = Math.max(width, 320);
   const viewportHeight = Math.max(height, 568);
   const isCompact = viewportWidth < 360;
-  const isLargePhone = viewportWidth >= 412 && viewportWidth < 600;
+  const isRegularPhone = viewportWidth >= 360 && viewportWidth < 393;
+  const isWidePhone = viewportWidth >= 393 && viewportWidth < 412;
+  const isLargePhone = viewportWidth >= 412 && viewportWidth < 480;
+  const isExtraLargePhone = viewportWidth >= 480 && viewportWidth < 600;
   const isTablet = viewportWidth >= 600;
   const isLargeScreen = viewportWidth >= 960;
-  const horizontalPadding = isCompact ? 14 : isTablet ? 24 : isLargePhone ? 20 : 16;
-  const heroPadding = isCompact ? 16 : isTablet ? 28 : isLargePhone ? 24 : 20;
+  const horizontalPadding = isCompact
+    ? 14
+    : isRegularPhone
+      ? 16
+      : isWidePhone
+        ? 18
+        : isLargePhone
+          ? 20
+          : isExtraLargePhone || isTablet
+            ? 24
+            : 16;
+  const heroPadding = horizontalPadding;
   const contentMaxWidth = isLargeScreen ? 1040 : isTablet ? 880 : viewportWidth;
   const narrowMaxWidth = isTablet ? 720 : viewportWidth;
-  const sectionGap = isTablet ? 20 : 16;
+  const sectionGap = isCompact
+    ? 14
+    : isWidePhone
+      ? 18
+      : isLargePhone || isExtraLargePhone || isTablet
+        ? 20
+        : 16;
   const boundedWidth = Math.min(viewportWidth, contentMaxWidth);
   const availableWidth = Math.max(boundedWidth - horizontalPadding * 2, 0);
 
@@ -53,7 +72,10 @@ export function useResponsiveLayout() {
     viewportWidth,
     viewportHeight,
     isCompact,
+    isRegularPhone,
+    isWidePhone,
     isLargePhone,
+    isExtraLargePhone,
     isTablet,
     isLargeScreen,
     horizontalPadding,

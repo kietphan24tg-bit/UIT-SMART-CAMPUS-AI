@@ -27,23 +27,29 @@ function normalizeRfid(value: string) {
   return String(value || '').trim().toUpperCase();
 }
 
+function resolveGateId(value?: string) {
+  const gateId = String(value || '').trim();
+  return gateId || DEFAULT_GATE_ID;
+}
+
 @Injectable()
 export class ParkingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getStatus(gateId = DEFAULT_GATE_ID): Promise<ParkingStatus> {
+    const resolvedGateId = resolveGateId(gateId);
     const [slots, latestTelemetry, activeSessions] = await Promise.all([
       this.prisma.parkingSlot.findMany({
-        where: { gateId },
+        where: { gateId: resolvedGateId },
         orderBy: { slotNumber: 'asc' },
       }),
       this.prisma.telemetrySnapshot.findFirst({
-        where: { gateId },
+        where: { gateId: resolvedGateId },
         orderBy: { reportedAt: 'desc' },
       }),
       this.prisma.parkingSession.count({
         where: {
-          gateId,
+          gateId: resolvedGateId,
           status: 'active',
         },
       }),
@@ -60,7 +66,7 @@ export class ParkingService {
     const availableSlots = mappedSlots.filter((slot) => !slot.isOccupied).length;
 
     return {
-      gateId,
+      gateId: resolvedGateId,
       totalSlots: mappedSlots.length,
       occupiedSlots: mappedSlots.length - availableSlots,
       availableSlots,
@@ -107,8 +113,8 @@ export class ParkingService {
     if (duplicateVehicle) {
       throw new ConflictException(
         duplicateVehicle.plateNumber === plateNumber
-          ? 'Bien so da duoc dang ky'
-          : 'RFID da duoc dang ky',
+          ? 'Biển số đã được đăng ký'
+          : 'RFID đã được đăng ký',
       );
     }
 
@@ -141,7 +147,7 @@ export class ParkingService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException('Khong tim thay xe');
+      throw new NotFoundException('Không tìm thấy xe');
     }
 
     return vehicle;

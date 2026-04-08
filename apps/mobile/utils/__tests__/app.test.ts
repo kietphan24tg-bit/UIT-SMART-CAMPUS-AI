@@ -2,9 +2,9 @@ import { getRoleScopedTabTitle, getTelemetryHealthState } from '../app';
 
 describe('app utils', () => {
   it('should resolve operations label for admin roles', () => {
-    expect(getRoleScopedTabTitle('admin')).toBe('Van hanh');
-    expect(getRoleScopedTabTitle('super_admin')).toBe('Van hanh');
-    expect(getRoleScopedTabTitle('student')).toBe('Lich hoc');
+    expect(getRoleScopedTabTitle('admin')).toBe('Vận hành');
+    expect(getRoleScopedTabTitle('super_admin')).toBe('Vận hành');
+    expect(getRoleScopedTabTitle('student')).toBe('Lịch');
   });
 
   it('should detect stale telemetry', () => {

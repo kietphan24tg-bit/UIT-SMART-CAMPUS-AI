@@ -2,10 +2,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, EmptyState, Screen, SectionCard, StatusBadge, TopHero } from '@/components/ui';
+import {
+  ContentStack,
+  EmptyState,
+  Screen,
+  SectionCard,
+  StatusBadge,
+  TopHero,
+} from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { getGreetingName, getRoleLabel, isAdminRole, isLecturerRole, isSuperAdminRole } from '@/utils/app';
+import {
+  getGreetingName,
+  getRoleLabel,
+  isAdminRole,
+  isLecturerRole,
+  isSuperAdminRole,
+} from '@/utils/app';
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
@@ -16,19 +29,21 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <TopHero
-        eyebrow="Profile overview"
+        eyebrow="Hồ sơ"
         title={getGreetingName(user)}
-        subtitle="Tong hop thong tin tai khoan, quyen hien tai va duong vao cac nhom thiet lap quan trong."
+        subtitle="Tài khoản, quyền hiện tại và lối vào hỗ trợ."
         badge={{ label: getRoleLabel(user?.role), tone: 'info' }}
+        showBrand
       />
 
-      <ContentStack>
+      <ContentStack gap={16} overlapHero={false}>
         <View
           style={[
             styles.profileCard,
             {
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
+              ...theme.elevation.level1,
             },
           ]}
         >
@@ -44,77 +59,87 @@ export default function ProfileScreen() {
               {user?.lastName?.charAt(0) ?? 'U'}
             </Text>
           </View>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{getGreetingName(user)}</Text>
-          <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
-            {user?.studentId || 'Chua co ma dinh danh'} · {user?.email || 'Chua co email'}
+          <Text
+            style={[
+              styles.name,
+              { color: theme.colors.text, fontFamily: theme.fonts.bold },
+            ]}
+          >
+            {getGreetingName(user)}
+          </Text>
+          <Text style={[styles.meta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            {user?.studentId || 'Chưa có mã định danh'} · {user?.email || 'Chưa có email'}
           </Text>
           {user ? <StatusBadge label={getRoleLabel(user.role)} tone="info" /> : null}
         </View>
 
-        <SectionCard title="Vai tro & entry points" subtitle="Cac loi vao role-specific duoc dat ro rang de user khong bi lac.">
+        <SectionCard title="Lối vào theo vai trò" subtitle="Chỉ hiển thị đúng công cụ theo quyền hiện tại.">
           <View style={styles.linkGroup}>
             {isLecturerRole(user?.role) ? (
               <ProfileLink
                 icon="school-outline"
-                label="Tac vu giang day"
-                description="Class dashboard, attendance QR, grade sheet, thong bao lop"
-                onPress={() => router.push('/schedule/class-dashboard')}
+                label="Lịch dạy"
+                description="Mở lịch và công cụ lớp học."
+                onPress={() => router.push('/schedule')}
               />
             ) : null}
             {isAdminRole(user?.role) ? (
               <ProfileLink
                 icon="pulse-outline"
-                label="Trung tam van hanh"
-                description="Approvals, fire alerts, user summary, parking ops"
+                label="Vận hành campus"
+                description="Theo dõi parking, telemetry và cảnh báo."
                 onPress={() => router.push('/schedule')}
               />
             ) : null}
             {isSuperAdminRole(user?.role) ? (
               <ProfileLink
                 icon="settings-outline"
-                label="System controls"
-                description="Role management, gateway config, retention policy"
+                label="Thiết lập hệ thống"
+                description="Đi tới phạm vi thiết lập được cấp."
                 onPress={() => router.push('/settings/system-controls')}
               />
             ) : null}
           </View>
         </SectionCard>
 
-        <SectionCard title="Cai dat & ho tro" subtitle="Nhom entry danh cho account, phap ly va ho tro su dung.">
+        <SectionCard title="Tài khoản và hỗ trợ" subtitle="Các lối vào chính cho mọi người dùng.">
           <View style={styles.linkGroup}>
             <ProfileLink
               icon="settings-outline"
-              label="Tai khoan & ho tro"
-              description="Mat khau, ho tro, about, dang xuat"
+              label="Cài đặt"
+              description="Quản lý tài khoản và hỗ trợ."
               onPress={() => router.push('/settings')}
             />
             <ProfileLink
               icon="shield-checkmark-outline"
-              label="Quyen rieng tu & phap ly"
-              description="Privacy, terms, permissions, data usage"
+              label="Quyền riêng tư"
+              description="Điều khoản, chính sách và quyền truy cập."
               onPress={() => router.push('/legal')}
             />
             <ProfileLink
               icon="trash-outline"
-              label="Xoa tai khoan"
-              description="Diem vao rieng cho account deletion"
+              label="Xóa tài khoản"
+              description="Xem lưu ý trước khi gửi yêu cầu."
               onPress={() => router.push('/account/delete')}
             />
           </View>
         </SectionCard>
 
-        <SectionCard title="Trang thai tai khoan" subtitle="Thong tin ngan gon de nguoi dung hieu boi canh hien tai.">
+        <SectionCard title="Thông tin ứng dụng" subtitle="Tóm tắt sản phẩm và phiên bản hiện tại.">
           {user ? (
             <View style={styles.linkGroup}>
               <Text style={[styles.metaLeft, { color: theme.colors.textMuted }]}>
-                Role hien tai quyet dinh tab thu hai, quick actions va cac hidden task routes duoc mo tren mobile.
+                UIT Smart Campus tập trung vào xác thực, lịch học, thông báo và parking.
+              </Text>
+              <Text style={[styles.metaLeft, { color: theme.colors.textMuted }]}>
+                Phiên bản ứng dụng: 0.1.0
               </Text>
             </View>
           ) : (
             <EmptyState
               icon="person-outline"
-              title="Chua co du lieu ho so"
-              description="App se dua ban ve auth neu phien dang nhap khong con hieu luc."
+              title="Chưa có dữ liệu hồ sơ"
+              description="Ứng dụng sẽ đưa bạn về màn đăng nhập nếu phiên làm việc hết hạn."
             />
           )}
         </SectionCard>
@@ -130,7 +155,7 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons name="log-out-outline" size={20} color={theme.colors.danger} />
-          <Text style={[styles.logoutText, { color: theme.colors.danger }]}>Dang xuat</Text>
+          <Text style={[styles.logoutText, { color: theme.colors.danger }]}>Đăng xuất</Text>
         </Pressable>
       </ContentStack>
     </Screen>
@@ -186,7 +211,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     padding: 20,
-    gap: 8,
+    gap: 10,
   },
   avatar: {
     width: 76,
@@ -197,11 +222,9 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 30,
-    fontWeight: '800',
   },
   name: {
     fontSize: 22,
-    fontWeight: '800',
   },
   meta: {
     fontSize: 13,
@@ -232,7 +255,6 @@ const styles = StyleSheet.create({
   },
   linkLabel: {
     fontSize: 15,
-    fontWeight: '800',
   },
   linkDescription: {
     marginTop: 4,
@@ -250,6 +272,5 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: '800',
   },
 });

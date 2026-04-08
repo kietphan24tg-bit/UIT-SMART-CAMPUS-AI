@@ -19,3 +19,33 @@ export interface AuthTokens {
 export interface RefreshTokenRequest {
   refreshToken: string;
 }
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetOtpVerifyRequest {
+  email: string;
+  otp: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface PasswordResetChallenge {
+  maskedEmail: string;
+  expiresInSeconds: number;
+  delivery: 'email' | 'preview';
+  previewCode?: string;
+}
+
+export interface PasswordResetOtpVerifyResult {
+  verified: boolean;
+}
+
+export interface PasswordResetConfirmResult {
+  success: boolean;
+}

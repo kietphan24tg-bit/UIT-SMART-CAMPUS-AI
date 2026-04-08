@@ -34,6 +34,14 @@ apps/mobile/ios/
 *.mobileprovision
 *.orig.*
 
+# Local dev artifacts
+*.pid
+apps/mobile/demo-*.png
+apps/mobile/expo-qr.png
+apps/mobile/expo54-qr.png
+apps/mobile/window_dump*.xml
+apps/mobile/Expo-Go-*.apk
+
 # Testing
 coverage/
 *.lcov

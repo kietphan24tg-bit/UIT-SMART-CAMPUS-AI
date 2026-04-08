@@ -1,8 +1,8 @@
 import { Link, router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, FormField, PrimaryButton, Screen, StatusBadge, TopHero } from '@/components/ui';
+import { ContentStack, FormField, PrimaryButton, Screen, TopHero } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 
@@ -47,43 +47,27 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
   const [password, setPassword] = useState('');
   const [registerForm, setRegisterForm] = useState<RegisterForm>(EMPTY_REGISTER_FORM);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const title = useMemo(
-    () => (mode === 'login' ? 'Đăng nhập một lần, dùng cả campus' : 'Tạo tài khoản UIT Smart Campus'),
-    [mode],
-  );
-
-  const subtitle = useMemo(
-    () =>
-      mode === 'login'
-        ? 'Tập trung lịch học, cảnh báo, parking và dịch vụ trong một ứng dụng đồng nhất.'
-        : 'Đăng ký với email UIT và MSSV để dùng các dịch vụ cốt lõi của hệ thống.',
-    [mode],
-  );
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setError('');
-    setSuccess('');
   };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setError('Vui lòng nhập đầy đủ email và mật khẩu.');
+      setError('Nhập đủ email và mật khẩu.');
       return;
     }
 
     setLoading(true);
     setError('');
-    setSuccess('');
 
     try {
       await login(email.trim(), password);
       router.replace('/home');
     } catch {
-      setError('Email hoặc mật khẩu chưa chính xác.');
+      setError('Email hoặc mật khẩu chưa đúng.');
     } finally {
       setLoading(false);
     }
@@ -99,17 +83,17 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
     };
 
     if (Object.values(payload).some((item) => !item)) {
-      setError('Vui lòng điền đầy đủ thông tin đăng ký.');
+      setError('Vui lòng điền đủ thông tin.');
       return;
     }
 
     if (!isValidUitEmail(payload.email)) {
-      setError('Email đăng ký cần thuộc tên miền UIT.');
+      setError('Email cần thuộc miền UIT.');
       return;
     }
 
     if (!isValidPassword(payload.password)) {
-      setError('Mật khẩu cần từ 8 ký tự, có ít nhất 1 chữ in hoa và 1 số.');
+      setError('Mật khẩu tối thiểu 8 ký tự, có 1 chữ hoa và 1 số.');
       return;
     }
 
@@ -120,13 +104,12 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
 
     setLoading(true);
     setError('');
-    setSuccess('');
 
     try {
       await register(payload);
       router.replace('/home');
     } catch {
-      setError('Đăng ký chưa thành công. Vui lòng kiểm tra lại thông tin.');
+      setError('Đăng ký chưa thành công. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -144,68 +127,19 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
       <Screen
         contentContainerStyle={{
           flexGrow: 1,
-          paddingBottom: theme.spacing.xxl,
+          paddingBottom: theme.spacing.xl,
         }}
       >
         <TopHero
-          eyebrow="UIT Smart Campus"
-          title={mode === 'login' ? 'Chào mừng trở lại' : 'Khởi tạo tài khoản'}
-          subtitle="Thiết kế thống nhất cho cả light mode, dark mode và trải nghiệm sử dụng thực tế của UITer."
-          badge={{ label: mode === 'login' ? 'Đăng nhập nhanh' : 'Đăng ký chuẩn UIT', tone: 'info' }}
+          title={mode === 'login' ? 'Đăng nhập tài khoản UIT' : 'Tạo tài khoản UIT'}
+          subtitle={mode === 'login' ? 'Tiếp tục với email UIT của bạn.' : 'Điền thông tin để bắt đầu sử dụng ứng dụng.'}
+          showBrand
+          brandCompact
+          brandCentered
+          brandShowSubtitle={false}
         />
 
-        <ContentStack narrow>
-          <View
-            style={[
-              styles.segment,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <Pressable
-              onPress={() => switchMode('login')}
-              style={[
-                styles.segmentButton,
-                mode === 'login'
-                  ? {
-                      backgroundColor: theme.colors.primarySurface,
-                    }
-                  : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentLabel,
-                  { color: mode === 'login' ? theme.colors.primary : theme.colors.textMuted },
-                ]}
-              >
-                Đăng nhập
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => switchMode('register')}
-              style={[
-                styles.segmentButton,
-                mode === 'register'
-                  ? {
-                      backgroundColor: theme.colors.primarySurface,
-                    }
-                  : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentLabel,
-                  { color: mode === 'register' ? theme.colors.primary : theme.colors.textMuted },
-                ]}
-              >
-                Đăng ký
-              </Text>
-            </Pressable>
-          </View>
-
+        <ContentStack narrow overlapHero={false}>
           <View
             style={[
               styles.card,
@@ -215,11 +149,72 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
               },
             ]}
           >
-            <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
+            <View
+              style={[
+                styles.segment,
+                {
+                  backgroundColor: theme.colors.surfaceSubtle,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Pressable
+                onPress={() => switchMode('login')}
+                style={[
+                  styles.segmentButton,
+                  mode === 'login'
+                    ? {
+                        backgroundColor: theme.colors.primarySurface,
+                      }
+                    : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.segmentLabel,
+                    {
+                      color: mode === 'login' ? theme.colors.primary : theme.colors.textMuted,
+                      fontFamily: theme.fonts.semibold,
+                    },
+                  ]}
+                >
+                  Đăng nhập
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => switchMode('register')}
+                style={[
+                  styles.segmentButton,
+                  mode === 'register'
+                    ? {
+                        backgroundColor: theme.colors.primarySurface,
+                      }
+                    : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.segmentLabel,
+                    {
+                      color: mode === 'register' ? theme.colors.primary : theme.colors.textMuted,
+                      fontFamily: theme.fonts.semibold,
+                    },
+                  ]}
+                >
+                  Đăng ký
+                </Text>
+              </Pressable>
+            </View>
 
-            {error ? <StatusBadge label={error} tone="danger" /> : null}
-            {success ? <StatusBadge label={success} tone="success" /> : null}
+            <Text style={[styles.formTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+              {mode === 'login' ? 'Đăng nhập' : 'Đăng ký'}
+            </Text>
+
+            {error ? (
+              <Text style={[styles.errorText, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}>
+                {error}
+              </Text>
+            ) : null}
 
             {mode === 'login' ? (
               <View style={styles.form}>
@@ -230,7 +225,6 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  hint="Dùng email UIT để truy cập đầy đủ dữ liệu học tập và thông báo."
                 />
                 <FormField
                   label="Mật khẩu"
@@ -238,15 +232,10 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
-                  hint="Mật khẩu tối thiểu 8 ký tự."
                 />
-                <PrimaryButton
-                  label="Đăng nhập"
-                  loading={loading}
-                  onPress={() => void handleLogin()}
-                />
+                <PrimaryButton label="Đăng nhập" loading={loading} onPress={() => void handleLogin()} />
                 <Link href="/forgot-password" style={styles.link}>
-                  <Text style={[styles.linkText, { color: theme.colors.primary }]}>
+                  <Text style={[styles.linkText, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
                     Quên mật khẩu?
                   </Text>
                 </Link>
@@ -282,7 +271,7 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
                 />
                 <FormField
                   label="Mật khẩu"
-                  placeholder="Ít nhất 8 ký tự, 1 chữ hoa, 1 số"
+                  placeholder="Ít nhất 8 ký tự"
                   value={registerForm.password}
                   onChangeText={(value) => updateRegisterField('password', value)}
                   secureTextEntry
@@ -294,11 +283,7 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
                   onChangeText={(value) => updateRegisterField('confirmPassword', value)}
                   secureTextEntry
                 />
-                <PrimaryButton
-                  label="Tạo tài khoản"
-                  loading={loading}
-                  onPress={() => void handleRegister()}
-                />
+                <PrimaryButton label="Tạo tài khoản" loading={loading} onPress={() => void handleRegister()} />
               </View>
             )}
           </View>
@@ -309,46 +294,43 @@ export function AuthScreen({ initialMode = 'login' }: AuthScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  card: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+  },
   segment: {
     flexDirection: 'row',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 6,
+    padding: 4,
   },
   segmentButton: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
   },
   segmentLabel: {
     fontSize: 14,
-    fontWeight: '700',
   },
-  card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 18,
-    gap: 16,
+  formTitle: {
+    fontSize: 18,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   form: {
-    gap: 14,
+    gap: 12,
   },
   link: {
-    marginTop: 4,
-    alignSelf: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 2,
   },
   linkText: {
     fontSize: 14,
-    fontWeight: '600',
   },
 });

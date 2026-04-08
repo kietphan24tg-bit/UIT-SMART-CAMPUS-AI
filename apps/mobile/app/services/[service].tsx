@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
-import { TaskScreen } from '@/components/tasks';
 import {
   ContentStack,
   EmptyState,
+  InfoRow,
+  PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionCard,
   SkeletonBlock,
   TopHero,
@@ -14,9 +16,15 @@ import {
 import { gradesApi } from '@/services/api/grades';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import type { GradeRecord, GPASummary, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
-import { formatGpaValue, getServiceEntries, isAdminRole, isLecturerRole } from '@/utils/app';
-import { getServiceBlueprint } from '@/utils/role-ui';
+import type { GradeRecord, GPASummary } from '@/types/app-data';
+import {
+  formatGpaValue,
+  getServiceEntries,
+  getSupportStateLabel,
+  getSupportStateTone,
+  isAdminRole,
+  isLecturerRole,
+} from '@/utils/app';
 
 export default function ServiceDetailScreen() {
   const role = useAuthStore((state) => state.user?.role);
@@ -40,9 +48,9 @@ export default function ServiceDetailScreen() {
       <Screen>
         <ContentStack>
           <EmptyState
-            title="Dich vu khong ton tai"
-            description="Module nay chua duoc khai bao trong Services Hub hien tai."
-            actionLabel="Quay lai dich vu"
+            title="Dịch vụ không tồn tại"
+            description="Mục này chưa có trong Services Hub."
+            actionLabel="Quay lại dịch vụ"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -54,12 +62,15 @@ export default function ServiceDetailScreen() {
     return (
       <Screen>
         <TopHero
-          eyebrow="Shared service detail"
+          eyebrow="Dịch vụ học vụ"
           title={service.title}
           subtitle={service.description}
-          badge={{ label: 'Backend-ready', tone: 'success' }}
+          badge={{
+            label: getSupportStateLabel(service.supportState),
+            tone: getSupportStateTone(service.supportState),
+          }}
         />
-        <ContentStack narrow>
+        <ContentStack narrow overlapHero={false}>
           <GradesPanel
             loading={gradesQuery.isLoading}
             gpa={gradesQuery.data?.gpa ?? null}
@@ -70,47 +81,96 @@ export default function ServiceDetailScreen() {
     );
   }
 
-  const blueprint = getServiceBlueprint(serviceId, (role ?? 'student') as never);
+  if (service.id === 'admin-tools') {
+    return (
+      <Screen>
+        <TopHero
+          eyebrow="Dịch vụ quản trị"
+          title={service.title}
+          subtitle={service.description}
+          badge={{
+            label: getSupportStateLabel(service.supportState),
+            tone: getSupportStateTone(service.supportState),
+          }}
+        />
+
+        <ContentStack narrow overlapHero={false}>
+          <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
+            <Text style={styles.body}>
+              Ứng dụng đang tập trung vào tác vụ quản trị có dữ liệu thật: parking, telemetry, fire alert và thông báo.
+            </Text>
+          </SectionCard>
+
+          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
+            <View style={styles.column}>
+              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
+              <InfoRow label="Thông báo" value="Danh sách, chưa đọc, đánh dấu đã đọc" />
+              <InfoRow label="Hồ sơ" value="Xem và cập nhật thông tin cá nhân" />
+            </View>
+          </SectionCard>
+
+          <PrimaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
+          <SecondaryButton label="Mở trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
+          <SecondaryButton label="Mở parking + IoT" onPress={() => router.push('/parking')} />
+        </ContentStack>
+      </Screen>
+    );
+  }
 
   return (
-    <TaskScreen
-      config={{
-        eyebrow: 'Shared service detail',
-        title: service.title,
-        subtitle: service.description,
-        badge: {
-          label: blueprint.readinessLabel,
-          tone: blueprint.readinessTone,
-        },
-        sections: [
-          {
-            title: 'Contract summary',
-            subtitle: `${service.summary} · state coverage ${blueprint.stateLabels.join(', ')}`,
-            infoRows: blueprint.contractRows,
-          },
-          ...blueprint.sections,
-        ],
-        primaryAction: blueprint.primaryAction,
-        secondaryActions: blueprint.secondaryActions,
-        layout: serviceId === 'chatbot' || serviceId === 'library' ? 'narrow' : 'default',
-      }}
-      onActionPress={(action: TaskActionDescriptor) => {
-        if (action.route) {
-          router.push(action.route as never);
-          return;
-        }
+    <Screen>
+      <TopHero
+        eyebrow="Dịch vụ campus"
+        title={service.title}
+        subtitle={service.description}
+        badge={{
+          label: getSupportStateLabel(service.supportState),
+          tone: getSupportStateTone(service.supportState),
+        }}
+      />
 
-        Alert.alert(
-          'UI backend-ready',
-          'Action nay da duoc chot de backend noi mutation theo contract hien thi trong man detail.',
-        );
-      }}
-      onRecordPress={(record: TaskRecord) => {
-        if (record.route) {
-          router.push(record.route as never);
-        }
-      }}
-    />
+      <ContentStack narrow={service.id === 'chatbot' || service.id === 'library'} overlapHero={false}>
+        <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
+          <Text style={styles.body}>
+            {service.disabledReason || 'Dịch vụ này đang hoạt động trong phạm vi hiện tại của ứng dụng.'}
+          </Text>
+        </SectionCard>
+
+        <SectionCard title="Trạng thái dịch vụ" subtitle="Thông tin nhanh về mức độ sẵn sàng.">
+          <View style={styles.column}>
+            <InfoRow label="Trạng thái" value={getSupportStateLabel(service.supportState)} />
+            <InfoRow
+              label="Gợi ý"
+              value={
+                service.supportState === 'live'
+                  ? 'Bạn có thể sử dụng ngay.'
+                  : service.supportState === 'partial'
+                    ? 'Một số hạng mục sẽ được mở dần.'
+                    : 'Sắp triển khai.'
+              }
+            />
+          </View>
+        </SectionCard>
+
+        <SectionCard title="Phạm vi hiện có" subtitle="Thông tin ngắn gọn theo trạng thái dịch vụ.">
+          <Text style={styles.body}>
+            {service.supportState === 'unsupported'
+              ? 'Tạm thời chưa khả dụng trong phiên bản hiện tại.'
+              : 'Một phần dịch vụ đã sẵn sàng.'}
+          </Text>
+        </SectionCard>
+
+        <PrimaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
+        <SecondaryButton
+          label="Liên hệ hỗ trợ"
+          onPress={() =>
+            void Linking.openURL(
+              'mailto:support@uit.edu.vn?subject=Ho%20tro%20dich%20vu%20UIT%20Smart%20Campus',
+            )
+          }
+        />
+      </ContentStack>
+    </Screen>
   );
 }
 
@@ -127,7 +187,7 @@ function GradesPanel({
 
   return (
     <>
-      <SectionCard title="GPA hien tai" subtitle="Snapshot ngan gon de nguoi dung doc nhanh.">
+      <SectionCard title="GPA hiện tại" subtitle="Tóm tắt nhanh trên thiết bị di động.">
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={24} width="35%" />
@@ -139,13 +199,13 @@ function GradesPanel({
               {formatGpaValue(gpa?.gpa)}
             </Text>
             <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-              {gpa?.totalCourses ?? 0} hoc phan · {gpa?.totalCredits ?? 0} tin chi
+              {gpa?.totalCourses ?? 0} học phần · {gpa?.totalCredits ?? 0} tín chỉ
             </Text>
           </View>
         )}
       </SectionCard>
 
-      <SectionCard title="Bang diem gan day" subtitle="Danh sach ngan, tap trung vao thong tin sinh vien can xem ngay.">
+      <SectionCard title="Bảng điểm gần đây" subtitle="Chỉ hiển thị học phần có dữ liệu.">
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={96} />
@@ -171,7 +231,7 @@ function GradesPanel({
                   {grade.course.code} · {grade.semester.name}
                 </Text>
                 <Text style={[styles.gradeScore, { color: theme.colors.primary }]}>
-                  {grade.totalScore ?? '--'} · {grade.letterGrade ?? 'Chua co chu cai'}
+                  {grade.totalScore ?? '--'} · {grade.letterGrade ?? 'Chưa có điểm chữ'}
                 </Text>
               </View>
             ))}
@@ -179,8 +239,8 @@ function GradesPanel({
         ) : (
           <EmptyState
             icon="bar-chart-outline"
-            title="Chua co du lieu diem"
-            description="GPA service se chuyen tu preview sang live detail khi backend co them hoc phan hoac hoc ky cho tai khoan hien tai."
+            title="Chưa có dữ liệu điểm"
+            description="Bảng điểm sẽ hiển thị khi hệ thống có dữ liệu."
           />
         )}
       </SectionCard>

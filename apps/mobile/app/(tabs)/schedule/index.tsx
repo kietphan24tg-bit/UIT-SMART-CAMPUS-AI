@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { MetricGrid, RoleTaskSection } from '@/components/tasks';
+import { MetricGrid } from '@/components/tasks';
 import {
   ContentStack,
   EmptyState,
@@ -15,18 +16,16 @@ import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import type { FireAlertRecord, ScheduleRecord } from '@/types/app-data';
 import {
   formatDateTime,
   getDayLabel,
   getRoleLabel,
+  getTelemetryHealthLabel,
   groupScheduleByDay,
   isAdminRole,
   isLecturerRole,
 } from '@/utils/app';
-import {
-  getLecturerDashboardSnapshot,
-  getOperationsSummary,
-} from '@/utils/role-ui';
 
 export default function ScheduleScreen() {
   const theme = useAppTheme();
@@ -35,13 +34,24 @@ export default function ScheduleScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const [selectedSemesterId, setSelectedSemesterId] = useState<string | undefined>(undefined);
 
-  const isOperations = isAdminRole(role);
+  const isOperationsRole = isAdminRole(role);
   const isLecturer = isLecturerRole(role);
   const scheduleState = useScheduleScreenData(selectedSemesterId);
   const operationsState = useOperationsScreenData();
 
-  if (isOperations) {
-    const operations = getOperationsSummary(role, operationsState.data);
+  if (isOperationsRole) {
+    const parking = operationsState.data?.parking ?? null;
+    const telemetry = operationsState.data?.telemetry ?? null;
+    const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
+    const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
+    const healthTone =
+      telemetry?.fireDetected
+        ? 'danger'
+        : telemetry?.reportedAt
+          ? 'success'
+          : parking?.lastUpdated
+            ? 'warning'
+            : 'info';
 
     return (
       <Screen
@@ -54,104 +64,199 @@ export default function ScheduleScreen() {
         }
       >
         <TopHero
-          eyebrow="Operations"
-          title={role === 'super_admin' ? 'Trung tam van hanh UIT' : 'Bang dieu phoi van hanh'}
-          subtitle="Parking, fire alerts, room approvals va gateway health duoc gom vao mot tab mobile-first cho Admin va Super Admin."
+          eyebrow="Vận hành"
+          title={role === 'super_admin' ? 'Trung tâm vận hành UIT' : 'Điều phối campus'}
+          subtitle="Tập trung parking, telemetry và fire alert."
           badge={{ label: getRoleLabel(role), tone: 'info' }}
         />
 
         <ContentStack>
-          <MetricGrid items={operations.metrics} />
-
-          <RoleTaskSection
-            title="Tac vu van hanh"
-            subtitle="Cac action chinh de backend co diem vao CRUD va workflow ro rang."
-            tasks={operations.quickTasks}
-            onPressTask={(route) => router.push(route as never)}
+          <MetricGrid
+            items={[
+              {
+                label: 'Chỗ trống',
+                value: parking ? `${parking.availableSlots}/${parking.totalSlots}` : '--',
+                helper: 'Bãi xe A1-A4',
+                tone: 'success',
+              },
+              {
+                label: 'Phiên mở',
+                value: `${parking?.activeSessions ?? 0}`,
+                helper: 'Lượt gửi xe hiện tại',
+                tone: 'info',
+              },
+              {
+                label: 'Cảnh báo cháy',
+                value: `${openFireAlerts}`,
+                helper: 'Mục chưa xử lý',
+                tone: 'danger',
+              },
+              {
+                label: 'Chưa đọc',
+                value: `${operationsState.data?.unreadCount ?? 0}`,
+                helper: 'Thông báo hệ thống',
+                tone: 'warning',
+              },
+            ]}
           />
 
-          <RoleTaskSection
-            title={role === 'super_admin' ? 'System oversight' : 'Hang doi xu ly'}
-            subtitle="Queue items va entry points theo role van nam trong cung family Operations."
-            tasks={operations.queueItems}
-            onPressTask={(route) => router.push(route as never)}
-          />
-
-          <SectionCard title="Gateway zones" subtitle="Tong hop suc khoe zone va ghi chu van hanh.">
-            <View style={styles.grid}>
-              {operations.gatewayZones.map((zone) => (
-                <View
-                  key={zone.id}
-                  style={[
-                    styles.zoneCard,
-                    {
-                      backgroundColor: theme.colors.surfaceSubtle,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <StatusBadge
-                    label={zone.health}
-                    tone={
-                      zone.health === 'offline'
-                        ? 'danger'
-                        : zone.health === 'warning' || zone.health === 'stale'
-                          ? 'warning'
-                          : 'success'
-                    }
-                  />
-                  <Text style={[styles.zoneTitle, { color: theme.colors.text }]}>{zone.label}</Text>
-                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                    {zone.deviceCount} thiet bi · {zone.lastUpdated}
-                  </Text>
-                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>{zone.issueSummary}</Text>
-                </View>
-              ))}
-            </View>
-          </SectionCard>
-
-          <SectionCard title="Permission summary" subtitle="Luon hien ro access level, khong de user phai doan quyen.">
+          <SectionCard
+            title="Lối vào vận hành"
+            subtitle="Các điểm vào quan trọng cho vận hành."
+          >
             <View style={styles.column}>
-              {operations.permissionSummary.map((item) => (
-                <View key={item.id} style={styles.column}>
-                  <View style={styles.rowBetween}>
-                    <Text style={[styles.zoneTitle, { color: theme.colors.text }]}>{item.label}</Text>
-                    <StatusBadge
-                      label={item.accessLevel === 'full' ? 'Toan quyen' : item.accessLevel === 'limited' ? 'Co gioi han' : 'Chi xem'}
-                      tone={item.accessLevel === 'full' ? 'success' : 'info'}
-                    />
-                  </View>
-                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>{item.description}</Text>
-                </View>
-              ))}
+              <NavigationRow
+                icon="flame-outline"
+                label="Lịch sử cảnh báo cháy"
+                description="Xem fire alert gần đây."
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
+                onPress={() => router.push('/operations/fire-alerts')}
+              />
+              <NavigationRow
+                icon="car-sport-outline"
+                label="Parking + IoT"
+                description="Theo dõi bãi xe, slot và cảm biến."
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
+                onPress={() => router.push('/operations/parking-ops')}
+              />
+              <NavigationRow
+                icon="notifications-outline"
+                label="Broadcast thông báo"
+                description="Sắp triển khai gửi thông báo chủ động."
+                badgeLabel="Chưa hỗ trợ"
+                badgeTone="info"
+                onPress={() => router.push('/operations/notifications')}
+              />
+              {role === 'super_admin' ? (
+                <NavigationRow
+                  icon="settings-outline"
+                  label="Thiết lập hệ thống"
+                  description="Sắp triển khai cấu hình hệ thống trên mobile."
+                  badgeLabel="Chưa hỗ trợ"
+                  badgeTone="info"
+                  onPress={() => router.push('/settings/system-controls')}
+                />
+              ) : null}
             </View>
           </SectionCard>
 
           <SectionCard
-            title={role === 'super_admin' ? 'System alerts' : 'Van hanh gan day'}
-            subtitle="Card ngan gon de khong desktop-hoa tab Operations."
+            title="Parking hiện tại"
+            subtitle="Tóm tắt bãi xe hiện tại."
+            actionLabel="Mở parking"
+            onActionPress={() => router.push('/parking')}
           >
-            <View style={styles.column}>
-              {operations.systemAlerts.map((alert) => (
-                <View
-                  key={alert}
-                  style={[
-                    styles.inlineItem,
-                    {
-                      backgroundColor: theme.colors.surfaceSubtle,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>{alert}</Text>
+            {parking ? (
+              <View style={styles.column}>
+                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+                    {parking.availableSlots}/{parking.totalSlots} chỗ trống
+                  </Text>
+                  <StatusBadge
+                    label={getTelemetryHealthLabel(telemetry?.fireDetected ? 'fire-alert' : parking.lastUpdated ? 'online' : 'no-data')}
+                    tone={healthTone}
+                  />
                 </View>
-              ))}
-              {operationsState.data?.telemetry ? (
-                <Text style={[styles.metaText, { color: theme.colors.textSoft }]}>
-                  Gateway {operationsState.data.telemetry.deviceIp || 'unknown'} · reported {formatDateTime(operationsState.data.telemetry.reportedAt)}
+                <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                  {parking.activeSessions} lượt gửi xe đang mở · cập nhật {formatDateTime(parking.lastUpdated)}
                 </Text>
-              ) : null}
-            </View>
+                <View style={styles.badgeRow}>
+                  <StatusBadge label={`Nhiệt độ ${parking.sensors.temperature ?? '--'}°C`} tone="info" />
+                  <StatusBadge label={`Độ ẩm ${parking.sensors.humidity ?? '--'}%`} tone="success" />
+                  <StatusBadge label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                  <StatusBadge
+                    label={parking.sensors.fireDetected ? 'Cảnh báo cháy' : 'An toàn'}
+                    tone={parking.sensors.fireDetected ? 'danger' : 'success'}
+                  />
+                </View>
+              </View>
+            ) : (
+              <EmptyState
+                icon="car-outline"
+                title="Chưa có dữ liệu bãi xe"
+                description="Kéo xuống để làm mới dữ liệu."
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Telemetry mới nhất" subtitle="Dữ liệu cảm biến mới nhất.">
+            {telemetry ? (
+              <View style={styles.column}>
+                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                  <StatusBadge
+                    label={telemetry.fireDetected ? 'Cảnh báo cháy' : 'Thiết bị đang gửi dữ liệu'}
+                    tone={telemetry.fireDetected ? 'danger' : 'success'}
+                  />
+                  <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                    {formatDateTime(telemetry.reportedAt)}
+                  </Text>
+                </View>
+                <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                  Gateway {telemetry.gateId} · IP {telemetry.deviceIp || 'Chưa xác định'}
+                </Text>
+                <View style={styles.badgeRow}>
+                  <StatusBadge label={`Nhiệt độ ${telemetry.temperature ?? '--'}°C`} tone="info" />
+                  <StatusBadge label={`Độ ẩm ${telemetry.humidity ?? '--'}%`} tone="success" />
+                  <StatusBadge label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                </View>
+              </View>
+            ) : (
+              <EmptyState
+                icon="hardware-chip-outline"
+                title="Chưa có telemetry mới"
+                description="Chưa có dữ liệu telemetry mới."
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Cảnh báo gần đây"
+            subtitle="Ưu tiên các mục cần xử lý trước."
+          >
+            {fireAlerts.length > 0 ? (
+              <View style={styles.column}>
+                {fireAlerts.slice(0, 5).map((item) => (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/alerts/[id]',
+                        params: { id: item.id, kind: 'fire_alert' },
+                      } as never)
+                    }
+                    style={[
+                      styles.inlineCard,
+                      {
+                        backgroundColor: theme.colors.surfaceSubtle,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.rowBetween}>
+                      <Text style={[styles.inlineTitle, { color: theme.colors.text }]}>
+                        {item.message}
+                      </Text>
+                      <StatusBadge
+                        label={item.isResolved ? 'Đã xử lý' : 'Đang mở'}
+                        tone={item.isResolved ? 'info' : 'danger'}
+                      />
+                    </View>
+                    <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                      Cổng {item.gateId} · {formatDateTime(item.reportedAt)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <EmptyState
+                icon="shield-checkmark-outline"
+                title="Không có cảnh báo cháy đang mở"
+                description="Danh sách sẽ hiển thị khi có fire alert mới."
+              />
+            )}
           </SectionCard>
         </ContentStack>
       </Screen>
@@ -163,7 +268,35 @@ export default function ScheduleScreen() {
     ? layout.getGridColumns({ minItemWidth: 280, gap: 12, maxColumns: 2 })
     : 1;
   const dayBlockWidth = layout.getGridItemWidth({ columns: dayColumns, gap: 12 });
-  const lecturer = isLecturer ? getLecturerDashboardSnapshot(scheduleState.schedule) : null;
+
+  const scheduleMetrics = [
+    {
+      label: 'Trong tuần',
+      value: `${scheduleState.schedule.length}`,
+      helper: isLecturer ? 'Buổi dạy đã có lịch' : 'Buổi học đã có lịch',
+      tone: 'info' as const,
+    },
+    {
+      label: 'Hôm nay',
+      value: `${scheduleState.schedule.filter((item: ScheduleRecord) => item.dayOfWeek === currentDayOfWeek()).length}`,
+      helper: isLecturer ? 'Buổi dạy hôm nay' : 'Buổi học hôm nay',
+      tone: 'success' as const,
+    },
+    {
+      label: 'Học kỳ',
+      value:
+        scheduleState.semesters.find((item) => item.id === scheduleState.resolvedSemesterId)?.name ??
+        '--',
+      helper: 'Bộ lọc hiện tại',
+      tone: 'primary' as const,
+    },
+    {
+      label: 'Tiếp theo',
+      value: scheduleState.schedule[0]?.startTime ?? '--',
+      helper: scheduleState.schedule[0]?.course.code ?? 'Chưa có dữ liệu',
+      tone: 'warning' as const,
+    },
+  ];
 
   return (
     <Screen
@@ -176,20 +309,20 @@ export default function ScheduleScreen() {
       }
     >
       <TopHero
-        eyebrow="Academic schedule"
-        title={isLecturer ? 'Lich day & tac vu lop' : 'Lich hoc tuan nay'}
+        eyebrow={isLecturer ? 'Lịch giảng dạy' : 'Lịch học'}
+        title={isLecturer ? 'Lịch dạy trong học kỳ' : 'Lịch học trong học kỳ'}
         subtitle={
           isLecturer
-            ? 'Lich day cua lecturer duoc giu chung family voi attendance, grade sheet va class notifications.'
-            : 'Thiet ke tap trung vao hoc ky, buoi tiep theo va lich theo ngay de UITer quet nhanh.'
+            ? 'Lịch giảng dạy và tác vụ hiện đang hỗ trợ.'
+            : 'Lịch học theo học kỳ, buổi gần nhất và theo ngày.'
         }
         badge={{ label: getRoleLabel(role), tone: 'info' }}
       />
 
       <ContentStack>
-        {lecturer ? <MetricGrid items={lecturer.metrics} /> : null}
+        <MetricGrid items={scheduleMetrics} />
 
-        <SectionCard title="Hoc ky" subtitle="Chon hoc ky de loc dung lich dang quan tam.">
+        <SectionCard title="Học kỳ" subtitle="Chọn học kỳ cần theo dõi.">
           <View style={styles.chips}>
             {scheduleState.semesters.map((semester) => (
               <Pressable
@@ -227,50 +360,66 @@ export default function ScheduleScreen() {
           </View>
         </SectionCard>
 
-        <SectionCard title={isLecturer ? 'Buoi day tiep theo' : 'Buoi gan nhat'} subtitle="Card uu tien de nguoi dung ra quyet dinh nhanh.">
+        <SectionCard
+          title={isLecturer ? 'Buổi dạy gần nhất' : 'Buổi học gần nhất'}
+          subtitle="Thông tin ưu tiên hiển thị đầu tiên."
+        >
           {scheduleState.schedule[0] ? (
             <View style={styles.column}>
-              <Text style={[styles.zoneTitle, { color: theme.colors.text }]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
                 {scheduleState.schedule[0].course.name}
               </Text>
               <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                {getDayLabel(scheduleState.schedule[0].dayOfWeek)} · {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} · Phong {scheduleState.schedule[0].room}
+                {getDayLabel(scheduleState.schedule[0].dayOfWeek)} · {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} · Phòng {scheduleState.schedule[0].room}
+              </Text>
+              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
+                {scheduleState.schedule[0].instructor}
               </Text>
             </View>
           ) : (
             <EmptyState
               icon="calendar-clear-outline"
-              title="Khong co lich trong hoc ky nay"
-              description="Khi backend co du lieu lich cho hoc ky duoc chon, danh sach theo ngay se hien thi ngay ben duoi."
+              title="Không có lịch trong học kỳ này"
+              description="Danh sách sẽ hiển thị khi có dữ liệu cho học kỳ này."
             />
           )}
         </SectionCard>
 
-        {lecturer ? (
-          <>
-            <RoleTaskSection
-              title="Tac vu giang day"
-              subtitle="Nhung viec can xu ly nhanh trong ca day hien tai."
-              tasks={lecturer.focusTasks}
-              onPressTask={(route) => router.push(route as never)}
-            />
-            <RoleTaskSection
-              title="Lop dang theo doi"
-              subtitle="Class dashboard, attendance, grade va thong bao van nam trong cung family Schedule."
-              tasks={lecturer.activeClasses}
-              onPressTask={(route) => router.push(route as never)}
-            />
-            <SectionCard title="Action screens" subtitle="Long-form flows duoc tach rieng de de thao tac tren Android.">
-              <View style={styles.column}>
-                <StatusAction label="Class dashboard" route="/schedule/class-dashboard" onPress={(route) => router.push(route as never)} />
-                <StatusAction label="Create / edit session" route="/schedule/session-editor" onPress={(route) => router.push(route as never)} />
-                <StatusAction label="Attendance report" route="/schedule/attendance-report" onPress={(route) => router.push(route as never)} />
-              </View>
-            </SectionCard>
-          </>
+        {isLecturer ? (
+          <SectionCard
+            title="Công cụ giảng dạy"
+            subtitle="Một số công cụ đang ở trạng thái sắp triển khai."
+          >
+            <View style={styles.column}>
+              <NavigationRow
+                icon="school-outline"
+                label="Bảng lớp học"
+                description="Mở phạm vi dashboard lớp học."
+                badgeLabel="Chưa hỗ trợ"
+                badgeTone="info"
+                onPress={() => router.push('/schedule/class-dashboard')}
+              />
+              <NavigationRow
+                icon="qr-code-outline"
+                label="Điểm danh QR"
+                description="Sắp triển khai điểm danh QR."
+                badgeLabel="Chưa hỗ trợ"
+                badgeTone="info"
+                onPress={() => router.push('/schedule/attendance-session')}
+              />
+              <NavigationRow
+                icon="bar-chart-outline"
+                label="Bảng nhập điểm"
+                description="Hiện chỉ hỗ trợ xem điểm."
+                badgeLabel="Chưa hỗ trợ"
+                badgeTone="info"
+                onPress={() => router.push('/schedule/grade-sheet')}
+              />
+            </View>
+          </SectionCard>
         ) : null}
 
-        <SectionCard title="Theo ngay" subtitle="Gom lich theo thu de de quet nhanh tren phone va tablet.">
+        <SectionCard title="Theo ngày" subtitle="Gom lịch theo thứ để đọc nhanh.">
           {Object.keys(groupedSchedule).length > 0 ? (
             <View style={styles.grid}>
               {Object.entries(groupedSchedule).map(([day, items]) => (
@@ -285,7 +434,7 @@ export default function ScheduleScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.zoneTitle, { color: theme.colors.text }]}>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
                     {getDayLabel(Number(day))}
                   </Text>
                   {items.map((item) => (
@@ -304,8 +453,8 @@ export default function ScheduleScreen() {
           ) : (
             <EmptyState
               icon="albums-outline"
-              title="Chua co lich hoc nao"
-              description="Man nay da co empty state, loading state va lecturer actions de no backend that sau nay."
+              title="Chưa có lịch học nào"
+              description="Danh sách sẽ xuất hiện khi có dữ liệu cho học kỳ đang chọn."
             />
           )}
         </SectionCard>
@@ -314,32 +463,59 @@ export default function ScheduleScreen() {
   );
 }
 
-function StatusAction({
+function NavigationRow({
+  icon,
   label,
-  route,
+  description,
+  badgeLabel,
+  badgeTone,
   onPress,
 }: {
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  route: string;
-  onPress: (route: string) => void;
+  description: string;
+  badgeLabel: string;
+  badgeTone: 'success' | 'info' | 'warning' | 'danger' | 'primary';
+  onPress: () => void;
 }) {
   const theme = useAppTheme();
 
   return (
     <Pressable
-      onPress={() => onPress(route)}
+      accessibilityRole="button"
+      onPress={onPress}
       style={[
-        styles.inlineItem,
+        styles.inlineCard,
         {
           backgroundColor: theme.colors.surfaceSubtle,
           borderColor: theme.colors.border,
         },
       ]}
     >
-      <Text style={[styles.zoneTitle, { color: theme.colors.text }]}>{label}</Text>
-      <Text style={[styles.metaText, { color: theme.colors.primary }]}>Mo</Text>
+      <View
+        style={[
+          styles.iconBubble,
+          {
+            backgroundColor: theme.colors.primarySurface,
+          },
+        ]}
+      >
+        <Ionicons name={icon} size={18} color={theme.colors.primary} />
+      </View>
+      <View style={styles.rowContent}>
+        <View style={styles.rowBetween}>
+          <Text style={[styles.inlineTitle, { color: theme.colors.text }]}>{label}</Text>
+          <StatusBadge label={badgeLabel} tone={badgeTone} />
+        </View>
+        <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>{description}</Text>
+      </View>
     </Pressable>
   );
+}
+
+function currentDayOfWeek() {
+  const day = new Date().getDay();
+  return day === 0 ? 7 : day;
 }
 
 const styles = StyleSheet.create({
@@ -372,15 +548,40 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  zoneCard: {
+  inlineCard: {
     borderRadius: 18,
     borderWidth: 1,
     padding: 14,
-    gap: 10,
-    flex: 1,
-    minWidth: 240,
+    gap: 12,
+    flexDirection: 'row',
   },
-  zoneTitle: {
+  iconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowContent: {
+    flex: 1,
+    gap: 8,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  rowBetweenStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cardTitle: {
     fontSize: 16,
     fontWeight: '800',
   },
@@ -388,23 +589,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  inlineTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+  },
   metaText: {
     fontSize: 13,
     lineHeight: 18,
-  },
-  inlineItem: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
   },
 });

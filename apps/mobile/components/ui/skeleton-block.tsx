@@ -1,10 +1,11 @@
 import { StyleSheet, View } from 'react-native';
+import type { DimensionValue } from 'react-native';
 
 import { useAppTheme } from '@/theme';
 
 interface SkeletonBlockProps {
   height: number;
-  width?: number | string;
+  width?: DimensionValue;
   radius?: number;
 }
 
@@ -24,6 +25,7 @@ export function SkeletonBlock({
           width,
           borderRadius: radius,
           backgroundColor: theme.colors.backgroundMuted,
+          borderColor: theme.colors.border,
         },
       ]}
     />
@@ -33,5 +35,6 @@ export function SkeletonBlock({
 const styles = StyleSheet.create({
   block: {
     overflow: 'hidden',
+    borderWidth: 1,
   },
 });

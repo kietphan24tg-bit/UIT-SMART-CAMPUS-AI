@@ -1,46 +1,52 @@
 # API Documentation
 
-## Tong quan
+## Overview
 
-Backend API duoc xay dung voi NestJS va tu dong generate Swagger docs.
+Backend API is built with NestJS and exposed through Swagger.
 
-**Swagger UI**: http://localhost:3000/docs (khi chay dev)
+**Swagger UI:** `http://localhost:3000/docs`
 
 ## Base URL
 
-```
+```text
 Development: http://localhost:3000/api/v1
 Production:  https://api.smartcampus.uit.edu.vn/api/v1
 ```
 
 ## Authentication
 
-Su dung **Bearer Token** (JWT) cho tat ca endpoints yeu cau xac thuc.
+Use JWT bearer tokens for all protected endpoints.
 
-```
+```text
 Authorization: Bearer <access_token>
 ```
 
-### Token lifecycle
-1. Login/Register -> Nhan `accessToken` + `refreshToken`
-2. Gui `accessToken` trong header moi request
-3. Khi `accessToken` het han (15 phut) -> Dung `refreshToken` de lay cap token moi
-4. `refreshToken` het han sau 7 ngay -> Phai dang nhap lai
+## IoT Secret
+
+Gateway and firmware calls must include a shared secret header:
+
+```text
+x-iot-secret: <IOT_SHARED_SECRET>
+```
+
+This applies only to IoT and safety ingress endpoints, not to mobile clients.
 
 ## Response Format
 
-### Thanh cong
+### Success
+
 ```json
 {
   "success": true,
-  "data": { ... },
+  "data": {},
   "message": "Success",
   "statusCode": 200,
   "timestamp": "2025-01-15T10:30:00.000Z"
 }
 ```
 
-### Loi
+### Error
+
 ```json
 {
   "success": false,
@@ -51,63 +57,280 @@ Authorization: Bearer <access_token>
 }
 ```
 
-## Endpoints
+## Core Modules
 
-### Auth (`/auth`)
+### Auth
 
-| Method | Endpoint | Mo ta | Auth |
-|--------|----------|-------|------|
-| POST | `/auth/register` | Dang ky tai khoan moi | No |
-| POST | `/auth/login` | Dang nhap | No |
-| POST | `/auth/refresh` | Refresh access token | No |
-| POST | `/auth/logout` | Dang xuat | Yes |
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| POST | `/auth/register` | No |
+| POST | `/auth/login` | No |
+| POST | `/auth/refresh` | No |
+| POST | `/auth/password-reset/request` | No |
+| POST | `/auth/password-reset/verify` | No |
+| POST | `/auth/password-reset/reset` | No |
+| POST | `/auth/logout` | Yes |
 
-### Users (`/users`)
+### Users
 
-| Method | Endpoint | Mo ta | Auth |
-|--------|----------|-------|------|
-| GET | `/users/me` | Lay thong tin user hien tai | Yes |
-| PATCH | `/users/me` | Cap nhat profile | Yes |
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| GET | `/users/me` | Yes |
+| PATCH | `/users/me` | Yes |
 
-### Schedule (`/schedules`)
+### Password Reset Contracts
 
-| Method | Endpoint | Mo ta | Auth |
-|--------|----------|-------|------|
-| GET | `/schedules` | Lay thoi khoa bieu (query: ?semesterId=) | Yes |
-| GET | `/schedules/semesters` | Lay danh sach hoc ky | Yes |
-| GET | `/schedules/:id` | Lay chi tiet 1 buoi hoc | Yes |
+#### `POST /auth/password-reset/request`
 
-### Grades (`/grades`)
+Body:
 
-| Method | Endpoint | Mo ta | Auth |
-|--------|----------|-------|------|
-| GET | `/grades` | Lay bang diem (query: ?semesterId=) | Yes |
-| GET | `/grades/gpa` | Tinh GPA (query: ?semesterId=) | Yes |
+```json
+{
+  "email": "student@gm.uit.edu.vn"
+}
+```
 
-### Notifications (`/notifications`)
+Response `data`:
 
-| Method | Endpoint | Mo ta | Auth |
-|--------|----------|-------|------|
-| GET | `/notifications` | Lay danh sach thong bao (query: ?page=&limit=) | Yes |
-| GET | `/notifications/unread-count` | Dem thong bao chua doc | Yes |
-| PATCH | `/notifications/:id/read` | Danh dau da doc | Yes |
-| PATCH | `/notifications/read-all` | Danh dau tat ca da doc | Yes |
+```json
+{
+  "maskedEmail": "st***@gm.uit.edu.vn",
+  "expiresInSeconds": 600,
+  "delivery": "email"
+}
+```
 
-## Error Codes
+When SMTP is not configured in local development, the API falls back to:
 
-| Status Code | Mo ta |
-|------------|-------|
-| 200 | Thanh cong |
-| 201 | Tao moi thanh cong |
-| 400 | Bad Request - Du lieu khong hop le |
-| 401 | Unauthorized - Chua dang nhap hoac token het han |
-| 403 | Forbidden - Khong co quyen truy cap |
-| 404 | Not Found - Khong tim thay tai nguyen |
-| 409 | Conflict - Du lieu bi trung (vd: email da ton tai) |
-| 500 | Internal Server Error |
+```json
+{
+  "maskedEmail": "st***@gm.uit.edu.vn",
+  "expiresInSeconds": 600,
+  "delivery": "preview",
+  "previewCode": "123456"
+}
+```
 
-## Rate Limiting
+#### `POST /auth/password-reset/verify`
 
-(Se duoc cau hinh o Phase 2)
-- 100 requests/phut cho endpoints thong thuong
-- 10 requests/phut cho auth endpoints (chong brute force)
+Body:
+
+```json
+{
+  "email": "student@gm.uit.edu.vn",
+  "otp": "123456"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "verified": true
+}
+```
+
+#### `POST /auth/password-reset/reset`
+
+Body:
+
+```json
+{
+  "email": "student@gm.uit.edu.vn",
+  "otp": "123456",
+  "newPassword": "Password123"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "success": true
+}
+```
+
+### Schedule
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| GET | `/schedules` | Yes |
+| GET | `/schedules/semesters` | Yes |
+| GET | `/schedules/:id` | Yes |
+
+### Grades
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| GET | `/grades` | Yes |
+| GET | `/grades/gpa` | Yes |
+
+### Notifications
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| GET | `/notifications` | Yes |
+| GET | `/notifications/unread-count` | Yes |
+| PATCH | `/notifications/:id/read` | Yes |
+| PATCH | `/notifications/read-all` | Yes |
+
+### Parking
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| GET | `/parking/status` | Yes |
+| GET | `/parking/vehicles` | Yes |
+| POST | `/parking/vehicles` | Yes |
+
+### Payments
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| POST | `/parking/subscriptions/:vehicleId/payments/momo` | Yes |
+| POST | `/payments/momo/webhook` | No |
+| GET | `/payments/momo/mock-success/:transactionId` | No |
+
+### IoT
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| POST | `/iot/parking/scan` | `x-iot-secret` |
+| POST | `/iot/telemetry` | `x-iot-secret` |
+| GET | `/iot/telemetry/latest` | Bearer + admin/super_admin |
+
+### Safety
+
+| Method | Endpoint | Auth |
+| --- | --- | --- |
+| POST | `/safety/fire-alerts` | `x-iot-secret` |
+| GET | `/safety/fire-alerts` | Bearer + admin/super_admin |
+
+## IoT Contracts
+
+### `POST /iot/parking/scan`
+
+Headers:
+
+```text
+Content-Type: application/json
+x-iot-secret: <IOT_SHARED_SECRET>
+```
+
+Body:
+
+```json
+{
+  "rfidTag": "RFID-22520001",
+  "recognizedPlate": "51F44614",
+  "gateId": "uit-gate-a",
+  "capturedAt": "2026-04-06T12:15:00.000Z"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "action": "entry_allowed",
+  "message": "Xe hợp lệ. Mở barrier cho xe vào.",
+  "availableSlots": 2,
+  "sessionId": "ps_01H..."
+}
+```
+
+`action` can be `entry_allowed`, `exit_allowed`, or `denied`.
+
+### `POST /iot/telemetry`
+
+Headers:
+
+```text
+Content-Type: application/json
+x-iot-secret: <IOT_SHARED_SECRET>
+```
+
+Body:
+
+```json
+{
+  "gateId": "uit-gate-a",
+  "deviceIp": "192.168.1.55",
+  "slotBitmap": "0101",
+  "slots": [
+    { "slotNumber": "A1", "occupied": false },
+    { "slotNumber": "A2", "occupied": true },
+    { "slotNumber": "A3", "occupied": false },
+    { "slotNumber": "A4", "occupied": true }
+  ],
+  "temperature": 32.5,
+  "humidity": 72.4,
+  "rainDetected": false,
+  "fireDetected": false,
+  "reportedAt": "2026-04-06T12:15:00.000Z"
+}
+```
+
+### `GET /iot/telemetry/latest`
+
+Query:
+
+```text
+gateId=uit-gate-a (optional)
+```
+
+Requires bearer token and `admin` or `super_admin`.
+
+## Safety Contracts
+
+### `POST /safety/fire-alerts`
+
+Headers:
+
+```text
+Content-Type: application/json
+x-iot-secret: <IOT_SHARED_SECRET>
+```
+
+Body:
+
+```json
+{
+  "gateId": "uit-gate-a",
+  "message": "Cảm biến lửa đã kích hoạt tại bãi xe.",
+  "reportedAt": "2026-04-06T12:15:00.000Z",
+  "telemetrySnapshot": {
+    "gateId": "uit-gate-a",
+    "deviceIp": "192.168.1.55",
+    "slotBitmap": "0101",
+    "slots": [
+      { "slotNumber": "A1", "occupied": false },
+      { "slotNumber": "A2", "occupied": true }
+    ],
+    "temperature": 32.5,
+    "humidity": 72.4,
+    "rainDetected": false,
+    "fireDetected": true,
+    "reportedAt": "2026-04-06T12:15:00.000Z"
+  }
+}
+```
+
+`message` is optional. When omitted, the backend uses the default campus-safe fire alert copy.
+
+### `GET /safety/fire-alerts`
+
+Query:
+
+```text
+page=1 (optional)
+limit=20 (optional)
+```
+
+Requires bearer token and `admin` or `super_admin`.
+
+## Usage Notes
+
+- Mobile clients should poll snapshots, not expect a mobile streaming channel.
+- Telemetry UI should treat data older than 30 seconds as stale.
+- Gateway and firmware must keep `gateId` aligned with the backend contract.
+- Fire alerts are high-priority and should surface ahead of normal notifications.

@@ -1,8 +1,15 @@
+import {
+  BeVietnamPro_400Regular,
+  BeVietnamPro_500Medium,
+  BeVietnamPro_600SemiBold,
+  BeVietnamPro_700Bold,
+  useFonts,
+} from '@expo-google-fonts/be-vietnam-pro';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -22,12 +29,31 @@ export default function RootLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrate = useAuthStore((s) => s.hydrate);
   const colorScheme = useColorScheme();
+  const [authReady, setAuthReady] = useState(false);
+  const [fontsLoaded] = useFonts({
+    BeVietnamPro_400Regular,
+    BeVietnamPro_500Medium,
+    BeVietnamPro_600SemiBold,
+    BeVietnamPro_700Bold,
+  });
 
   useEffect(() => {
-    hydrate().finally(() => {
-      SplashScreen.hideAsync();
-    });
+    hydrate()
+      .catch(() => undefined)
+      .finally(() => {
+        setAuthReady(true);
+      });
   }, [hydrate]);
+
+  useEffect(() => {
+    if (authReady && fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [authReady, fontsLoaded]);
+
+  if (!authReady || !fontsLoaded) {
+    return null;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

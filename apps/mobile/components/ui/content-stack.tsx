@@ -28,7 +28,7 @@ export function ContentStack({
         {
           maxWidth: narrow ? layout.narrowMaxWidth : layout.contentMaxWidth,
           paddingHorizontal: layout.horizontalPadding,
-          marginTop: overlapHero ? -10 : 0,
+          marginTop: overlapHero ? (layout.isTablet ? -20 : -16) : layout.sectionGap,
           gap: gap ?? layout.sectionGap,
         },
         style,

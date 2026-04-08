@@ -11,6 +11,12 @@ describe('AuthController', () => {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
   };
+  const passwordResetChallenge = {
+    maskedEmail: 'st***@gm.uit.edu.vn',
+    expiresInSeconds: 600,
+    delivery: 'preview' as const,
+    previewCode: '123456',
+  };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -22,6 +28,9 @@ describe('AuthController', () => {
             register: jest.fn().mockResolvedValue(mockTokens),
             login: jest.fn().mockResolvedValue(mockTokens),
             refreshToken: jest.fn().mockResolvedValue(mockTokens),
+            requestPasswordReset: jest.fn().mockResolvedValue(passwordResetChallenge),
+            verifyPasswordResetOtp: jest.fn().mockResolvedValue({ verified: true }),
+            resetPassword: jest.fn().mockResolvedValue({ success: true }),
             logout: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -76,6 +85,47 @@ describe('AuthController', () => {
       await controller.logout('user-1');
 
       expect(authService.logout).toHaveBeenCalledWith('user-1');
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('should request an OTP for password reset', async () => {
+      const dto = { email: 'student@gm.uit.edu.vn' };
+
+      const result = await controller.requestPasswordReset(dto);
+
+      expect(authService.requestPasswordReset).toHaveBeenCalledWith(dto.email);
+      expect(result).toEqual(passwordResetChallenge);
+    });
+  });
+
+  describe('verifyPasswordResetOtp', () => {
+    it('should verify OTP before reset', async () => {
+      const dto = { email: 'student@gm.uit.edu.vn', otp: '123456' };
+
+      const result = await controller.verifyPasswordResetOtp(dto);
+
+      expect(authService.verifyPasswordResetOtp).toHaveBeenCalledWith(dto.email, dto.otp);
+      expect(result).toEqual({ verified: true });
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should reset password with email, otp, and new password', async () => {
+      const dto = {
+        email: 'student@gm.uit.edu.vn',
+        otp: '123456',
+        newPassword: 'Password123',
+      };
+
+      const result = await controller.resetPassword(dto);
+
+      expect(authService.resetPassword).toHaveBeenCalledWith(
+        dto.email,
+        dto.otp,
+        dto.newPassword,
+      );
+      expect(result).toEqual({ success: true });
     });
   });
 });

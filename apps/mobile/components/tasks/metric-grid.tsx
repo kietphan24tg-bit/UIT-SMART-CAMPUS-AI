@@ -32,19 +32,78 @@ export function MetricGrid({
           style={[
             styles.card,
             { width },
+            getMetricToneStyle(theme, item.tone),
             {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
+              borderRadius: theme.radii.xl,
             },
+            theme.elevation.level1 as never,
           ]}
         >
-          <Text style={[styles.label, { color: theme.colors.textMuted }]}>{item.label}</Text>
-          <Text style={[styles.value, { color: theme.colors.text }]}>{item.value}</Text>
-          <Text style={[styles.helper, { color: theme.colors.textSoft }]}>{item.helper}</Text>
+          <Text style={[styles.label, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+            {item.label}
+          </Text>
+          <Text
+            style={[
+              styles.value,
+              {
+                color: getMetricToneStyle(theme, item.tone).accentColor,
+                fontFamily: theme.fonts.bold,
+              },
+            ]}
+          >
+            {item.value}
+          </Text>
+          <Text style={[styles.helper, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+            {item.helper}
+          </Text>
         </View>
       ))}
     </View>
   );
+}
+
+function getMetricToneStyle(
+  theme: ReturnType<typeof useAppTheme>,
+  tone?: MetricItem['tone'],
+) {
+  switch (tone) {
+    case 'primary':
+      return {
+        backgroundColor: theme.colors.primarySurface,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.primary,
+      };
+    case 'success':
+      return {
+        backgroundColor: theme.colors.successSurface,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.success,
+      };
+    case 'warning':
+      return {
+        backgroundColor: theme.colors.warningSurface,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.warning,
+      };
+    case 'danger':
+      return {
+        backgroundColor: theme.colors.dangerSurface,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.danger,
+      };
+    case 'info':
+      return {
+        backgroundColor: theme.colors.infoSurface,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.info,
+      };
+    default:
+      return {
+        backgroundColor: theme.colors.surfaceElevated,
+        borderColor: theme.colors.border,
+        accentColor: theme.colors.text,
+      };
+  }
 }
 
 const styles = StyleSheet.create({
@@ -54,7 +113,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    borderRadius: 20,
     borderWidth: 1,
     padding: 16,
     minHeight: 116,
@@ -63,8 +121,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   value: {
-    fontSize: 25,
-    fontWeight: '800',
+    fontSize: 26,
     marginTop: 8,
   },
   helper: {

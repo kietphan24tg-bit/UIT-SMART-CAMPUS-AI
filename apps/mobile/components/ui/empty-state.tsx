@@ -28,9 +28,11 @@ export function EmptyState({
       style={[
         styles.container,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.surfaceElevated,
           borderColor: theme.colors.border,
+          borderRadius: theme.radii.xl,
         },
+        theme.elevation.level1 as never,
       ]}
     >
       <View
@@ -43,8 +45,15 @@ export function EmptyState({
       >
         <Ionicons name={icon} size={24} color={theme.colors.primary} />
       </View>
-      <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
-      <Text style={[styles.description, { color: theme.colors.textMuted }]}>{description}</Text>
+      <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>{title}</Text>
+      <Text
+        style={[
+          styles.description,
+          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+        ]}
+      >
+        {description}
+      </Text>
       {actionLabel && onActionPress ? (
         <SecondaryButton label={actionLabel} onPress={onActionPress} style={styles.button} />
       ) : null}
@@ -54,10 +63,9 @@ export function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
-    padding: 20,
+    padding: 22,
   },
   iconWrap: {
     width: 52,
@@ -69,7 +77,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
     textAlign: 'center',
   },
   description: {

@@ -1,13 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { MetricGrid, RoleTaskSection } from '@/components/tasks';
+import { MetricGrid } from '@/components/tasks';
 import {
   ContentStack,
   EmptyState,
+  PrimaryButton,
   Screen,
   SectionCard,
+  SecondaryButton,
   StatusBadge,
   TopHero,
 } from '@/components/ui';
@@ -15,6 +17,7 @@ import { useDashboardSnapshot } from '@/hooks/use-dashboard-snapshot';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import type { DashboardSnapshot } from '@/types/app-data';
 import {
   formatDateTime,
   formatGpaValue,
@@ -25,7 +28,14 @@ import {
   getTelemetryHealthLabel,
   isAdminRole,
 } from '@/utils/app';
-import { getHomeRoleModel } from '@/utils/role-ui';
+
+const ACTION_DESCRIPTIONS: Record<string, string> = {
+  schedule: 'Xem lịch học hoặc lịch dạy.',
+  grades: 'Theo dõi điểm và GPA theo học kỳ.',
+  alerts: 'Xem thông báo mới và cảnh báo.',
+  parking: 'Theo dõi chỗ trống và cảm biến.',
+  operations: 'Theo dõi vận hành campus.',
+};
 
 export default function HomeScreen() {
   const theme = useAppTheme();
@@ -33,8 +43,21 @@ export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const dashboard = useDashboardSnapshot(user?.role);
+  const snapshot: DashboardSnapshot = dashboard.data ?? {
+    role: user?.role ?? 'student',
+    todayClasses: [],
+    nextClass: null,
+    gpa: null,
+    unreadCount: 0,
+    parking: null,
+    telemetryHealth: 'no-data',
+  };
+
   const quickActions = getRoleQuickActions(user?.role);
-  const roleModel = getHomeRoleModel(dashboard.data.role, dashboard.data);
+  const isOperationsRole = isAdminRole(user?.role);
+  const shouldShowParkingHealth =
+    snapshot.telemetryHealth !== 'online' && snapshot.telemetryHealth !== 'no-data';
+
   const quickColumns = layout.getGridColumns({
     minItemWidth: 150,
     gap: 12,
@@ -42,12 +65,14 @@ export default function HomeScreen() {
   });
   const quickCardWidth = layout.getGridItemWidth({ columns: quickColumns, gap: 12 });
 
-  const emergencyTone =
-    dashboard.data.telemetryHealth === 'fire-alert'
+  const healthTone =
+    snapshot.telemetryHealth === 'fire-alert'
       ? 'danger'
-      : dashboard.data.telemetryHealth === 'stale' || dashboard.data.telemetryHealth === 'offline'
+      : snapshot.telemetryHealth === 'stale' || snapshot.telemetryHealth === 'offline'
         ? 'warning'
-        : 'info';
+        : snapshot.telemetryHealth === 'no-data'
+          ? 'info'
+          : 'success';
 
   return (
     <Screen
@@ -60,185 +85,208 @@ export default function HomeScreen() {
       }
     >
       <TopHero
-        eyebrow="Dashboard ca nhan hoa"
-        title={`Xin chao, ${getGreetingName(user)}!`}
-        subtitle={getDashboardHeroSummary(dashboard.data)}
+        eyebrow="Trang chủ"
+        title={`Xin chào, ${getGreetingName(user)}!`}
+        subtitle={getDashboardHeroSummary(snapshot)}
         badge={{ label: getRoleLabel(user?.role), tone: 'info' }}
-      />
-
-      <ContentStack>
-        {dashboard.data.telemetryHealth !== 'online' ? (
-          <View
-            style={[
-              styles.banner,
-              layout.isCompact ? styles.bannerStacked : null,
+        showBrand
+        headerRight={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mở cảnh báo và thông báo"
+            onPress={() => router.push('/alerts')}
+            style={({ pressed }) => [
+              styles.bellButton,
               {
-                backgroundColor:
-                  emergencyTone === 'danger'
-                    ? theme.colors.emergencySurface
-                    : theme.colors.warningSurface,
-                borderColor:
-                  emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning,
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.86 : 1,
               },
             ]}
           >
-            <Ionicons
-              name={emergencyTone === 'danger' ? 'warning-outline' : 'cloud-offline-outline'}
-              size={20}
-              color={emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning}
-            />
-            <View style={styles.bannerContent}>
-              <Text
-                style={[
-                  styles.bannerTitle,
-                  {
-                    color:
-                      emergencyTone === 'danger' ? theme.colors.emergency : theme.colors.warning,
-                  },
-                ]}
-              >
-                {getTelemetryHealthLabel(dashboard.data.telemetryHealth)}
-              </Text>
-              <Text style={[styles.bannerText, { color: theme.colors.textMuted }]}>
-                {dashboard.data.telemetryHealth === 'fire-alert'
-                  ? 'Cam bien lua dang kich hoat tai khu parking. Uu tien kiem tra canh bao ngay.'
-                  : 'Du lieu parking chua duoc lam moi dung chu ky. App van giu snapshot gan nhat de ban theo doi.'}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        <MetricGrid items={roleModel.metrics} />
-
-        <SectionCard title="Thao tac nhanh" subtitle="Duong vao chinh thay doi theo tung role nhung van giu mot bo cuc UIT thong nhat.">
-          <View style={styles.quickGrid}>
-            {quickActions.map((action) => (
-              <View
-                key={action.id}
-                style={[
-                  styles.quickCard,
-                  { width: quickCardWidth },
-                  {
-                    backgroundColor: theme.colors.surfaceSubtle,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Ionicons name={action.icon as never} size={22} color={theme.colors.primary} />
-                <Text style={[styles.quickLabel, { color: theme.colors.text }]}>{action.label}</Text>
-                <Text
-                  style={[styles.quickLink, { color: theme.colors.primary }]}
-                  onPress={() => router.push(action.route as never)}
-                >
-                  Mo
+            <Ionicons name="notifications-outline" size={20} color={theme.colors.textMuted} />
+            {snapshot.unreadCount > 0 ? (
+              <View style={[styles.bellBadge, { backgroundColor: theme.colors.primary }]}>
+                <Text style={[styles.bellBadgeText, { fontFamily: theme.fonts.bold }]}>
+                  {snapshot.unreadCount > 9 ? '9+' : `${snapshot.unreadCount}`}
                 </Text>
               </View>
-            ))}
-          </View>
-        </SectionCard>
+            ) : null}
+          </Pressable>
+        }
+      />
 
-        <RoleTaskSection
-          title={roleModel.focusTitle}
-          subtitle={roleModel.focusSubtitle}
-          tasks={roleModel.focusTasks}
-          onPressTask={(route) => router.push(route as never)}
-        />
-
-        {roleModel.supportTasks?.length ? (
-          <RoleTaskSection
-            title={roleModel.supportTitle || 'Tac vu ho tro'}
-            subtitle={roleModel.supportSubtitle}
-            tasks={roleModel.supportTasks}
-            onPressTask={(route) => router.push(route as never)}
-          />
-        ) : null}
-
-        {!isAdminRole(user?.role) ? (
+      <ContentStack>
+        {isOperationsRole ? (
           <SectionCard
-            title="Buoi tiep theo"
-            subtitle="Thong tin buoi hoc hoac buoi day sap toi can duoc quet nhanh tren mobile."
-            actionLabel="Xem lich"
-            onActionPress={() => router.push('/schedule')}
+            title="Tổng quan vận hành"
+            subtitle="Tóm tắt parking, gateway và cảnh báo."
+            variant="elevated"
           >
-            {dashboard.data.nextClass ? (
-              <View style={styles.column}>
+            <View style={styles.sectionStack}>
+              <MetricGrid
+                items={[
+                  {
+                    label: 'Chỗ trống',
+                    value: snapshot.parking
+                      ? `${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots}`
+                      : '--',
+                    helper: 'A1-A4',
+                    tone: 'success',
+                  },
+                  {
+                    label: 'Phiên mở',
+                    value: `${snapshot.parking?.activeSessions ?? 0}`,
+                    helper: 'Đang gửi xe',
+                    tone: 'info',
+                  },
+                  {
+                    label: 'Chưa đọc',
+                    value: `${snapshot.unreadCount}`,
+                    helper: 'Cần theo dõi',
+                    tone: 'warning',
+                  },
+                  {
+                    label: 'Gateway',
+                    value: getTelemetryHealthLabel(snapshot.telemetryHealth),
+                    helper: 'Cảm biến',
+                    tone: healthTone,
+                  },
+                ]}
+                minItemWidth={156}
+              />
+
+              {shouldShowParkingHealth ? (
+                <ParkingHealthCallout
+                  state={snapshot.telemetryHealth}
+                  tone={healthTone}
+                  onPress={() => router.push('/parking')}
+                />
+              ) : null}
+
+              <View style={styles.opsButtons}>
+                <PrimaryButton label="Mở Parking" onPress={() => router.push('/parking')} />
+                <SecondaryButton label="Trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
+              </View>
+            </View>
+          </SectionCard>
+        ) : (
+          <SectionCard
+            title="Buổi tiếp theo"
+            subtitle={`Hôm nay có ${snapshot.todayClasses.length} buổi trong lịch.`}
+            actionLabel="Xem lịch"
+            onActionPress={() => router.push('/schedule')}
+            variant="elevated"
+          >
+            {snapshot.nextClass ? (
+              <View style={styles.sectionStack}>
                 <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.classTitle, { color: theme.colors.text }]}>
-                      {dashboard.data.nextClass.course.name}
+                    <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                      {snapshot.nextClass.course.name}
                     </Text>
-                    <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
-                      {dashboard.data.nextClass.course.code} · {dashboard.data.nextClass.instructor}
+                    <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                      {snapshot.nextClass.course.code} · {snapshot.nextClass.instructor}
                     </Text>
                   </View>
-                  <StatusBadge label={`Phong ${dashboard.data.nextClass.room}`} tone="primary" />
+                  <StatusBadge label={`Phòng ${snapshot.nextClass.room}`} tone="primary" />
                 </View>
-                <Text style={[styles.classTime, { color: theme.colors.primary }]}>
-                  {dashboard.data.nextClass.startTime} - {dashboard.data.nextClass.endTime}
+                <Text style={[styles.timeText, { color: theme.colors.primary, fontFamily: theme.fonts.bold }]}>
+                  {snapshot.nextClass.startTime} - {snapshot.nextClass.endTime}
                 </Text>
               </View>
             ) : (
               <EmptyState
                 icon="calendar-clear-outline"
-                title="Hom nay chua co lich moi"
-                description="Khi co lich hoc hoac lich day, buoi gan nhat se xuat hien tai day de ban quyet dinh nhanh."
+                title="Chưa có lịch gần nhất"
+                description="Buổi gần nhất sẽ hiển thị tại đây khi có dữ liệu."
               />
             )}
           </SectionCard>
-        ) : null}
+        )}
 
         <SectionCard
-          title={isAdminRole(user?.role) ? 'Parking & telemetry' : 'Parking + IoT'}
-          subtitle="Hero status, slot snapshot va telemetry cua bai xe UIT duoc giu gon de hop mobile phone va tablet."
-          actionLabel="Mo parking"
+          title="Parking + IoT"
+          subtitle="Số chỗ trống A1-A4 và trạng thái cảm biến."
+          actionLabel="Mở Parking"
           onActionPress={() => router.push('/parking')}
+          variant="outlined"
         >
-          {dashboard.data.parking ? (
-            <View style={styles.column}>
+          {snapshot.parking ? (
+            <View style={styles.sectionStack}>
               <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
-                <Text style={[styles.classTitle, { color: theme.colors.text }]}>
-                  {dashboard.data.parking.availableSlots}/{dashboard.data.parking.totalSlots} cho trong
+                <Text style={[styles.parkingTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                  {snapshot.parking.availableSlots}/{snapshot.parking.totalSlots} chỗ trống
                 </Text>
-                <StatusBadge
-                  label={getTelemetryHealthLabel(dashboard.data.telemetryHealth)}
-                  tone={emergencyTone}
-                />
+                <StatusBadge label={getTelemetryHealthLabel(snapshot.telemetryHealth)} tone={healthTone} />
               </View>
-              <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
-                {dashboard.data.parking.activeSessions} session dang mo · cap nhat {formatDateTime(dashboard.data.parking.lastUpdated)}
+
+              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                {snapshot.parking.activeSessions} lượt gửi xe · cập nhật {formatDateTime(snapshot.parking.lastUpdated)}
               </Text>
-              <View style={styles.sensorRow}>
+
+              <View style={styles.badgeRow}>
                 <StatusBadge
-                  label={`Temp ${dashboard.data.parking.sensors.temperature ?? '--'}°C`}
+                  label={`Nhiệt độ ${snapshot.parking.sensors.temperature ?? '--'}°C`}
                   tone="info"
                 />
-                <StatusBadge
-                  label={`Humidity ${dashboard.data.parking.sensors.humidity ?? '--'}%`}
-                  tone="success"
-                />
-                <StatusBadge
-                  label={dashboard.data.parking.sensors.fireDetected ? 'Fire alert' : 'An toan'}
-                  tone={dashboard.data.parking.sensors.fireDetected ? 'danger' : 'success'}
-                />
+                <StatusBadge label={`Độ ẩm ${snapshot.parking.sensors.humidity ?? '--'}%`} tone="success" />
+                <StatusBadge label={snapshot.parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                {snapshot.parking.sensors.fireDetected ? (
+                  <StatusBadge label="Cảnh báo cháy" tone="danger" />
+                ) : null}
               </View>
+
+              {shouldShowParkingHealth ? (
+                <ParkingHealthCallout
+                  state={snapshot.telemetryHealth}
+                  tone={healthTone}
+                  onPress={() => router.push('/parking')}
+                />
+              ) : null}
             </View>
           ) : (
             <EmptyState
               icon="car-sport-outline"
-              title="Parking chua san sang"
-              description="App chua lay duoc snapshot bai xe o thoi diem hien tai. Ban van co the mo man parking chi tiet hoac thu tai lai."
+              title="Chưa có dữ liệu parking"
+              description="Kéo xuống để làm mới."
             />
           )}
         </SectionCard>
 
-        {!isAdminRole(user?.role) ? (
-          <SectionCard title="GPA hien tai" subtitle="Student-first block van duoc giu gon va ro rang trong dashboard.">
-            <Text style={[styles.classTitle, { color: theme.colors.text }]}>
-              {formatGpaValue(dashboard.data.gpa?.gpa)}
-            </Text>
-            <Text style={[styles.classMeta, { color: theme.colors.textMuted }]}>
-              {dashboard.data.gpa?.totalCourses ?? 0} hoc phan · {dashboard.data.gpa?.totalCredits ?? 0} tin chi
-            </Text>
+        <SectionCard
+          title="Truy cập nhanh"
+          subtitle="Các tính năng dùng nhiều nhất."
+          variant="outlined"
+        >
+          <View style={styles.quickGrid}>
+            {quickActions.map((action) => (
+              <QuickActionTile
+                key={action.id}
+                icon={action.icon as never}
+                label={action.label}
+                description={ACTION_DESCRIPTIONS[action.id] ?? 'Mở để tiếp tục.'}
+                route={action.route}
+                width={quickCardWidth}
+              />
+            ))}
+          </View>
+        </SectionCard>
+
+        {!isOperationsRole ? (
+          <SectionCard
+            title="Kết quả học tập"
+            subtitle="Xem nhanh GPA và số tín chỉ."
+            variant="outlined"
+          >
+            <View style={styles.sectionStack}>
+              <Text style={[styles.gpaValue, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                {formatGpaValue(snapshot.gpa?.gpa)}
+              </Text>
+              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                {snapshot.gpa?.totalCourses ?? 0} học phần · {snapshot.gpa?.totalCredits ?? 0} tín chỉ
+              </Text>
+            </View>
           </SectionCard>
         ) : null}
       </ContentStack>
@@ -246,50 +294,147 @@ export default function HomeScreen() {
   );
 }
 
+function QuickActionTile({
+  icon,
+  label,
+  description,
+  route,
+  width,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  description: string;
+  route: string;
+  width: number;
+}) {
+  const theme = useAppTheme();
+  const router = useRouter();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(route as never)}
+      style={({ pressed }) => [
+        styles.quickCard,
+        { width },
+        {
+          backgroundColor: theme.colors.surfaceSubtle,
+          borderColor: theme.colors.border,
+          opacity: pressed ? 0.86 : 1,
+        },
+      ]}
+    >
+      <View style={styles.quickHeader}>
+        <View style={[styles.quickIconWrap, { backgroundColor: theme.colors.primarySurface }]}>
+          <Ionicons name={icon} size={20} color={theme.colors.primary} />
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.colors.textSoft} />
+      </View>
+      <Text style={[styles.quickLabel, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>{label}</Text>
+      <Text
+        style={[
+          styles.quickDescription,
+          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+        ]}
+      >
+        {description}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ParkingHealthCallout({
+  state,
+  tone,
+  onPress,
+}: {
+  state: DashboardSnapshot['telemetryHealth'];
+  tone: 'success' | 'warning' | 'danger' | 'info';
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  const title =
+    state === 'fire-alert'
+      ? 'Cảnh báo cháy đang kích hoạt'
+      : state === 'offline'
+        ? 'Gateway đang mất kết nối'
+        : 'Dữ liệu cảm biến chưa được làm mới';
+  const description =
+    state === 'fire-alert'
+      ? 'Ưu tiên kiểm tra trạng thái an toàn và xử lý theo quy trình.'
+      : state === 'offline'
+        ? 'Ứng dụng sẽ cập nhật lại khi gateway online.'
+        : 'Ứng dụng đang hiển thị dữ liệu gần nhất.';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.callout,
+        {
+          backgroundColor:
+            tone === 'danger'
+              ? theme.colors.emergencySurface
+              : tone === 'warning'
+                ? theme.colors.warningSurface
+                : theme.colors.infoSurface,
+          borderColor:
+            tone === 'danger'
+              ? theme.colors.emergency
+              : tone === 'warning'
+                ? theme.colors.warning
+                : theme.colors.info,
+          opacity: pressed ? 0.88 : 1,
+        },
+      ]}
+    >
+      <Ionicons
+        name={tone === 'danger' ? 'flame-outline' : tone === 'warning' ? 'cloud-offline-outline' : 'alert-circle-outline'}
+        size={18}
+        color={tone === 'danger' ? theme.colors.emergency : tone === 'warning' ? theme.colors.warning : theme.colors.info}
+      />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.calloutTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+          {title}
+        </Text>
+        <Text style={[styles.calloutBody, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+          {description}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  banner: {
-    borderRadius: 20,
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
-    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+  },
+  sectionStack: {
     gap: 12,
   },
-  bannerStacked: {
-    flexDirection: 'column',
-  },
-  bannerContent: {
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  bannerText: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  quickCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
+  opsButtons: {
     gap: 10,
-  },
-  quickLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  quickLink: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  column: {
-    gap: 12,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -301,21 +446,71 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
   },
-  classTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+  cardTitle: {
+    fontSize: 17,
   },
-  classMeta: {
+  parkingTitle: {
+    fontSize: 18,
+  },
+  timeText: {
+    fontSize: 16,
+  },
+  metaText: {
     fontSize: 13,
     lineHeight: 18,
   },
-  classTime: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  sensorRow: {
+  badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  quickHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLabel: {
+    fontSize: 15,
+  },
+  quickDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  gpaValue: {
+    fontSize: 30,
+  },
+  callout: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  calloutTitle: {
+    fontSize: 13,
+  },
+  calloutBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
   },
 });

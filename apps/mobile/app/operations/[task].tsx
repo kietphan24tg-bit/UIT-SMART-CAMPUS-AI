@@ -21,9 +21,9 @@ export default function OperationsTaskScreen() {
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Khong tim thay tac vu"
-            description="Route nay chua co task key hop le trong operations family."
-            actionLabel="Quay lai"
+            title="Không tìm thấy tác vụ"
+            description="Task key không hợp lệ trong nhóm vận hành."
+            actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -41,7 +41,7 @@ export default function OperationsTaskScreen() {
             icon="lock-closed-outline"
             title={copy.title}
             description={copy.description}
-            actionLabel="Ve van hanh"
+            actionLabel="Về vận hành"
             onActionPress={() => router.replace('/schedule')}
           />
         </ContentStack>
@@ -56,9 +56,9 @@ export default function OperationsTaskScreen() {
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Task chua san sang"
-            description="Task key nay chua duoc khai bao trong operations flow."
-            actionLabel="Ve van hanh"
+            title="Tác vụ chưa sẵn sàng"
+            description="Task key này chưa được khai báo trong nhóm vận hành."
+            actionLabel="Về vận hành"
             onActionPress={() => router.replace('/schedule')}
           />
         </ContentStack>
@@ -73,8 +73,8 @@ export default function OperationsTaskScreen() {
     }
 
     Alert.alert(
-      'UI backend-ready',
-      'Action nay da co contract ro rang de backend noi mutation tuong ung.',
+      'Chưa hỗ trợ thao tác',
+      'Tính năng này đang ở trạng thái sắp triển khai trên mobile.',
     );
   };
 

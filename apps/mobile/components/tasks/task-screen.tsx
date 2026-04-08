@@ -153,6 +153,7 @@ function TaskRecordGrid({
               {
                 backgroundColor: theme.colors.surfaceSubtle,
                 borderColor: theme.colors.border,
+                opacity: record.disabled ? 0.72 : 1,
               },
             ]}
           >
@@ -162,12 +163,26 @@ function TaskRecordGrid({
             </View>
             <Text style={[styles.recordTitle, { color: theme.colors.text }]}>{record.title}</Text>
             <Text style={[styles.recordSubtitle, { color: theme.colors.textMuted }]}>{record.subtitle}</Text>
+            {record.disabledReason ? (
+              <Text style={[styles.recordMeta, { color: theme.colors.textSoft }]}>
+                {record.disabledReason}
+              </Text>
+            ) : null}
           </View>
         );
 
         if (record.route && onPressRecord) {
           return (
-            <Pressable key={record.id} accessibilityRole="button" onPress={() => onPressRecord(record)}>
+            <Pressable
+              key={record.id}
+              accessibilityRole="button"
+              disabled={record.disabled}
+              onPress={() => {
+                if (!record.disabled) {
+                  onPressRecord(record);
+                }
+              }}
+            >
               {card}
             </Pressable>
           );

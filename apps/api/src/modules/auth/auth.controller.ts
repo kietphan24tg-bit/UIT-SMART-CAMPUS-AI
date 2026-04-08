@@ -6,6 +6,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
+import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+import { PasswordResetVerifyDto } from './dto/password-reset-verify.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -32,6 +35,27 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP for password reset' })
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('password-reset/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP for password reset' })
+  verifyPasswordResetOtp(@Body() dto: PasswordResetVerifyDto) {
+    return this.authService.verifyPasswordResetOtp(dto.email, dto.otp);
+  }
+
+  @Post('password-reset/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with verified OTP' })
+  resetPassword(@Body() dto: PasswordResetConfirmDto) {
+    return this.authService.resetPassword(dto.email, dto.otp, dto.newPassword);
   }
 
   @Post('logout')

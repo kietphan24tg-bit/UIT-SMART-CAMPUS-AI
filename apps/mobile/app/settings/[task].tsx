@@ -18,9 +18,9 @@ export default function SettingsTaskScreen() {
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Khong tim thay tac vu"
-            description="Route nay chua co task key hop le trong settings family."
-            actionLabel="Quay lai"
+            title="Không tìm thấy tác vụ"
+            description="Task key không hợp lệ trong nhóm cài đặt."
+            actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -38,7 +38,7 @@ export default function SettingsTaskScreen() {
             icon="lock-closed-outline"
             title={copy.title}
             description={copy.description}
-            actionLabel="Ve settings"
+            actionLabel="Về cài đặt"
             onActionPress={() => router.replace('/settings')}
           />
         </ContentStack>
@@ -53,9 +53,9 @@ export default function SettingsTaskScreen() {
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Task chua san sang"
-            description="Task key nay chua duoc khai bao trong settings flow."
-            actionLabel="Ve settings"
+            title="Tác vụ chưa sẵn sàng"
+            description="Task key này chưa được khai báo trong nhóm cài đặt."
+            actionLabel="Về cài đặt"
             onActionPress={() => router.replace('/settings')}
           />
         </ContentStack>
@@ -70,8 +70,8 @@ export default function SettingsTaskScreen() {
     }
 
     Alert.alert(
-      'UI backend-ready',
-      'Action nay da duoc chot de backend noi phan role management va retention.',
+      'Chưa hỗ trợ thao tác',
+      'Tính năng này đang ở trạng thái sắp triển khai trên mobile.',
     );
   };
 

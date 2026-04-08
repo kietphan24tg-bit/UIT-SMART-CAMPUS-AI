@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { TextInputProps } from 'react-native';
 
@@ -11,26 +12,48 @@ interface FormFieldProps extends TextInputProps {
 
 export function FormField({ label, hint, error, style, ...rest }: FormFieldProps) {
   const theme = useAppTheme();
+  const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text>
+      <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+        {label}
+      </Text>
       <TextInput
         placeholderTextColor={theme.colors.textSoft}
         style={[
           styles.input,
           {
             backgroundColor: theme.colors.input,
-            borderColor: error ? theme.colors.danger : theme.colors.inputBorder,
+            borderColor: error
+              ? theme.colors.danger
+              : isFocused
+                ? theme.colors.primary
+                : theme.colors.inputBorder,
             color: theme.colors.text,
+            fontFamily: theme.fonts.regular,
           },
           style,
         ]}
+        onFocus={(event) => {
+          setIsFocused(true);
+          rest.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setIsFocused(false);
+          rest.onBlur?.(event);
+        }}
         {...rest}
       />
-      {error ? <Text style={[styles.message, { color: theme.colors.danger }]}>{error}</Text> : null}
+      {error ? (
+        <Text style={[styles.message, { color: theme.colors.danger, fontFamily: theme.fonts.regular }]}>
+          {error}
+        </Text>
+      ) : null}
       {!error && hint ? (
-        <Text style={[styles.message, { color: theme.colors.textSoft }]}>{hint}</Text>
+        <Text style={[styles.message, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+          {hint}
+        </Text>
       ) : null}
     </View>
   );
@@ -42,13 +65,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
   },
   input: {
     borderWidth: 1,
-    borderRadius: 14,
-    minHeight: 50,
-    paddingHorizontal: 14,
+    borderRadius: 16,
+    minHeight: 52,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
   },

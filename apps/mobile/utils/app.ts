@@ -5,17 +5,19 @@ import type {
   DashboardSnapshot,
   ScheduleRecord,
   ServiceEntry,
+  StatusTone,
+  SupportState,
   TelemetryHealthState,
 } from '@/types/app-data';
 
 const DAY_LABELS: Record<number, string> = {
-  1: 'Thu hai',
-  2: 'Thu ba',
-  3: 'Thu tu',
-  4: 'Thu nam',
-  5: 'Thu sau',
-  6: 'Thu bay',
-  7: 'Chu nhat',
+  1: 'Thứ hai',
+  2: 'Thứ ba',
+  3: 'Thứ tư',
+  4: 'Thứ năm',
+  5: 'Thứ sáu',
+  6: 'Thứ bảy',
+  7: 'Chủ nhật',
 };
 
 const DAY_LABELS_SHORT: Record<number, string> = {
@@ -31,18 +33,18 @@ const DAY_LABELS_SHORT: Record<number, string> = {
 export function getRoleLabel(role?: string | null) {
   switch (role) {
     case USER_ROLES.LECTURER:
-      return 'Giang vien';
+      return 'Giảng viên';
     case USER_ROLES.ADMIN:
-      return 'Quan tri vien';
+      return 'Quản trị viên';
     case USER_ROLES.SUPER_ADMIN:
-      return 'Quan tri he thong';
+      return 'Quản trị hệ thống';
     default:
-      return 'Sinh vien';
+      return 'Sinh viên';
   }
 }
 
 export function getRoleScopedTabTitle(role?: string | null) {
-  return isAdminRole(role) ? 'Van hanh' : 'Lich hoc';
+  return isAdminRole(role) ? 'Vận hành' : 'Lịch';
 }
 
 export function isAdminRole(role?: string | null) {
@@ -57,10 +59,12 @@ export function isLecturerRole(role?: string | null) {
   return role === USER_ROLES.LECTURER;
 }
 
-export function getGreetingName(user?: {
-  firstName?: string | null;
-  lastName?: string | null;
-} | null) {
+export function getGreetingName(
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null,
+) {
   if (!user?.firstName && !user?.lastName) {
     return 'UITer';
   }
@@ -69,7 +73,7 @@ export function getGreetingName(user?: {
 }
 
 export function getDayLabel(dayOfWeek: number) {
-  return DAY_LABELS[dayOfWeek] ?? 'Khac';
+  return DAY_LABELS[dayOfWeek] ?? 'Khác';
 }
 
 export function getDayLabelShort(dayOfWeek: number) {
@@ -78,7 +82,7 @@ export function getDayLabelShort(dayOfWeek: number) {
 
 export function formatDateTime(value?: string | null) {
   if (!value) {
-    return 'Chua co du lieu';
+    return 'Chưa có dữ liệu';
   }
 
   return new Date(value).toLocaleString('vi-VN', {
@@ -91,7 +95,7 @@ export function formatDateTime(value?: string | null) {
 
 export function formatShortDate(value?: string | null) {
   if (!value) {
-    return 'Chua co du lieu';
+    return 'Chưa có dữ liệu';
   }
 
   return new Date(value).toLocaleDateString('vi-VN', {
@@ -107,7 +111,7 @@ export function formatCurrency(value: number) {
 
 export function formatSubscriptionDate(value?: string | null) {
   if (!value) {
-    return 'Chua kich hoat';
+    return 'Chưa kích hoạt';
   }
 
   return new Date(value).toLocaleDateString('vi-VN', {
@@ -145,6 +149,7 @@ export function getNextClass(schedule: ScheduleRecord[]) {
     if (dayDeltaA !== dayDeltaB) {
       return dayDeltaA - dayDeltaB;
     }
+
     return a.startTime.localeCompare(b.startTime);
   });
 
@@ -189,213 +194,262 @@ export function getTelemetryHealthState(
 export function getTelemetryHealthLabel(state: TelemetryHealthState) {
   switch (state) {
     case 'fire-alert':
-      return 'Canh bao chay';
+      return 'Cảnh báo cháy';
     case 'offline':
-      return 'Mat ket noi';
+      return 'Mất kết nối';
     case 'stale':
-      return 'Du lieu cu';
+      return 'Dữ liệu cũ';
     case 'no-data':
-      return 'Chua co du lieu';
+      return 'Chưa có dữ liệu';
     default:
-      return 'Dang truc tuyen';
+      return 'Đang trực tuyến';
   }
 }
 
 export function getSeverityLabel(severity: AlertSeverity) {
   switch (severity) {
     case 'critical':
-      return 'Khan cap';
+      return 'Khẩn cấp';
     case 'warning':
-      return 'Can chu y';
+      return 'Cần chú ý';
     default:
-      return 'Thong thuong';
+      return 'Thông thường';
+  }
+}
+
+export function getSupportStateLabel(state: SupportState) {
+  switch (state) {
+    case 'live':
+      return 'Đang hỗ trợ';
+    case 'partial':
+      return 'Tạm thời chưa khả dụng';
+    default:
+      return 'Sắp triển khai';
+  }
+}
+
+export function getSupportStateTone(state: SupportState): StatusTone {
+  switch (state) {
+    case 'live':
+      return 'success';
+    case 'partial':
+      return 'warning';
+    default:
+      return 'info';
   }
 }
 
 export function getDashboardHeroSummary(snapshot: DashboardSnapshot) {
-  if (isSuperAdminRole(snapshot.role)) {
-    return `${snapshot.unreadCount} canh bao can theo doi tren he UIT Smart Campus`;
-  }
-
   if (isAdminRole(snapshot.role)) {
-    return `${snapshot.unreadCount} hang doi van hanh can xu ly`;
+    return snapshot.parking
+      ? `Bãi xe còn ${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots} chỗ, ${snapshot.unreadCount} mục cần theo dõi.`
+      : `${snapshot.unreadCount} mục vận hành cần theo dõi hôm nay.`;
   }
 
   if (snapshot.nextClass) {
-    return `Buoi tiep theo: ${snapshot.nextClass.course.name}`;
+    return `Buổi tiếp theo: ${snapshot.nextClass.course.name} lúc ${snapshot.nextClass.startTime}.`;
   }
 
-  return 'Chua co lich sap toi';
+  if (typeof snapshot.gpa?.gpa === 'number') {
+    return `GPA hiện tại ${formatGPA(snapshot.gpa.gpa)} và ${snapshot.unreadCount} thông báo chưa đọc.`;
+  }
+
+  return 'Theo dõi lịch học, parking và thông báo trong một nơi duy nhất.';
 }
 
 export function getRoleQuickActions(role?: string | null) {
-  if (isSuperAdminRole(role)) {
-    return [
-      { id: 'operations', label: 'Operations', icon: 'pulse-outline', route: '/operations/fire-alerts' },
-      { id: 'system', label: 'System controls', icon: 'settings-outline', route: '/settings/system-controls' },
-      { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
-    ];
-  }
-
   if (isAdminRole(role)) {
     return [
-      { id: 'approvals', label: 'Approval queue', icon: 'git-pull-request-outline', route: '/operations/approvals' },
-      { id: 'alerts', label: 'Fire alerts', icon: 'warning-outline', route: '/operations/fire-alerts' },
-      { id: 'services', label: 'Admin tools', icon: 'grid-outline', route: '/services/admin-tools' },
+      { id: 'operations', label: 'Vận hành', icon: 'pulse-outline', route: '/schedule' },
+      { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
+      { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
     ];
   }
 
   if (isLecturerRole(role)) {
     return [
-      { id: 'attendance', label: 'Attendance QR', icon: 'qr-code-outline', route: '/schedule/attendance-session' },
-      { id: 'grades', label: 'Grade sheet', icon: 'create-outline', route: '/schedule/grade-sheet' },
-      { id: 'notifications', label: 'Thong bao lop', icon: 'mail-outline', route: '/schedule/class-notification' },
+      { id: 'schedule', label: 'Lịch dạy', icon: 'calendar-outline', route: '/schedule' },
+      { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
+      { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
     ];
   }
 
   return [
-    { id: 'schedule', label: 'Lich hoc', icon: 'calendar-outline', route: '/schedule' },
-    { id: 'grades', label: 'Diem & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
+    { id: 'schedule', label: 'Lịch học', icon: 'calendar-outline', route: '/schedule' },
+    { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
     { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
   ];
 }
 
 export function getServiceEntries(role?: string | null): ServiceEntry[] {
+  const teachingCategory = 'Công cụ giảng dạy' as const;
+  const adminCategory = 'Công cụ quản trị' as const;
+
   const entries: ServiceEntry[] = [
     {
       id: 'grades',
-      title: 'Diem & GPA',
-      summary: 'Theo doi bang diem va hoc luc theo tung hoc ky.',
-      category: 'Academic',
+      title: 'Điểm & GPA',
+      summary: 'Theo dõi bảng điểm theo học kỳ.',
+      category: 'Học vụ',
       icon: 'bar-chart-outline',
-      availability: 'live',
-      primaryAction: 'Xem bang diem',
+      supportState: 'live',
+      isInteractive: true,
+      lastVerifiedSource: 'grades',
+      primaryAction: 'Xem bảng điểm',
       route: '/services/grades',
       description:
-        'Hien thi GPA hien tai, tong tin chi da tich luy va danh sach diem cua cac hoc phan da co ket qua.',
+        'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.',
     },
     {
       id: 'parking',
       title: 'Parking + IoT',
-      summary: 'Theo doi bai xe, cam bien va goi gui xe thang.',
-      category: 'Campus utilities',
+      summary: 'Theo dõi chỗ trống, cảm biến và gói gửi xe.',
+      category: 'Tiện ích campus',
       icon: 'car-sport-outline',
-      availability: 'live',
-      primaryAction: 'Mo Parking',
+      supportState: 'live',
+      isInteractive: true,
+      lastVerifiedSource: 'parking',
+      primaryAction: 'Mở Parking',
       route: '/parking',
       description:
-        'Tinh trang cho trong A1-A4, nhiet do, do am, mua, lua, dang ky xe va thanh toan MoMo cho dich vu gui xe.',
+        'Hỗ trợ A1-A4, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
     },
     {
       id: 'events',
-      title: 'Su kien & Cong dong',
-      summary: 'Kham pha workshop, CLB va cac hoat dong trong truong.',
-      category: 'Campus life',
+      title: 'Sự kiện & cộng đồng',
+      summary: 'Sắp triển khai lịch sự kiện trong campus.',
+      category: 'Đời sống campus',
       icon: 'megaphone-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai lịch sự kiện và check-in.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/events',
       description:
-        'Module roadmap danh cho su kien, check-in QR va hoat dong cong dong cua UIT.',
+        'Sắp triển khai lịch sự kiện, đăng ký tham gia và check-in.',
     },
     {
       id: 'course-registration',
-      title: 'Dang ky mon hoc',
-      summary: 'Chuan bi cho giai doan dang ky tin chi tap trung.',
-      category: 'Academic',
+      title: 'Đăng ký môn học',
+      summary: 'Sắp triển khai đăng ký học phần theo đợt.',
+      category: 'Học vụ',
       icon: 'document-text-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai đăng ký và hủy đăng ký học phần.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/course-registration',
       description:
-        'Ho tro xem mon mo, kiem tra tien quyet va dang ky hoac huy dang ky mon hoc.',
+        'Sắp triển khai đăng ký học phần và theo dõi trạng thái.',
     },
     {
       id: 'attendance',
-      title: 'Diem danh QR',
-      summary: 'Diem danh nhanh cho buoi hoc va quan ly trang thai tham du.',
-      category: isLecturerRole(role) ? 'Teaching tools' : 'Academic',
+      title: 'Điểm danh QR',
+      summary: 'Sắp triển khai điểm danh QR theo buổi học.',
+      category: isLecturerRole(role) ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai điểm danh QR.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/attendance',
       description:
-        'Dung chung mot template cho quet QR, tao phien diem danh va bao cao tinh trang tham du.',
+        'Sắp triển khai điểm danh QR cho giảng viên và sinh viên.',
     },
     {
       id: 'room-booking',
-      title: 'Dat phong',
-      summary: 'Tim va gui yeu cau su dung phong hoc hoac phong lab.',
-      category: 'Campus utilities',
+      title: 'Đặt phòng',
+      summary: 'Sắp triển khai đặt phòng học và phòng lab.',
+      category: 'Tiện ích campus',
       icon: 'business-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai đặt phòng và theo dõi trạng thái.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/room-booking',
       description:
-        'Luong du kien cho dat phong hoc, phe duyet va theo doi lich su yeu cau.',
+        'Sắp triển khai đặt phòng học hoặc phòng lab.',
     },
     {
       id: 'library',
-      title: 'Thu vien',
-      summary: 'Tim kiem tai lieu va quan ly luot muon trong tuong lai.',
-      category: 'Campus life',
+      title: 'Thư viện',
+      summary: 'Sắp triển khai dịch vụ thư viện.',
+      category: 'Đời sống campus',
       icon: 'book-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai tra cứu và mượn trả.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/library',
       description:
-        'Khung chi tiet dung chung cho tim sach, muon tra va dat cho hoc tap tai thu vien.',
+        'Sắp triển khai tra cứu sách và lịch sử mượn trả.',
     },
     {
       id: 'campus-map',
-      title: 'Ban do khuon vien',
-      summary: 'Tim duong trong campus va tra cuu vi tri phong hoc.',
-      category: 'Campus life',
+      title: 'Bản đồ khuôn viên',
+      summary: 'Sắp triển khai bản đồ khuôn viên và chỉ đường.',
+      category: 'Đời sống campus',
       icon: 'map-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai bản đồ khuôn viên.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/campus-map',
       description:
-        'Trinh bay dinh huong module ban do voi cac section ngan gon, khong tao flow rieng qua dai.',
+        'Sắp triển khai bản đồ khuôn viên và chỉ đường.',
     },
     {
       id: 'chatbot',
       title: 'AI Chatbot',
-      summary: 'Tro ly giai dap nhanh cac cau hoi pho bien cua UITer.',
-      category: 'Campus utilities',
+      summary: 'Sắp triển khai trợ lý hỏi đáp cho campus.',
+      category: 'Tiện ích campus',
       icon: 'chatbubble-ellipses-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai trợ lý hỏi đáp.',
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/chatbot',
       description:
-        'Mo ta ngan vai tro chatbot, pham vi kien thuc va hanh vi chinh khi trien khai chinh thuc.',
+        'Hiển thị phạm vi dự kiến và lưu ý quyền riêng tư.',
     },
     {
       id: 'smart-classroom',
-      title: 'Lop hoc thong minh',
-      summary: 'Theo doi va dieu khien thiet bi IoT trong phong hoc.',
-      category: isLecturerRole(role) ? 'Teaching tools' : 'Admin tools',
+      title: 'Lớp học thông minh',
+      summary: 'Sắp triển khai điều khiển IoT phòng học.',
+      category: isLecturerRole(role) ? teachingCategory : adminCategory,
       icon: 'hardware-chip-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Sắp triển khai lớp học thông minh.',
+      lastVerifiedSource: 'iot',
+      primaryAction: 'Theo dõi cập nhật',
       route: '/services/smart-classroom',
       description:
-        'Khung chi tiet dung chung cho dieu khien thiet bi, trang thai phong hoc va bai toan IoT mo rong.',
+        'Sắp triển khai điều khiển thiết bị phòng học theo quyền.',
     },
   ];
 
   if (isAdminRole(role)) {
     entries.push({
       id: 'admin-tools',
-      title: 'Bo cong cu van hanh',
-      summary: 'Theo doi canh bao chay, parking ops va suc khoe gateway.',
-      category: 'Admin tools',
+      title: 'Công cụ quản trị',
+      summary: 'Tổng hợp công cụ dành cho quản trị viên.',
+      category: adminCategory,
       icon: 'shield-checkmark-outline',
-      availability: 'preview',
-      primaryAction: 'Xem chi tiet',
+      supportState: 'live',
+      isInteractive: true,
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Mở công cụ quản trị',
       route: '/services/admin-tools',
       description:
-        'Diem tap trung cho quan tri vien de gom cac cong cu van hanh ma khong tao them screen family rieng.',
+        'Ưu tiên các luồng đang hỗ trợ như parking và cảnh báo.',
     });
   }
 

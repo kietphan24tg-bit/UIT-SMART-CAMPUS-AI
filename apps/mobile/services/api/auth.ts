@@ -1,4 +1,14 @@
-import type { AuthTokens, LoginRequest, RegisterRequest } from '@smart-campus/shared';
+import type {
+  AuthTokens,
+  LoginRequest,
+  PasswordResetChallenge,
+  PasswordResetConfirmRequest,
+  PasswordResetConfirmResult,
+  PasswordResetOtpVerifyRequest,
+  PasswordResetOtpVerifyResult,
+  PasswordResetRequest,
+  RegisterRequest,
+} from '@smart-campus/shared';
 
 import { apiClient } from './client';
 
@@ -13,6 +23,24 @@ export const authApi = {
 
   refresh: async (refreshToken: string): Promise<AuthTokens> => {
     return apiClient.post('/auth/refresh', { refreshToken });
+  },
+
+  requestPasswordReset: async (
+    data: PasswordResetRequest,
+  ): Promise<PasswordResetChallenge> => {
+    return apiClient.post('/auth/password-reset/request', data);
+  },
+
+  verifyPasswordResetOtp: async (
+    data: PasswordResetOtpVerifyRequest,
+  ): Promise<PasswordResetOtpVerifyResult> => {
+    return apiClient.post('/auth/password-reset/verify', data);
+  },
+
+  resetPassword: async (
+    data: PasswordResetConfirmRequest,
+  ): Promise<PasswordResetConfirmResult> => {
+    return apiClient.post('/auth/password-reset/reset', data);
   },
 
   getMe: async (token: string) => {

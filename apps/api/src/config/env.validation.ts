@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
 
 class EnvironmentVariables {
   @IsNumber()
@@ -31,6 +31,30 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   IOT_SHARED_SECRET = 'change-me';
+
+  @IsString()
+  @IsOptional()
+  SMTP_HOST = '';
+
+  @IsNumber()
+  @IsOptional()
+  SMTP_PORT = 587;
+
+  @IsBoolean()
+  @IsOptional()
+  SMTP_SECURE = false;
+
+  @IsString()
+  @IsOptional()
+  SMTP_USER = '';
+
+  @IsString()
+  @IsOptional()
+  SMTP_PASS = '';
+
+  @IsString()
+  @IsOptional()
+  SMTP_FROM = '';
 
   @IsString()
   @IsOptional()

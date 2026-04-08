@@ -34,13 +34,19 @@ export function RoleTaskSection({
           <Pressable
             key={task.id}
             accessibilityRole="button"
-            onPress={() => onPressTask(task.route)}
+            disabled={!task.route || !task.isInteractive}
+            onPress={() => {
+              if (task.route && task.isInteractive) {
+                onPressTask(task.route);
+              }
+            }}
             style={[
               styles.card,
               { width },
               {
                 backgroundColor: theme.colors.surfaceSubtle,
                 borderColor: theme.colors.border,
+                opacity: task.isInteractive ? 1 : 0.76,
               },
             ]}
           >
@@ -50,6 +56,9 @@ export function RoleTaskSection({
             </View>
             <Text style={[styles.title, { color: theme.colors.text }]}>{task.title}</Text>
             <Text style={[styles.description, { color: theme.colors.textMuted }]}>{task.description}</Text>
+            {!task.isInteractive && task.disabledReason ? (
+              <Text style={[styles.meta, { color: theme.colors.textSoft }]}>{task.disabledReason}</Text>
+            ) : null}
           </Pressable>
         ))}
       </View>
@@ -68,7 +77,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     gap: 10,
-    minHeight: 144,
+    minHeight: 156,
   },
   header: {
     gap: 10,

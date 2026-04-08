@@ -26,6 +26,12 @@ const mockTokens = {
   refreshToken: 'mock-refresh-token',
 };
 
+const mockedAuthApi = authApi as unknown as {
+  login: jest.Mock;
+  register: jest.Mock;
+  getMe: jest.Mock;
+};
+
 describe('useAuthStore', () => {
   beforeEach(() => {
     useAuthStore.setState({
@@ -46,8 +52,8 @@ describe('useAuthStore', () => {
 
   describe('login', () => {
     it('should authenticate user and store tokens', async () => {
-      authApi.login.mockResolvedValue(mockTokens);
-      authApi.getMe.mockResolvedValue(mockUser);
+      mockedAuthApi.login.mockResolvedValue(mockTokens);
+      mockedAuthApi.getMe.mockResolvedValue(mockUser);
 
       await useAuthStore.getState().login('test@uit.edu.vn', 'Password123');
 
@@ -69,8 +75,8 @@ describe('useAuthStore', () => {
 
   describe('register', () => {
     it('should register, authenticate, and store tokens', async () => {
-      authApi.register.mockResolvedValue(mockTokens);
-      authApi.getMe.mockResolvedValue(mockUser);
+      mockedAuthApi.register.mockResolvedValue(mockTokens);
+      mockedAuthApi.getMe.mockResolvedValue(mockUser);
 
       await useAuthStore.getState().register({
         email: 'test@uit.edu.vn',
@@ -109,7 +115,7 @@ describe('useAuthStore', () => {
   describe('hydrate', () => {
     it('should restore auth state from stored token', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
-      authApi.getMe.mockResolvedValue(mockUser);
+      mockedAuthApi.getMe.mockResolvedValue(mockUser);
 
       await useAuthStore.getState().hydrate();
 
@@ -129,7 +135,7 @@ describe('useAuthStore', () => {
 
     it('should clear tokens on hydration error', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('bad-token');
-      authApi.getMe.mockRejectedValue(new Error('Unauthorized'));
+      mockedAuthApi.getMe.mockRejectedValue(new Error('Unauthorized'));
 
       await useAuthStore.getState().hydrate();
 

@@ -18,7 +18,8 @@ export default function TabLayout() {
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSoft,
         tabBarStyle: {
-          borderTopWidth: 0,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
           backgroundColor: theme.colors.tabBar,
           height: layout.isCompact ? 64 : 70,
           paddingBottom: 8,
@@ -31,7 +32,7 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '700',
+          fontFamily: theme.fonts.semibold,
         },
         headerShown: false,
       }}
@@ -39,7 +40,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Trang chu',
+          title: 'Trang chủ',
           tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
         }}
       />
@@ -49,7 +50,7 @@ export default function TabLayout() {
           title: roleScopedTitle,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name={roleScopedTitle === 'Van hanh' ? 'pulse-outline' : 'calendar-outline'}
+              name={roleScopedTitle === 'Vận hành' ? 'pulse-outline' : 'calendar-outline'}
               size={size}
               color={color}
             />
@@ -57,29 +58,23 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="parking"
+        options={{
+          title: 'Parking',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="car-sport-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="services"
         options={{
-          title: 'Dich vu',
+          title: 'Dịch vụ',
           tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="alerts"
-        options={{
-          title: 'Canh bao',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="notifications-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="parking"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
         options={{
           href: null,
         }}
@@ -87,7 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Ca nhan',
+          title: 'Cá nhân',
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />

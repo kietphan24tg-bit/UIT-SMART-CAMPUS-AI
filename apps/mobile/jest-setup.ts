@@ -1,5 +1,25 @@
 import '@testing-library/jest-native/extend-expect';
 
+jest.mock('axios', () => {
+  const mockAxios = {
+    create: jest.fn(() => mockAxios),
+    interceptors: {
+      request: { use: jest.fn() },
+      response: { use: jest.fn() },
+    },
+    get: jest.fn(),
+    post: jest.fn(),
+    patch: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  return {
+    __esModule: true,
+    default: mockAxios,
+  };
+});
+
 jest.mock('@expo/vector-icons', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');

@@ -6,7 +6,12 @@ import { ContentStack, EmptyState, Screen, StatusBadge, TopHero } from '@/compon
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { getRoleLabel, getServiceEntries } from '@/utils/app';
+import {
+  getRoleLabel,
+  getServiceEntries,
+  getSupportStateLabel,
+  getSupportStateTone,
+} from '@/utils/app';
 
 export default function ServicesScreen() {
   const theme = useAppTheme();
@@ -27,33 +32,51 @@ export default function ServicesScreen() {
   return (
     <Screen>
       <TopHero
-        eyebrow="Services hub"
-        title="Mot noi cho moi dich vu"
-        subtitle="Core modules, roadmap modules va role-specific tools deu duoc gom vao Services de IA cua UIT Smart Campus gon va on dinh."
+        eyebrow="Dịch vụ"
+        title="Dịch vụ campus"
+        subtitle="Chọn nhanh dịch vụ đang hỗ trợ. Mục chưa khả dụng sẽ có trạng thái rõ ràng."
         badge={{ label: getRoleLabel(role), tone: 'info' }}
       />
 
-      <ContentStack gap={20}>
+      <ContentStack gap={16} overlapHero={false}>
         {Object.keys(grouped).length === 0 ? (
           <EmptyState
-            title="Chua co dich vu nao"
-            description="Danh sach dich vu se xuat hien theo role va tien do trien khai cua tung module."
+            title="Chưa có dịch vụ phù hợp"
+            description="Danh sách sẽ tự đổi theo vai trò và quyền hiện tại."
           />
         ) : (
           Object.entries(grouped).map(([category, items]) => (
             <View key={category} style={styles.group}>
-              <Text style={[styles.groupTitle, { color: theme.colors.text }]}>{category}</Text>
+              <Text
+                style={[
+                  styles.groupTitle,
+                  { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                ]}
+              >
+                {category}
+              </Text>
               <View style={styles.grid}>
                 {items.map((service) => (
                   <Pressable
                     key={service.id}
-                    onPress={() => router.push(service.route as never)}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !service.isInteractive }}
+                    disabled={!service.isInteractive}
+                    onPress={() => {
+                      if (service.isInteractive) {
+                        router.push(service.route as never);
+                      }
+                    }}
                     style={[
                       styles.card,
                       { width: serviceCardWidth },
                       {
-                        backgroundColor: theme.colors.surface,
+                        backgroundColor: service.isInteractive
+                          ? theme.colors.surfaceElevated
+                          : theme.colors.surfaceSubtle,
                         borderColor: theme.colors.border,
+                        opacity: service.isInteractive ? 1 : 0.86,
+                        ...theme.elevation.level1,
                       },
                     ]}
                   >
@@ -69,15 +92,47 @@ export default function ServicesScreen() {
                         <Ionicons name={service.icon as never} size={22} color={theme.colors.primary} />
                       </View>
                       <StatusBadge
-                        label={service.availability === 'live' ? 'Dang dung duoc' : 'Roadmap'}
-                        tone={service.availability === 'live' ? 'success' : 'info'}
+                        label={getSupportStateLabel(service.supportState)}
+                        tone={getSupportStateTone(service.supportState)}
                       />
                     </View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{service.title}</Text>
-                    <Text style={[styles.cardSummary, { color: theme.colors.textMuted }]}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                      ]}
+                    >
+                      {service.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.cardSummary,
+                        { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                      ]}
+                    >
                       {service.summary}
                     </Text>
-                    <Text style={[styles.cardLink, { color: theme.colors.primary }]}>
+                    {service.disabledReason ? (
+                      <Text
+                        style={[
+                          styles.cardNote,
+                          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                        ]}
+                      >
+                        {service.disabledReason}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.cardLink,
+                        {
+                          color: service.isInteractive
+                            ? theme.colors.primary
+                            : theme.colors.textSoft,
+                          fontFamily: theme.fonts.semibold,
+                        },
+                      ]}
+                    >
                       {service.primaryAction}
                     </Text>
                   </Pressable>
@@ -93,11 +148,10 @@ export default function ServicesScreen() {
 
 const styles = StyleSheet.create({
   group: {
-    gap: 12,
+    gap: 10,
   },
   groupTitle: {
     fontSize: 18,
-    fontWeight: '800',
   },
   grid: {
     flexDirection: 'row',
@@ -105,10 +159,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
     padding: 16,
-    gap: 12,
+    gap: 10,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -125,14 +179,16 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 17,
-    fontWeight: '800',
   },
   cardSummary: {
     fontSize: 13,
     lineHeight: 18,
   },
+  cardNote: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
   cardLink: {
     fontSize: 14,
-    fontWeight: '700',
   },
 });

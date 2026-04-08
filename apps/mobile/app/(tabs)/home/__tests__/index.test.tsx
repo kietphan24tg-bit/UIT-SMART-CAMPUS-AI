@@ -26,7 +26,7 @@ describe('HomeScreen', () => {
         nextClass: {
           id: '1',
           course: { name: 'SE346', code: 'SE346' },
-          instructor: 'Co Lan',
+          instructor: 'Cô Lan',
           room: 'E3.1',
           startTime: '09:00',
           endTime: '11:00',
@@ -59,31 +59,32 @@ describe('HomeScreen', () => {
   it('should render greeting with user name', () => {
     const { getByText } = render(<HomeScreen />);
 
-    expect(getByText('Xin chao, Nguyen An!')).toBeTruthy();
+    expect(getByText('Xin chào, Nguyen An!')).toBeTruthy();
   });
 
   it('should render dashboard summary cards', () => {
-    const { getByText } = render(<HomeScreen />);
-
-    expect(getByText('Lich hom nay')).toBeTruthy();
-    expect(getByText('Canh bao moi')).toBeTruthy();
-    expect(getByText('3/4')).toBeTruthy();
-  });
-
-  it('should render role quick actions and student tasks', () => {
     const { getByText, getAllByText } = render(<HomeScreen />);
 
-    expect(getByText('Lich hoc')).toBeTruthy();
-    expect(getByText('Diem & GPA')).toBeTruthy();
+    expect(getByText('Buổi tiếp theo')).toBeTruthy();
     expect(getAllByText('Parking + IoT').length).toBeGreaterThan(0);
-    expect(getByText('Tac vu hoc vu')).toBeTruthy();
+    expect(getAllByText('3.71').length).toBeGreaterThan(0);
+  });
+
+  it('should render role quick actions and key sections', () => {
+    const { getByText, getAllByText } = render(<HomeScreen />);
+
+    expect(getByText('Truy cập nhanh')).toBeTruthy();
+    expect(getByText('Lịch học')).toBeTruthy();
+    expect(getByText('Điểm & GPA')).toBeTruthy();
+    expect(getAllByText('Parking + IoT').length).toBeGreaterThan(0);
+    expect(getByText('Kết quả học tập')).toBeTruthy();
   });
 
   it('should render next class card', () => {
-    const { getByText } = render(<HomeScreen />);
+    const { getByText, getAllByText } = render(<HomeScreen />);
 
-    expect(getByText('Buoi tiep theo')).toBeTruthy();
-    expect(getByText('SE346')).toBeTruthy();
+    expect(getByText('Buổi tiếp theo')).toBeTruthy();
+    expect(getAllByText('SE346').length).toBeGreaterThan(0);
     expect(getByText('09:00 - 11:00')).toBeTruthy();
   });
 
@@ -95,6 +96,6 @@ describe('HomeScreen', () => {
 
     const { getByText } = render(<HomeScreen />);
 
-    expect(getByText('Xin chao, UITer!')).toBeTruthy();
+    expect(getByText('Xin chào, UITer!')).toBeTruthy();
   });
 });

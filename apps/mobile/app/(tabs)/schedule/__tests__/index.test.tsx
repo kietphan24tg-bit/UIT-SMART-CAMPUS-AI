@@ -23,13 +23,27 @@ describe('ScheduleScreen', () => {
           activeSessions: 1,
           occupiedSlots: 2,
           lastUpdated: '2026-04-07T05:00:00.000Z',
+          sensors: {
+            temperature: 29,
+            humidity: 65,
+            rainDetected: false,
+            fireDetected: false,
+            deviceIp: '192.168.1.10',
+            reportedAt: '2026-04-07T05:00:00.000Z',
+          },
         },
         telemetry: {
+          gateId: 'uit-gate-a',
           fireDetected: false,
+          rainDetected: false,
+          temperature: 29,
+          humidity: 65,
           deviceIp: '192.168.1.10',
           reportedAt: '2026-04-07T05:00:00.000Z',
         },
-        fireAlerts: [{ id: 'fire-1', isResolved: false }],
+        fireAlerts: {
+          items: [{ id: 'fire-1', gateId: 'uit-gate-a', message: 'Phát hiện khói', isResolved: false, reportedAt: '2026-04-07T05:00:00.000Z' }],
+        },
         unreadCount: 3,
       },
       isLoading: false,
@@ -56,7 +70,7 @@ describe('ScheduleScreen', () => {
           startTime: '09:00',
           endTime: '11:00',
           room: 'E3.1',
-          instructor: 'Co Lan',
+          instructor: 'Cô Lan',
           course: { name: 'SE346', code: 'SE346' },
         },
       ],
@@ -64,12 +78,12 @@ describe('ScheduleScreen', () => {
 
     const { getByText, getAllByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Lich hoc tuan nay')).toBeTruthy();
-    expect(getByText('HK2 2024-2025')).toBeTruthy();
+    expect(getByText('Lịch học trong học kỳ')).toBeTruthy();
+    expect(getAllByText('HK2 2024-2025').length).toBeGreaterThan(0);
     expect(getAllByText('SE346').length).toBeGreaterThan(0);
   });
 
-  it('should render lecturer task sections', () => {
+  it('should render lecturer support entries', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'lecturer' } };
       return selector(state);
@@ -87,7 +101,7 @@ describe('ScheduleScreen', () => {
           startTime: '09:00',
           endTime: '11:00',
           room: 'E3.1',
-          instructor: 'Co Lan',
+          instructor: 'Cô Lan',
           semester: { name: 'HK2 2024-2025' },
           course: { name: 'SE346', code: 'SE346' },
         },
@@ -96,9 +110,9 @@ describe('ScheduleScreen', () => {
 
     const { getByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Lich day & tac vu lop')).toBeTruthy();
-    expect(getByText('Tac vu giang day')).toBeTruthy();
-    expect(getByText('Action screens')).toBeTruthy();
+    expect(getByText('Lịch dạy trong học kỳ')).toBeTruthy();
+    expect(getByText('Công cụ giảng dạy')).toBeTruthy();
+    expect(getByText('Điểm danh QR')).toBeTruthy();
   });
 
   it('should render operations variant for admin', () => {
@@ -117,8 +131,8 @@ describe('ScheduleScreen', () => {
 
     const { getByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Bang dieu phoi van hanh')).toBeTruthy();
-    expect(getByText('Tac vu van hanh')).toBeTruthy();
-    expect(getByText('Parking zone A')).toBeTruthy();
+    expect(getByText('Điều phối campus')).toBeTruthy();
+    expect(getByText('Lối vào vận hành')).toBeTruthy();
+    expect(getByText('Parking + IoT')).toBeTruthy();
   });
 });

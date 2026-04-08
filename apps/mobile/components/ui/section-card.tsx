@@ -6,6 +6,7 @@ import { SecondaryButton } from './buttons';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAppTheme } from '@/theme';
 
+type SectionCardVariant = 'elevated' | 'outlined' | 'subtle';
 
 interface SectionCardProps {
   title: string;
@@ -13,6 +14,7 @@ interface SectionCardProps {
   actionLabel?: string;
   onActionPress?: () => void;
   children: ReactNode;
+  variant?: SectionCardVariant;
 }
 
 export function SectionCard({
@@ -21,27 +23,46 @@ export function SectionCard({
   actionLabel,
   onActionPress,
   children,
+  variant = 'elevated',
 }: SectionCardProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
+  const elevationStyle =
+    variant === 'outlined' ? theme.elevation.level0 : theme.elevation.level2;
+  const backgroundColor =
+    variant === 'outlined'
+      ? theme.colors.surface
+      : variant === 'subtle'
+        ? theme.colors.surfaceSubtle
+        : theme.colors.surfaceElevated;
 
   return (
     <View
       style={[
         styles.card,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor,
           borderColor: theme.colors.border,
-          shadowColor: theme.colors.shadow,
-          padding: layout.isTablet ? 22 : 18,
+          borderRadius: theme.radii.xl,
+          padding: layout.isTablet ? 22 : layout.isCompact ? 16 : 18,
         },
+        elevationStyle as never,
       ]}
     >
       <View style={[styles.header, layout.isCompact ? styles.headerStacked : null]}>
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+            {title}
+          </Text>
           {subtitle ? (
-            <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
+            <Text
+              style={[
+                styles.subtitle,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
+              {subtitle}
+            </Text>
           ) : null}
         </View>
         {actionLabel && onActionPress ? (
@@ -59,13 +80,7 @@ export function SectionCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
     borderWidth: 1,
-    padding: 18,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 2,
   },
   header: {
     flexDirection: 'row',
@@ -83,8 +98,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   title: {
-    fontSize: 19,
-    fontWeight: '700',
+    fontSize: 18,
   },
   subtitle: {
     fontSize: 13,

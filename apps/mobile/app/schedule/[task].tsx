@@ -3,7 +3,6 @@ import { Alert } from 'react-native';
 
 import { TaskScreen } from '@/components/tasks';
 import { ContentStack, EmptyState, Screen } from '@/components/ui';
-import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ScheduleTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
 import { isLecturerRole } from '@/utils/app';
@@ -13,7 +12,6 @@ export default function ScheduleTaskScreen() {
   const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const params = useLocalSearchParams<{ task?: string }>();
-  const scheduleState = useScheduleScreenData();
   const task = params.task as ScheduleTaskKey | undefined;
 
   if (!task) {
@@ -21,9 +19,9 @@ export default function ScheduleTaskScreen() {
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Khong tim thay tac vu"
-            description="Route nay chua co task key hop le trong schedule family."
-            actionLabel="Quay lai"
+            title="Không tìm thấy tác vụ"
+            description="Task key không hợp lệ trong nhóm lịch học."
+            actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -41,7 +39,7 @@ export default function ScheduleTaskScreen() {
             icon="lock-closed-outline"
             title={copy.title}
             description={copy.description}
-            actionLabel="Ve lich"
+            actionLabel="Về lịch"
             onActionPress={() => router.replace('/schedule')}
           />
         </ContentStack>
@@ -49,16 +47,16 @@ export default function ScheduleTaskScreen() {
     );
   }
 
-  const config = getScheduleTaskConfig(task, scheduleState.schedule);
+  const config = getScheduleTaskConfig(task);
 
   if (!config) {
     return (
       <Screen>
         <ContentStack narrow>
           <EmptyState
-            title="Task chua san sang"
-            description="Task key nay chua duoc khai bao trong role-complete schedule flow."
-            actionLabel="Ve lich"
+            title="Tác vụ chưa sẵn sàng"
+            description="Task key này chưa được khai báo trong nhóm lịch học."
+            actionLabel="Về lịch"
             onActionPress={() => router.replace('/schedule')}
           />
         </ContentStack>
@@ -73,8 +71,8 @@ export default function ScheduleTaskScreen() {
     }
 
     Alert.alert(
-      'UI backend-ready',
-      'Action nay da duoc chot giao dien va contract de backend noi mutation o pass tiep theo.',
+      'Chưa hỗ trợ thao tác',
+      'Tính năng này đang ở trạng thái sắp triển khai trên mobile.',
     );
   };
 

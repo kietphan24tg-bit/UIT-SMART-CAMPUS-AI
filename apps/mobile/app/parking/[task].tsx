@@ -18,12 +18,7 @@ import { useParkingOverview } from '@/hooks/use-parking-overview';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAppTheme } from '@/theme';
 import type { ParkingTaskKey } from '@/types/app-data';
-import {
-  formatCurrency,
-  formatDateTime,
-  formatSubscriptionDate,
-} from '@/utils/app';
-import { getPaymentStatusRecord } from '@/utils/role-ui';
+import { formatCurrency, formatDateTime, formatSubscriptionDate } from '@/utils/app';
 
 export default function ParkingTaskScreen() {
   const router = useRouter();
@@ -40,11 +35,11 @@ export default function ParkingTaskScreen() {
 
   return (
     <Screen>
-      <ContentStack narrow>
+      <ContentStack narrow overlapHero={false}>
         <EmptyState
-          title="Khong tim thay tac vu parking"
-          description="Task key nay chua duoc khai bao trong Parking + IoT family."
-          actionLabel="Quay lai parking"
+          title="Không tìm thấy tác vụ"
+          description="Tác vụ này chưa có trong nhóm Parking + IoT."
+          actionLabel="Quay lại parking"
           onActionPress={() => router.replace('/parking')}
         />
       </ContentStack>
@@ -60,7 +55,7 @@ function VehicleRegistrationTask({ onDone }: { onDone: () => void }) {
 
   const handleSubmit = async () => {
     if (!plateNumber.trim() || !rfidTag.trim()) {
-      Alert.alert('Parking + IoT', 'Vui long nhap day du bien so va RFID.');
+      Alert.alert('Đăng ký xe', 'Vui lòng nhập đầy đủ biển số và mã RFID.');
       return;
     }
 
@@ -70,11 +65,14 @@ function VehicleRegistrationTask({ onDone }: { onDone: () => void }) {
         rfidTag,
         label: label.trim() || undefined,
       });
-      Alert.alert('Dang ky xe', 'Thong tin xe da duoc luu. Backend co the noi them validation chi tiet sau.');
+      Alert.alert(
+        'Đăng ký xe',
+        'Đăng ký thành công. Bạn có thể mở mục Thanh toán để kích hoạt hoặc gia hạn gói.',
+      );
       onDone();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Khong the dang ky xe luc nay.';
-      Alert.alert('Dang ky xe', message);
+      const message = error instanceof Error ? error.message : 'Không thể đăng ký xe lúc này.';
+      Alert.alert('Đăng ký xe', message);
     }
   };
 
@@ -82,49 +80,49 @@ function VehicleRegistrationTask({ onDone }: { onDone: () => void }) {
     <Screen>
       <TopHero
         eyebrow="Parking + IoT"
-        title="Vehicle registration"
-        subtitle="Luong dang ky xe tach rieng khoi overview de thao tac dai va validation khong lam roi man parking chinh."
-        badge={{ label: 'Task screen', tone: 'primary' }}
+        title="Đăng ký xe"
+        subtitle="Nhập biển số và RFID để liên kết xe với tài khoản."
+        badge={{ label: 'Đang hỗ trợ', tone: 'success' }}
       />
 
-      <ContentStack narrow>
-        <SectionCard title="Thong tin can nhap" subtitle="Tap trung vao bien so, RFID va ghi chu ngan.">
+      <ContentStack narrow overlapHero={false}>
+        <SectionCard title="Thông tin xe" subtitle="Nhập thông tin để hoàn tất đăng ký.">
           <View style={styles.column}>
             <FormField
-              label="Bien so"
-              placeholder="51F44614"
+              label="Biển số"
+              placeholder="51F-446.14"
               value={plateNumber}
               onChangeText={setPlateNumber}
               autoCapitalize="characters"
             />
             <FormField
-              label="RFID"
+              label="Mã RFID"
               placeholder="UIT-RFID-0001"
               value={rfidTag}
               onChangeText={setRfidTag}
               autoCapitalize="characters"
             />
             <FormField
-              label="Nhan xe"
-              placeholder="Xe may ca nhan"
+              label="Nhãn xe"
+              placeholder="Xe máy cá nhân"
               value={label}
               onChangeText={setLabel}
             />
           </View>
         </SectionCard>
 
-        <SectionCard title="Contract backend" subtitle="Chot payload cho phase backend tiep theo.">
-          <InfoRow label="Mutation" value="POST /parking/vehicles" />
-          <InfoRow label="Validation" value="plateNumber, rfidTag, role, duplicate plate" />
-          <InfoRow label="States" value="loading, error, success, duplicate, permission denied" />
+        <SectionCard title="Lưu ý" subtitle="Thông tin cần biết trước khi thanh toán gói gửi xe.">
+          <InfoRow label="Bắt buộc" value="Biển số và RFID" />
+          <InfoRow label="Tạo gói gửi xe" value="Hệ thống tạo theo xe đã đăng ký" />
+          <InfoRow label="Thanh toán" value="Thực hiện ở màn Thanh toán và gói gửi xe" />
         </SectionCard>
 
         <PrimaryButton
-          label="Dang ky xe"
+          label="Lưu thông tin xe"
           loading={parking.isSubmittingVehicle}
           onPress={() => void handleSubmit()}
         />
-        <SecondaryButton label="Quay lai parking" onPress={onDone} />
+        <SecondaryButton label="Quay lại parking" onPress={onDone} />
       </ContentStack>
     </Screen>
   );
@@ -135,8 +133,8 @@ function PaymentStatusTask({ onDone }: { onDone: () => void }) {
   const layout = useResponsiveLayout();
   const router = useRouter();
   const parking = useParkingOverview();
-  const paymentRecord = getPaymentStatusRecord(parking.data);
   const vehicles = parking.data?.vehicles ?? [];
+  const summary = summarizeSubscriptions(vehicles);
   const columns = layout.getGridColumns({
     minItemWidth: 220,
     gap: 12,
@@ -149,118 +147,130 @@ function PaymentStatusTask({ onDone }: { onDone: () => void }) {
       const checkout = await parking.createPayment(vehicleId);
       await Linking.openURL(checkout.checkoutUrl);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Khong the tao giao dich MoMo.';
-      Alert.alert('Thanh toan gui xe', message);
+      const message = error instanceof Error ? error.message : 'Không thể tạo giao dịch MoMo.';
+      Alert.alert('Thanh toán gửi xe', message);
     }
   };
-
-  const tone =
-    paymentRecord?.status === 'success'
-      ? 'success'
-      : paymentRecord?.status === 'pending'
-        ? 'warning'
-        : 'danger';
 
   return (
     <Screen>
       <TopHero
         eyebrow="Parking + IoT"
-        title="Parking payment status"
-        subtitle="Trang thai thanh toan tach rieng de user kiem tra pending / success / failed ma khong lam loang overview sensor."
-        badge={{ label: paymentRecord ? paymentRecord.status.toUpperCase() : 'NO VEHICLE', tone: paymentRecord ? tone : 'info' }}
+        title="Thanh toán và gói gửi xe"
+        subtitle="Hiển thị trạng thái gói thực tế và điểm vào thanh toán MoMo."
+        badge={{
+          label: vehicles.length > 0 ? `${vehicles.length} xe đã đăng ký` : 'Chưa có xe',
+          tone: vehicles.length > 0 ? 'info' : 'warning',
+        }}
       />
 
-      <ContentStack>
-        {paymentRecord ? (
-          <SectionCard title="Thanh toan gan nhat" subtitle="Snapshot de backend noi payment status record rieng.">
-            <View style={styles.column}>
-              <StatusBadge
-                label={paymentRecord.status === 'success' ? 'Thanh cong' : paymentRecord.status === 'pending' ? 'Dang cho' : 'Can thanh toan lai'}
-                tone={tone}
-              />
-              <InfoRow label="Transaction" value={paymentRecord.transactionId} />
-              <InfoRow label="Order" value={paymentRecord.orderId} />
-              <InfoRow label="Provider" value={paymentRecord.provider} />
-              <InfoRow label="So tien" value={`${formatCurrency(paymentRecord.amount)} VND`} />
-              <InfoRow label="Cap nhat" value={formatDateTime(paymentRecord.updatedAt)} />
-              <Text style={[styles.body, { color: theme.colors.textMuted }]}>{paymentRecord.note}</Text>
-            </View>
-          </SectionCard>
-        ) : (
-          <EmptyState
-            icon="wallet-outline"
-            title="Chua co du lieu thanh toan"
-            description="Khi user chua dang ky xe, parking payment status se hien empty state ro rang thay vi handoff URL mo ho."
-          />
-        )}
-
-        <SectionCard title="Xe da dang ky" subtitle="Mỗi xe co CTA thanh toan rieng va state goi gui xe.">
+      <ContentStack overlapHero={false}>
+        <SectionCard title="Trạng thái hiện có" subtitle="Tổng hợp trạng thái gói gửi xe.">
           {vehicles.length > 0 ? (
-            <View style={styles.grid}>
-              {vehicles.map((vehicle) => (
-                <View
-                  key={vehicle.id}
-                  style={[
-                    styles.vehicleCard,
-                    { width: cardWidth },
-                    {
-                      backgroundColor: theme.colors.surfaceSubtle,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.vehicleTitle, { color: theme.colors.text }]}>{vehicle.plateNumber}</Text>
-                  <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                    RFID {vehicle.rfidTag} · {vehicle.label || 'Khong co nhan xe'}
-                  </Text>
-                  <StatusBadge
-                    label={
-                      vehicle.subscription.status === 'active'
-                        ? 'Dang hieu luc'
-                        : vehicle.subscription.status === 'pending'
-                          ? 'Dang cho'
-                          : vehicle.subscription.status === 'expired'
-                            ? 'Da het han'
-                            : 'Chua kich hoat'
-                    }
-                    tone={
-                      vehicle.subscription.status === 'active'
-                        ? 'success'
-                        : vehicle.subscription.status === 'pending'
-                          ? 'warning'
-                          : vehicle.subscription.status === 'expired'
-                            ? 'danger'
-                            : 'info'
-                    }
-                  />
-                  <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                    Han goi: {formatSubscriptionDate(vehicle.subscription.endDate)}
-                  </Text>
-                  <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                    Phi thang: {formatCurrency(vehicle.subscription.monthlyFee)} VND
-                  </Text>
-                  <SecondaryButton
-                    label="Thanh toan qua MoMo"
-                    loading={parking.isSubmittingPayment}
-                    onPress={() => void handlePayment(vehicle.id)}
-                  />
-                </View>
-              ))}
+            <View style={styles.column}>
+              <View style={styles.badgeRow}>
+                <StatusBadge label={`${summary.active} đang hiệu lực`} tone="success" />
+                <StatusBadge label={`${summary.pending} đang chờ`} tone="warning" />
+                <StatusBadge label={`${summary.expired} đã hết hạn`} tone="danger" />
+                <StatusBadge label={`${summary.inactive} chưa kích hoạt`} tone="info" />
+              </View>
+              <Text style={[styles.body, { color: theme.colors.textMuted }]}>
+                Sau khi thanh toán, trạng thái gói sẽ cập nhật ở lần làm mới tiếp theo.
+              </Text>
             </View>
           ) : (
             <EmptyState
-              icon="car-sport-outline"
-              title="Ban chua dang ky xe"
-              description="Tao luong vehicle registration truoc, sau do quay lai day de xem payment state va CTA."
-              actionLabel="Dang ky xe"
+              icon="wallet-outline"
+              title="Chưa có dữ liệu gói gửi xe"
+              description="Bạn cần đăng ký ít nhất một xe trước khi thanh toán."
+              actionLabel="Đăng ký xe"
               onActionPress={() => router.push('/parking/vehicle-registration')}
             />
           )}
         </SectionCard>
 
-        <SecondaryButton label="Quay lai parking" onPress={onDone} />
+        <SectionCard title="Xe đã đăng ký" subtitle="Mỗi xe có nút thanh toán riêng.">
+          {vehicles.length > 0 ? (
+            <View style={styles.grid}>
+              {vehicles.map((vehicle) => {
+                const status = getSubscriptionMeta(vehicle.subscription.status);
+
+                return (
+                  <View
+                    key={vehicle.id}
+                    style={[
+                      styles.vehicleCard,
+                      { width: cardWidth },
+                      {
+                        backgroundColor: theme.colors.surfaceSubtle,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.vehicleTitle, { color: theme.colors.text }]}>
+                      {vehicle.plateNumber}
+                    </Text>
+                    <Text style={[styles.body, { color: theme.colors.textMuted }]}>
+                      RFID {vehicle.rfidTag} · {vehicle.label || 'Chưa đặt nhãn'}
+                    </Text>
+                    <StatusBadge label={status.label} tone={status.tone} />
+                    <InfoRow label="Hạn gói" value={formatSubscriptionDate(vehicle.subscription.endDate)} />
+                    <InfoRow
+                      label="Lần thanh toán gần nhất"
+                      value={formatDateTime(vehicle.subscription.lastPaymentAt)}
+                    />
+                    <InfoRow
+                      label="Phí tháng"
+                      value={`${formatCurrency(vehicle.subscription.monthlyFee)} VND`}
+                    />
+                    <SecondaryButton
+                      label={vehicle.subscription.status === 'active' ? 'Gia hạn qua MoMo' : 'Thanh toán qua MoMo'}
+                      loading={parking.isSubmittingPayment}
+                      onPress={() => void handlePayment(vehicle.id)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <EmptyState
+              icon="car-sport-outline"
+              title="Bạn chưa đăng ký xe"
+              description="Đăng ký xe trước, sau đó quay lại để thanh toán hoặc gia hạn."
+              actionLabel="Đăng ký xe"
+              onActionPress={() => router.push('/parking/vehicle-registration')}
+            />
+          )}
+        </SectionCard>
+
+        <SecondaryButton label="Quay lại parking" onPress={onDone} />
       </ContentStack>
     </Screen>
+  );
+}
+
+function getSubscriptionMeta(status: 'inactive' | 'pending' | 'active' | 'expired') {
+  switch (status) {
+    case 'active':
+      return { label: 'Đang hiệu lực', tone: 'success' as const };
+    case 'pending':
+      return { label: 'Đang chờ', tone: 'warning' as const };
+    case 'expired':
+      return { label: 'Đã hết hạn', tone: 'danger' as const };
+    default:
+      return { label: 'Chưa kích hoạt', tone: 'info' as const };
+  }
+}
+
+function summarizeSubscriptions(
+  vehicles: Array<{ subscription: { status: 'inactive' | 'pending' | 'active' | 'expired' } }>,
+) {
+  return vehicles.reduce(
+    (acc, vehicle) => {
+      acc[vehicle.subscription.status] += 1;
+      return acc;
+    },
+    { inactive: 0, pending: 0, active: 0, expired: 0 },
   );
 }
 
@@ -271,6 +281,11 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   grid: {
     flexDirection: 'row',

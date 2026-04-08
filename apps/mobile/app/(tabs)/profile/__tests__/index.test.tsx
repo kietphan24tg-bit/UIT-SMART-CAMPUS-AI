@@ -50,7 +50,7 @@ describe('ProfileScreen', () => {
   it('should call logout when pressing logout button', () => {
     const { getByText } = render(<ProfileScreen />);
 
-    fireEvent.press(getByText('Dang xuat'));
+    fireEvent.press(getByText('Đăng xuất'));
 
     expect(mockLogout).toHaveBeenCalled();
   });

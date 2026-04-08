@@ -8,16 +8,16 @@ import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
 
 import { AuthService } from './auth.service';
+import { PasswordResetMailerService } from './password-reset-mailer.service';
 
 jest.mock('bcrypt');
-jest.mock('uuid', () => ({ v4: () => 'mock-uuid-token' }));
+jest.mock('node:crypto', () => ({ randomUUID: () => 'mock-uuid-token' }));
 
 describe('AuthService', () => {
   let authService: AuthService;
   let prisma: jest.Mocked<PrismaService>;
-  let jwtService: jest.Mocked<JwtService>;
   let usersService: jest.Mocked<UsersService>;
-  let configService: jest.Mocked<ConfigService>;
+  let passwordResetMailerService: jest.Mocked<PasswordResetMailerService>;
 
   const mockUser = {
     id: 'user-1',
@@ -39,7 +39,7 @@ describe('AuthService', () => {
         {
           provide: PrismaService,
           useValue: {
-            user: { findUnique: jest.fn() },
+            user: { findUnique: jest.fn(), update: jest.fn() },
             refreshToken: {
               findUnique: jest.fn(),
               create: jest.fn(),
@@ -60,14 +60,20 @@ describe('AuthService', () => {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('7d') },
         },
+        {
+          provide: PasswordResetMailerService,
+          useValue: {
+            canSendEmail: jest.fn().mockReturnValue(false),
+            sendOtpEmail: jest.fn().mockResolvedValue(false),
+          },
+        },
       ],
     }).compile();
 
     authService = module.get(AuthService);
     prisma = module.get(PrismaService);
-    jwtService = module.get(JwtService);
     usersService = module.get(UsersService);
-    configService = module.get(ConfigService);
+    passwordResetMailerService = module.get(PasswordResetMailerService);
   });
 
   describe('register', () => {
@@ -181,6 +187,67 @@ describe('AuthService', () => {
 
       await authService.logout('user-1');
 
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+    });
+  });
+
+  describe('password reset', () => {
+    it('should create a password reset OTP for an active user', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
+
+      const result = await authService.requestPasswordReset('test@uit.edu.vn');
+
+      expect(passwordResetMailerService.sendOtpEmail).toHaveBeenCalled();
+      expect(result.delivery).toBe('preview');
+      expect('previewCode' in result && result.previewCode).toMatch(/^\d{6}$/);
+    });
+
+    it('should return email delivery when SMTP send succeeds', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
+      (passwordResetMailerService.canSendEmail as jest.Mock).mockReturnValue(true);
+      (passwordResetMailerService.sendOtpEmail as jest.Mock).mockResolvedValue(true);
+
+      const result = await authService.requestPasswordReset('test@uit.edu.vn');
+
+      expect(result.delivery).toBe('email');
+      expect(result).not.toHaveProperty('previewCode');
+    });
+
+    it('should verify a valid OTP', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await authService.requestPasswordReset('test@uit.edu.vn');
+
+      await expect(
+        authService.verifyPasswordResetOtp('test@uit.edu.vn', '123456'),
+      ).resolves.toEqual({ verified: true });
+    });
+
+    it('should update password, consume otp, and clear sessions after reset', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.hash as jest.Mock)
+        .mockResolvedValueOnce('hashed-otp')
+        .mockResolvedValueOnce('hashed-new-password');
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      (prisma.refreshToken.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      await authService.requestPasswordReset('test@uit.edu.vn');
+
+      await expect(
+        authService.resetPassword('test@uit.edu.vn', '123456', 'Password123'),
+      ).resolves.toEqual({ success: true });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { passwordHash: 'hashed-new-password' },
+      });
       expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-1' },
       });

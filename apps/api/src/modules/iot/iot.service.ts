@@ -4,11 +4,14 @@ import { USER_ROLES } from '@smart-campus/shared';
 import { PrismaService } from '../../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
-import type { FireAlertDto } from './dto/fire-alert.dto';
+import type {
+  FireAlertDto,
+  FireAlertTelemetrySnapshotDto,
+} from './dto/fire-alert.dto';
 import type { IotScanDto } from './dto/iot-scan.dto';
 import type { TelemetryDto } from './dto/telemetry.dto';
 
-const DEFAULT_FIRE_ALERT_MESSAGE = 'Cam bien lua da kich hoat tai bai xe UIT Campus.';
+const DEFAULT_FIRE_ALERT_MESSAGE = 'Cảm biến lửa đã kích hoạt tại bãi xe UIT Campus.';
 
 function normalizePlate(value: string) {
   return String(value || '')
@@ -19,6 +22,26 @@ function normalizePlate(value: string) {
 
 function normalizeRfid(value: string) {
   return String(value || '').trim().toUpperCase();
+}
+
+function normalizeGateId(value?: string) {
+  const gateId = String(value || '').trim();
+  return gateId || undefined;
+}
+
+function clampInteger(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  const normalized = Math.trunc(parsed);
+  return Math.min(max, Math.max(min, normalized));
 }
 
 @Injectable()
@@ -34,7 +57,7 @@ export class IotService {
     const availableSlots = await this.countAvailableSlots(dto.gateId);
 
     if (!recognizedPlate) {
-      return this.createDecision('denied', 'Khong nhan dien duoc bien so hop le.', availableSlots);
+      return this.createDecision('denied', 'Không nhận diện được biển số hợp lệ.', availableSlots);
     }
 
     const vehicle = await this.prisma.vehicle.findUnique({
@@ -45,7 +68,7 @@ export class IotService {
     if (!vehicle || !vehicle.isActive) {
       return this.createDecision(
         'denied',
-        'RFID chua duoc dang ky tren app UIT Campus.',
+        'RFID chưa được đăng ký trên app UIT Campus.',
         availableSlots,
       );
     }
@@ -53,7 +76,7 @@ export class IotService {
     if (normalizePlate(vehicle.plateNumber) !== recognizedPlate) {
       return this.createDecision(
         'denied',
-        'Bien so khong khop voi xe da dang ky.',
+        'Biển số không khớp với xe đã đăng ký.',
         availableSlots,
       );
     }
@@ -78,7 +101,7 @@ export class IotService {
 
       return {
         action: 'exit_allowed',
-        message: 'Bien so hop le. Mo barrier cho xe ra.',
+        message: 'Biển số hợp lệ. Mở barrier cho xe ra.',
         availableSlots,
         sessionId: completed.id,
       };
@@ -93,13 +116,13 @@ export class IotService {
     if (subscriptionExpired) {
       return this.createDecision(
         'denied',
-        'Goi gui xe thang chua hop le. Vui long thanh toan 40.000 VND/thang.',
+        'Gói gửi xe tháng chưa hợp lệ. Vui lòng thanh toán 40.000 VND/tháng.',
         availableSlots,
       );
     }
 
     if (availableSlots <= 0) {
-      return this.createDecision('denied', 'Bai xe dang het cho trong.', availableSlots);
+      return this.createDecision('denied', 'Bãi xe đang hết chỗ trống.', availableSlots);
     }
 
     const session = await this.prisma.parkingSession.create({
@@ -113,7 +136,7 @@ export class IotService {
 
     return {
       action: 'entry_allowed',
-      message: 'Xe hop le. Mo barrier cho xe vao.',
+      message: 'Xe hợp lệ. Mở barrier cho xe vào.',
       availableSlots,
       sessionId: session.id,
     };
@@ -168,13 +191,14 @@ export class IotService {
   }
 
   async getLatestTelemetry(gateId?: string) {
+    const resolvedGateId = normalizeGateId(gateId);
     const snapshot = await this.prisma.telemetrySnapshot.findFirst({
-      where: gateId ? { gateId } : undefined,
+      where: resolvedGateId ? { gateId: resolvedGateId } : undefined,
       orderBy: { reportedAt: 'desc' },
     });
 
     if (!snapshot) {
-      throw new NotFoundException('Chua co du lieu telemetry');
+      throw new NotFoundException('Chưa có dữ liệu telemetry');
     }
 
     return snapshot;
@@ -182,10 +206,11 @@ export class IotService {
 
   async createFireAlert(dto: FireAlertDto) {
     const reportedAt = new Date(dto.reportedAt);
+    const gateId = normalizeGateId(dto.gateId) ?? dto.gateId;
 
     let telemetrySnapshot = await this.prisma.telemetrySnapshot.findFirst({
       where: {
-        gateId: dto.gateId,
+        gateId,
         reportedAt,
       },
       orderBy: { reportedAt: 'desc' },
@@ -193,7 +218,7 @@ export class IotService {
 
     if (!telemetrySnapshot && dto.telemetrySnapshot) {
       const snapshotInput = this.coerceTelemetrySnapshot(
-        dto.gateId,
+        gateId,
         dto.reportedAt,
         dto.telemetrySnapshot,
       );
@@ -202,7 +227,7 @@ export class IotService {
 
     const fireAlert = await this.prisma.fireAlert.create({
       data: {
-        gateId: dto.gateId,
+        gateId,
         telemetrySnapshotId: telemetrySnapshot?.id ?? null,
         message: dto.message?.trim() || DEFAULT_FIRE_ALERT_MESSAGE,
         reportedAt,
@@ -210,7 +235,7 @@ export class IotService {
     });
 
     await this.notificationsService.createSystemNotifications(
-      'Canh bao chay bai xe',
+      'Cảnh báo cháy bãi xe',
       fireAlert.message,
       'fire_alert',
       {
@@ -225,11 +250,13 @@ export class IotService {
   }
 
   async listFireAlerts(page = 1, limit = 20) {
+    const safePage = clampInteger(page, 1, 1, 1000);
+    const safeLimit = clampInteger(limit, 20, 1, 100);
     const [items, total] = await Promise.all([
       this.prisma.fireAlert.findMany({
         orderBy: { reportedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (safePage - 1) * safeLimit,
+        take: safeLimit,
         include: { telemetrySnapshot: true },
       }),
       this.prisma.fireAlert.count(),
@@ -238,10 +265,10 @@ export class IotService {
     return {
       items,
       meta: {
-        page,
-        limit,
+        page: safePage,
+        limit: safeLimit,
         total,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
+        totalPages: Math.max(1, Math.ceil(total / safeLimit)),
       },
     };
   }
@@ -311,7 +338,7 @@ export class IotService {
   private coerceTelemetrySnapshot(
     gateId: string,
     reportedAt: string,
-    snapshot: Record<string, unknown>,
+    snapshot: FireAlertTelemetrySnapshotDto,
   ): TelemetryDto {
     const slots = Array.isArray(snapshot.slots)
       ? snapshot.slots.map((slot, index) => {
@@ -322,7 +349,7 @@ export class IotService {
             };
           }
 
-          const slotRecord = slot as Record<string, unknown>;
+          const slotRecord = slot as unknown as Record<string, unknown>;
           return {
             slotNumber: String(slotRecord.slotNumber || `A${index + 1}`),
             zone: String(slotRecord.zone || 'Main'),

@@ -36,7 +36,7 @@ describe('ParkingScreen', () => {
             id: 'vehicle-1',
             plateNumber: '51F44614',
             rfidTag: 'RFID-1',
-            label: 'Xe may ca nhan',
+            label: 'Xe máy cá nhân',
             updatedAt: '2026-04-07T05:00:00.000Z',
             subscription: {
               status: 'active',
@@ -57,7 +57,7 @@ describe('ParkingScreen', () => {
 
     const { getByText } = render(<ParkingScreen />);
 
-    expect(getByText('Parking + IoT')).toBeTruthy();
+    expect(getByText('Bãi xe thông minh UIT')).toBeTruthy();
     expect(getByText('A1')).toBeTruthy();
     expect(getByText('51F44614')).toBeTruthy();
   });
@@ -79,6 +79,6 @@ describe('ParkingScreen', () => {
 
     const { getByText } = render(<ParkingScreen />);
 
-    expect(getByText('Ban chua dang ky xe')).toBeTruthy();
+    expect(getByText('Bạn chưa đăng ký xe')).toBeTruthy();
   });
 });
