@@ -63,6 +63,11 @@ export function ForgotPasswordScreen() {
   const stepOrder: ResetStep[] = ['request', 'verify', 'reset'];
   const activeIndex = step === 'done' ? 3 : stepOrder.indexOf(step);
   const useWideMeta = layout.isTablet || layout.isExtraLargePhone;
+  const shouldShowMetaGroup = step === 'verify' || step === 'reset';
+  const helperCopy =
+    maskedEmail && (step === 'verify' || step === 'reset')
+      ? `OTP đã được gửi tới ${maskedEmail}.`
+      : null;
 
   const resetFeedback = () => setFeedback(null);
 
@@ -214,12 +219,22 @@ export function ForgotPasswordScreen() {
 
       {feedback ? <StatusBadge label={feedback.label} tone={feedback.tone} /> : null}
 
-      {step !== 'done' ? (
+      {helperCopy ? (
+        <Text
+          style={[
+            styles.helperCopy,
+            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+          ]}
+        >
+          {helperCopy}
+        </Text>
+      ) : null}
+
+      {step !== 'done' && (shouldShowMetaGroup || previewCode) ? (
         <View style={styles.metaGroup}>
-          <InfoRow label="Email" value={maskedEmail || email.trim() || 'Chưa nhập'} />
-          {(step === 'verify' || step === 'reset') && (
+          {shouldShowMetaGroup ? (
             <InfoRow label="Hiệu lực OTP" value={`${Math.round(expiresInSeconds / 60)} phút`} />
-          )}
+          ) : null}
           {previewCode ? <InfoRow label="Mã thử nghiệm" value={previewCode} /> : null}
         </View>
       ) : null}
@@ -365,6 +380,11 @@ const styles = StyleSheet.create({
   },
   metaGroup: {
     gap: 10,
+  },
+  helperCopy: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: -2,
   },
   form: {
     gap: 14,
