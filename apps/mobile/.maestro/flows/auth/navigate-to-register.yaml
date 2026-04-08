@@ -4,14 +4,14 @@ name: Auth - Chuyen giua Login va Register
 - launchApp:
     clearState: true
 
-- assertVisible: "Smart Campus"
-- assertVisible: "Chua co tai khoan? Dang ky"
+- assertVisible: 'Smart Campus'
+- assertVisible: 'Đăng ký tại đây'
 
 # Chuyen sang man hinh dang ky
-- tapOn: "Chua co tai khoan? Dang ky"
-- assertVisible: "Tao tai khoan"
-- assertVisible: "Da co tai khoan? Dang nhap"
+- tapOn: 'Đăng ký tại đây'
+- assertVisible: 'Tạo tài khoản'
+- assertVisible: 'Đã có tài khoản?'
 
 # Quay lai man hinh dang nhap
-- tapOn: "Da co tai khoan? Dang nhap"
-- assertVisible: "UIT - Dang nhap"
+- tapOn: 'Đăng nhập'
+- assertVisible: 'Hello!'

@@ -24,6 +24,7 @@ const config: ExpoConfig = {
       backgroundColor: '#FFFFFF',
     },
     package: 'vn.edu.uit.smartcampus',
+    softwareKeyboardLayoutMode: 'resize',
   },
   plugins: ['expo-router', 'expo-secure-store', 'expo-font'],
   experiments: {

@@ -4,17 +4,18 @@ name: Login - Dang nhap thanh cong
 - launchApp:
     clearState: true
 
-- assertVisible: "Smart Campus"
-- assertVisible: "UIT - Dang nhap"
+- assertVisible: 'Smart Campus'
+- assertVisible: 'Hello!'
+- assertVisible: 'Email sinh viên'
 
-- tapOn: "Email"
-- inputText: "student@gm.uit.edu.vn"
+- tapOn: 'student@gm.uit.edu.vn'
+- inputText: 'student@gm.uit.edu.vn'
 
-- tapOn: "Mat khau"
-- inputText: "Password123"
+- tapOn: 'Nhập mật khẩu'
+- inputText: 'Password123'
 
-- tapOn: "Dang nhap"
+- tapOn: 'Đăng nhập'
 
 - assertVisible:
-    text: "Trang chu"
+    text: 'Trang chủ'
     timeout: 5000

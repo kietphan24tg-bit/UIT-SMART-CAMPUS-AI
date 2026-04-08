@@ -1,8 +1,19 @@
 import '@testing-library/jest-native/extend-expect';
 
 jest.mock('axios', () => {
-  const mockAxios = {
-    create: jest.fn(() => mockAxios),
+  const mockAxios: {
+    create: jest.Mock;
+    interceptors: {
+      request: { use: jest.Mock };
+      response: { use: jest.Mock };
+    };
+    get: jest.Mock;
+    post: jest.Mock;
+    patch: jest.Mock;
+    put: jest.Mock;
+    delete: jest.Mock;
+  } = {
+    create: jest.fn(),
     interceptors: {
       request: { use: jest.fn() },
       response: { use: jest.fn() },
@@ -13,6 +24,7 @@ jest.mock('axios', () => {
     put: jest.fn(),
     delete: jest.fn(),
   };
+  mockAxios.create.mockImplementation(() => mockAxios);
 
   return {
     __esModule: true,
@@ -23,9 +35,22 @@ jest.mock('axios', () => {
 jest.mock('@expo/vector-icons', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
+  const createIcon = ({ name, ...rest }: { name: string }) => React.createElement(Text, rest, name);
+
   return {
-    Ionicons: ({ name, ...rest }: { name: string }) =>
-      React.createElement(Text, rest, name),
+    Ionicons: createIcon,
+    Feather: createIcon,
+  };
+});
+
+jest.mock('expo-image', () => {
+  const React = jest.requireActual('react');
+  const { Image } = jest.requireActual('react-native');
+
+  return {
+    Image: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(Image, { ...props, ref }),
+    ),
   };
 });
 

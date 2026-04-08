@@ -4,27 +4,30 @@ name: Register - Dang ky tai khoan
 - launchApp:
     clearState: true
 
-- tapOn: "Chua co tai khoan? Dang ky"
+- tapOn: 'Đăng ký tại đây'
 
-- assertVisible: "Tao tai khoan"
+- assertVisible: 'Tạo tài khoản'
 
-- tapOn: "Ho"
-- inputText: "Nguyen Van"
+- tapOn: 'Nguyễn'
+- inputText: 'Nguyen Van'
 
-- tapOn: "Ten"
-- inputText: "Test"
+- tapOn: 'Văn A'
+- inputText: 'Test'
 
-- tapOn: "MSSV (8 so)"
-- inputText: "22529999"
+- tapOn: '22520001'
+- inputText: '22529999'
 
-- tapOn: "Email"
-- inputText: "test.e2e@gm.uit.edu.vn"
+- tapOn: 'student@gm.uit.edu.vn'
+- inputText: 'test.e2e@gm.uit.edu.vn'
 
-- tapOn: "Mat khau (8+ ky tu, 1 hoa, 1 so)"
-- inputText: "TestPass123"
+- tapOn: 'Ít nhất 8 ký tự'
+- inputText: 'TestPass123'
 
-- tapOn: "Dang ky"
+- tapOn: 'Nhập lại mật khẩu'
+- inputText: 'TestPass123'
+
+- tapOn: 'Tạo tài khoản'
 
 - assertVisible:
-    text: "Trang chu"
+    text: 'Trang chủ'
     timeout: 5000
