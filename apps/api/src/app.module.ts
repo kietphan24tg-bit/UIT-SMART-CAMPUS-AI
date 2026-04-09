@@ -5,6 +5,7 @@ import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GradesModule } from './modules/grades/grades.module';
+import { HealthModule } from './modules/health/health.module';
 import { IotModule } from './modules/iot/iot.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ParkingModule } from './modules/parking/parking.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     ScheduleModule,
     GradesModule,
+    HealthModule,
     NotificationsModule,
     ParkingModule,
     IotModule,

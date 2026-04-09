@@ -53,13 +53,28 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
-  scheduleItems ScheduleItem[]
-  grades        Grade[]
-  notifications Notification[]
-  vehicles      Vehicle[]
+  refreshTokens      RefreshToken[]
+  passwordResetOtps   PasswordResetOtp[]
+  scheduleItems       ScheduleItem[]
+  grades              Grade[]
+  notifications       Notification[]
+  vehicles            Vehicle[]
 
   @@map("users")
+}
+
+model PasswordResetOtp {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt, expiresAt])
+  @@map("password_reset_otps")
 }
 
 model RefreshToken {

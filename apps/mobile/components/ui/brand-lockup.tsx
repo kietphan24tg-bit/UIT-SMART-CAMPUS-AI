@@ -1,6 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import UIT_LOCKUP from '../../assets/brand/uit-lockup.png';
 import UIT_MARK from '../../assets/brand/uit-mark.png';
 
 import { useAppTheme } from '@/theme';
@@ -13,35 +12,47 @@ interface BrandLockupProps {
 export function BrandLockup({ compact = false, showSubtitle = true }: BrandLockupProps) {
   const theme = useAppTheme();
 
-  if (!compact) {
-    return (
-      <View style={styles.lockupWrap} accessibilityRole="image">
-        <Image source={UIT_LOCKUP} style={styles.lockupImage} resizeMode="contain" accessibilityLabel="Logo UIT" />
-        <Text style={[styles.lockupCaption, { color: theme.colors.heroSubtext, fontFamily: theme.fonts.semibold }]}>
-          Smart Campus
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.row}>
+    <View
+      style={[styles.root, compact ? styles.rootCompact : styles.rootFull]}
+      accessibilityRole="image"
+    >
       <View
         style={[
           styles.mark,
+          compact ? styles.markCompact : styles.markFull,
           {
             backgroundColor: theme.colors.primarySurface,
             borderColor: theme.colors.border,
           },
         ]}
       >
-        <Image source={UIT_MARK} style={styles.markImage} resizeMode="contain" accessibilityLabel="Biểu trưng UIT" />
+        <Image
+          source={UIT_MARK}
+          style={styles.markImage}
+          resizeMode="contain"
+          accessibilityLabel="Biểu trưng UIT"
+        />
       </View>
+
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>Smart Campus</Text>
+        <Text
+          style={[
+            styles.wordmark,
+            compact ? styles.wordmarkCompact : styles.wordmarkFull,
+            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+          ]}
+        >
+          UIT Smart Campus
+        </Text>
         {showSubtitle ? (
-          <Text style={[styles.subtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
-            Đại học Công nghệ Thông tin
+          <Text
+            style={[
+              styles.subtitle,
+              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+            ]}
+          >
+            Trường Đại học Công nghệ Thông tin
           </Text>
         ) : null}
       </View>
@@ -50,44 +61,50 @@ export function BrandLockup({ compact = false, showSubtitle = true }: BrandLocku
 }
 
 const styles = StyleSheet.create({
-  lockupWrap: {
-    alignSelf: 'flex-start',
-    gap: 6,
-  },
-  lockupImage: {
-    height: 26,
-    width: 260,
-    maxWidth: '100%',
-  },
-  lockupCaption: {
-    fontSize: 12,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  row: {
+  root: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  rootCompact: {
+    gap: 10,
+  },
+  rootFull: {
+    gap: 12,
+  },
   mark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
     borderWidth: 1,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    overflow: 'hidden',
+  },
+  markCompact: {
+    width: 40,
+    height: 40,
+  },
+  markFull: {
+    width: 48,
+    height: 48,
   },
   markImage: {
-    width: 28,
-    height: 28,
+    width: '68%',
+    height: '68%',
   },
   copy: {
+    flexShrink: 1,
     gap: 2,
   },
-  title: {
-    fontSize: 16,
+  wordmark: {
     letterSpacing: 0.2,
+  },
+  wordmarkCompact: {
+    fontSize: 15,
+    lineHeight: 18,
+  },
+  wordmarkFull: {
+    fontSize: 17,
+    lineHeight: 20,
   },
   subtitle: {
     fontSize: 12,

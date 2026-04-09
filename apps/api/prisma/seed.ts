@@ -1,11 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import {
-  PrismaClient,
-  Role,
-  SubscriptionStatus,
-} from '@prisma/client';
+import { PrismaClient, Role, SubscriptionStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 
@@ -21,7 +17,10 @@ async function main() {
   const [superAdmin, admin, lecturer, student] = await Promise.all([
     prisma.user.upsert({
       where: { email: 'superadmin@uit.edu.vn' },
-      update: {},
+      update: {
+        passwordHash,
+        isActive: true,
+      },
       create: {
         email: 'superadmin@uit.edu.vn',
         passwordHash,
@@ -33,7 +32,10 @@ async function main() {
     }),
     prisma.user.upsert({
       where: { email: 'admin@uit.edu.vn' },
-      update: {},
+      update: {
+        passwordHash,
+        isActive: true,
+      },
       create: {
         email: 'admin@uit.edu.vn',
         passwordHash,
@@ -45,7 +47,10 @@ async function main() {
     }),
     prisma.user.upsert({
       where: { email: 'lecturer@uit.edu.vn' },
-      update: {},
+      update: {
+        passwordHash,
+        isActive: true,
+      },
       create: {
         email: 'lecturer@uit.edu.vn',
         passwordHash,
@@ -58,7 +63,10 @@ async function main() {
     }),
     prisma.user.upsert({
       where: { email: 'student@gm.uit.edu.vn' },
-      update: {},
+      update: {
+        passwordHash,
+        isActive: true,
+      },
       create: {
         email: 'student@gm.uit.edu.vn',
         passwordHash,

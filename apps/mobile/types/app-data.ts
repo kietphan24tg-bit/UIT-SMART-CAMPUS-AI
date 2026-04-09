@@ -108,12 +108,7 @@ export interface FireAlertsPayload {
   meta: PaginatedMeta;
 }
 
-export type TelemetryHealthState =
-  | 'online'
-  | 'stale'
-  | 'offline'
-  | 'fire-alert'
-  | 'no-data';
+export type TelemetryHealthState = 'online' | 'stale' | 'offline' | 'fire-alert' | 'no-data';
 
 export interface DashboardSnapshot {
   role: string;
@@ -127,6 +122,7 @@ export interface DashboardSnapshot {
 
 export type AlertFeedKind = 'notification' | 'fire_alert';
 export type AlertSeverity = 'normal' | 'warning' | 'critical';
+export type AlertCategory = 'general' | 'academic' | 'payment' | 'emergency';
 
 export interface AlertFeedItem {
   id: string;
@@ -135,6 +131,7 @@ export interface AlertFeedItem {
   body: string;
   timestamp: string;
   severity: AlertSeverity;
+  category: AlertCategory;
   isRead: boolean;
   gateId?: string;
   deviceIp?: string | null;
@@ -181,13 +178,7 @@ export interface ParkingOverviewState {
   telemetryHealth: TelemetryHealthState;
 }
 
-export type StatusTone =
-  | 'primary'
-  | 'neutral'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'info';
+export type StatusTone = 'primary' | 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface MetricItem {
   label: string;

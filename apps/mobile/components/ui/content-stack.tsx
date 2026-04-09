@@ -17,7 +17,7 @@ export function ContentStack({
   style,
   gap,
   narrow = false,
-  overlapHero = true,
+  overlapHero = false,
 }: ContentStackProps) {
   const layout = useResponsiveLayout();
 

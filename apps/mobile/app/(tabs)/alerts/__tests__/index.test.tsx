@@ -23,19 +23,21 @@ describe('AlertsScreen', () => {
         {
           id: 'fire-1',
           kind: 'fire_alert',
-          title: 'Cảnh báo cháy bãi xe',
-          body: 'Phát hiện lửa tại gateway A.',
+          title: 'Canh bao chay bai xe',
+          body: 'Phat hien lua tai gateway A.',
           timestamp: '2026-04-07T05:00:00.000Z',
           severity: 'critical',
+          category: 'emergency',
           isRead: false,
         },
         {
           id: 'notification-1',
           kind: 'notification',
-          title: 'Lịch học thay đổi',
-          body: 'Phòng học đã được cập nhật.',
+          title: 'Lich hoc thay doi',
+          body: 'Phong hoc da duoc cap nhat.',
           timestamp: '2026-04-07T06:00:00.000Z',
           severity: 'warning',
+          category: 'academic',
           isRead: false,
         },
       ],
@@ -46,13 +48,18 @@ describe('AlertsScreen', () => {
     });
   });
 
-  it('should render emergency and normal groups', () => {
+  it('should render category sections and filter chips', () => {
     const { getByText, getAllByText } = render(<AlertsScreen />);
 
-    expect(getAllByText('Khẩn cấp').length).toBeGreaterThan(0);
-    expect(getByText('Thông báo gần đây')).toBeTruthy();
-    expect(getByText('Cảnh báo cháy bãi xe')).toBeTruthy();
-    expect(getByText('Lịch học thay đổi')).toBeTruthy();
     expect(getByText('Bộ lọc nhanh')).toBeTruthy();
+    expect(getByText('Tất cả')).toBeTruthy();
+    expect(getByText('Chung')).toBeTruthy();
+    expect(getAllByText('Học vụ').length).toBeGreaterThan(1);
+    expect(getByText('Thanh toán')).toBeTruthy();
+    expect(getAllByText('Khẩn cấp').length).toBeGreaterThan(1);
+    expect(getByText('Chưa đọc')).toBeTruthy();
+    expect(getAllByText('Khẩn cấp').length).toBeGreaterThan(0);
+    expect(getByText('Canh bao chay bai xe')).toBeTruthy();
+    expect(getByText('Lich hoc thay doi')).toBeTruthy();
   });
 });

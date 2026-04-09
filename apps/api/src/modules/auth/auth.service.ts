@@ -1,25 +1,21 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
 
-import { PasswordResetMailerService } from './password-reset-mailer.service';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
+import { PasswordResetMailerService } from './password-reset-mailer.service';
 
 const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
-  private readonly passwordResetOtpStore = new Map<
-    string,
-    { codeHash: string; expiresAt: number }
-  >();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -93,9 +89,23 @@ export class AuthService {
 
     const otp = this.generateOtp();
     const codeHash = await bcrypt.hash(otp, 10);
-    this.passwordResetOtpStore.set(user.id, {
-      codeHash,
-      expiresAt: Date.now() + PASSWORD_RESET_OTP_TTL_MS,
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_OTP_TTL_MS);
+
+    await this.prisma.passwordResetOtp.updateMany({
+      where: {
+        userId: user.id,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { consumedAt: new Date() },
+    });
+
+    await this.prisma.passwordResetOtp.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        expiresAt,
+      },
     });
 
     const sent = await this.passwordResetMailerService.sendOtpEmail(
@@ -142,13 +152,28 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
+    const consumedAt = new Date();
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash },
+    await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.passwordResetOtp.updateMany({
+        where: {
+          id: passwordResetOtp.id,
+          consumedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { consumedAt },
+      });
+
+      if (consumed.count === 0) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+      await tx.refreshToken.deleteMany({ where: { userId: user.id } });
     });
-    this.passwordResetOtpStore.delete(user.id);
-    await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
 
     return { success: true };
   }
@@ -174,7 +199,9 @@ export class AuthService {
   }
 
   private normalizeEmail(email: string) {
-    return String(email || '').trim().toLowerCase();
+    return String(email || '')
+      .trim()
+      .toLowerCase();
   }
 
   private maskEmail(email: string) {
@@ -207,10 +234,16 @@ export class AuthService {
   }
 
   private async getLatestActivePasswordResetOtp(userId: string) {
-    const passwordResetOtp = this.passwordResetOtpStore.get(userId);
+    const passwordResetOtp = await this.prisma.passwordResetOtp.findFirst({
+      where: {
+        userId,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    if (!passwordResetOtp || passwordResetOtp.expiresAt <= Date.now()) {
-      this.passwordResetOtpStore.delete(userId);
+    if (!passwordResetOtp) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 

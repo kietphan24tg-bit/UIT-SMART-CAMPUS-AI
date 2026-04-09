@@ -263,6 +263,7 @@ export function getRoleQuickActions(role?: string | null) {
       { id: 'operations', label: 'Vận hành', icon: 'pulse-outline', route: '/schedule' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
+      { id: 'services', label: 'Dịch vụ', icon: 'grid-outline', route: '/services' },
     ];
   }
 
@@ -271,6 +272,7 @@ export function getRoleQuickActions(role?: string | null) {
       { id: 'schedule', label: 'Lịch dạy', icon: 'calendar-outline', route: '/schedule' },
       { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
+      { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
     ];
   }
 
@@ -278,6 +280,7 @@ export function getRoleQuickActions(role?: string | null) {
     { id: 'schedule', label: 'Lịch học', icon: 'calendar-outline', route: '/schedule' },
     { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
     { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
+    { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
   ];
 }
 
@@ -297,8 +300,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'grades',
       primaryAction: 'Xem bảng điểm',
       route: '/services/grades',
-      description:
-        'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.',
+      description: 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.',
     },
     {
       id: 'parking',
@@ -311,8 +313,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'parking',
       primaryAction: 'Mở Parking',
       route: '/parking',
-      description:
-        'Hỗ trợ A1-A4, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
+      description: 'Hỗ trợ A1-A4, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
     },
     {
       id: 'events',
@@ -326,8 +327,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/events',
-      description:
-        'Sắp triển khai lịch sự kiện, đăng ký tham gia và check-in.',
+      description: 'Sắp triển khai lịch sự kiện, đăng ký tham gia và check-in.',
     },
     {
       id: 'course-registration',
@@ -341,8 +341,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/course-registration',
-      description:
-        'Sắp triển khai đăng ký học phần và theo dõi trạng thái.',
+      description: 'Sắp triển khai đăng ký học phần và theo dõi trạng thái.',
     },
     {
       id: 'attendance',
@@ -356,8 +355,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/attendance',
-      description:
-        'Sắp triển khai điểm danh QR cho giảng viên và sinh viên.',
+      description: 'Sắp triển khai điểm danh QR cho giảng viên và sinh viên.',
     },
     {
       id: 'room-booking',
@@ -371,8 +369,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/room-booking',
-      description:
-        'Sắp triển khai đặt phòng học hoặc phòng lab.',
+      description: 'Sắp triển khai đặt phòng học hoặc phòng lab.',
     },
     {
       id: 'library',
@@ -386,8 +383,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/library',
-      description:
-        'Sắp triển khai tra cứu sách và lịch sử mượn trả.',
+      description: 'Sắp triển khai tra cứu sách và lịch sử mượn trả.',
     },
     {
       id: 'campus-map',
@@ -401,8 +397,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/campus-map',
-      description:
-        'Sắp triển khai bản đồ khuôn viên và chỉ đường.',
+      description: 'Sắp triển khai bản đồ khuôn viên và chỉ đường.',
     },
     {
       id: 'chatbot',
@@ -416,8 +411,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/chatbot',
-      description:
-        'Hiển thị phạm vi dự kiến và lưu ý quyền riêng tư.',
+      description: 'Hiển thị phạm vi dự kiến và lưu ý quyền riêng tư.',
     },
     {
       id: 'smart-classroom',
@@ -431,8 +425,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'iot',
       primaryAction: 'Theo dõi cập nhật',
       route: '/services/smart-classroom',
-      description:
-        'Sắp triển khai điều khiển thiết bị phòng học theo quyền.',
+      description: 'Sắp triển khai điều khiển thiết bị phòng học theo quyền.',
     },
   ];
 
@@ -448,8 +441,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Mở công cụ quản trị',
       route: '/services/admin-tools',
-      description:
-        'Ưu tiên các luồng đang hỗ trợ như parking và cảnh báo.',
+      description: 'Ưu tiên các luồng đang hỗ trợ như parking và cảnh báo.',
     });
   }
 

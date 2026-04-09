@@ -2,10 +2,50 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { notificationsApi } from '@/services/api/notifications';
 import { safetyApi } from '@/services/api/safety';
-import type { AlertFeedItem, FireAlertRecord, NotificationRecord } from '@/types/app-data';
+import type {
+  AlertCategory,
+  AlertFeedItem,
+  FireAlertRecord,
+  NotificationRecord,
+} from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 
+function getAlertCategoryFromType(type?: string | null): AlertCategory {
+  const normalized = (type ?? '').toLowerCase();
+
+  if (normalized.includes('fire')) {
+    return 'emergency';
+  }
+
+  if (
+    normalized.includes('pay') ||
+    normalized.includes('bill') ||
+    normalized.includes('invoice') ||
+    normalized.includes('transaction')
+  ) {
+    return 'payment';
+  }
+
+  if (
+    normalized.includes('academic') ||
+    normalized.includes('grade') ||
+    normalized.includes('schedule') ||
+    normalized.includes('class') ||
+    normalized.includes('course') ||
+    normalized.includes('attendance') ||
+    normalized.includes('registration') ||
+    normalized.includes('deadline') ||
+    normalized.includes('exam')
+  ) {
+    return 'academic';
+  }
+
+  return 'general';
+}
+
 function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
+  const category = getAlertCategoryFromType(item.type);
+
   return {
     id: item.id,
     kind: 'notification',
@@ -13,27 +53,29 @@ function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
     body: item.body,
     timestamp: item.createdAt,
     severity:
-      item.type === 'fire_alert'
+      category === 'emergency'
         ? 'critical'
-        : item.type === 'system' || item.type === 'deadline'
+        : category === 'academic' || category === 'payment'
           ? 'warning'
           : 'normal',
+    category,
     isRead: item.isRead,
   };
 }
 
 function toFireAlertFeed(item: FireAlertRecord): AlertFeedItem {
   const sensorContext = item.telemetrySnapshot
-    ? `IP gateway: ${item.telemetrySnapshot.deviceIp || 'Chưa xác định'}`
-    : 'Không có snapshot cảm biến đi kèm.';
+    ? `IP gateway: ${item.telemetrySnapshot.deviceIp || 'Chua xac dinh'}`
+    : 'Khong co snapshot cam bien di kem.';
 
   return {
     id: item.id,
     kind: 'fire_alert',
-    title: 'Cảnh báo cháy bãi xe',
+    title: 'Canh bao chay bai xe',
     body: item.message,
     timestamp: item.reportedAt,
     severity: item.isResolved ? 'warning' : 'critical',
+    category: 'emergency',
     isRead: item.isResolved,
     gateId: item.gateId,
     deviceIp: item.telemetrySnapshot?.deviceIp ?? null,

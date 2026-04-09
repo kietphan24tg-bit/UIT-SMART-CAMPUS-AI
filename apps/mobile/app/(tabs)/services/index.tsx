@@ -36,6 +36,7 @@ export default function ServicesScreen() {
         title="Dịch vụ campus"
         subtitle="Chọn nhanh dịch vụ đang hỗ trợ. Mục chưa khả dụng sẽ có trạng thái rõ ràng."
         badge={{ label: getRoleLabel(role), tone: 'info' }}
+        showBrand
       />
 
       <ContentStack gap={16} overlapHero={false}>
@@ -89,7 +90,11 @@ export default function ServicesScreen() {
                           },
                         ]}
                       >
-                        <Ionicons name={service.icon as never} size={22} color={theme.colors.primary} />
+                        <Ionicons
+                          name={service.icon as never}
+                          size={22}
+                          color={theme.colors.primary}
+                        />
                       </View>
                       <StatusBadge
                         label={getSupportStateLabel(service.supportState)}

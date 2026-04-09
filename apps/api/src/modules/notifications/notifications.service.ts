@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { UserRole } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -63,7 +64,7 @@ export class NotificationsService {
     body: string,
     type = 'general',
     data?: Record<string, unknown>,
-    roles?: string[],
+    roles?: UserRole[],
   ) {
     const users = await this.prisma.user.findMany({
       where: {

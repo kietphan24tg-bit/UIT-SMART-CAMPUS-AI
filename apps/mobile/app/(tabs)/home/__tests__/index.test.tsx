@@ -98,4 +98,16 @@ describe('HomeScreen', () => {
 
     expect(getByText('Xin chào, UITer!')).toBeTruthy();
   });
+
+  it('should hide GPA section for lecturer', () => {
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = { user: { firstName: 'An', lastName: 'Nguyen', role: 'lecturer' } };
+      return selector(state);
+    });
+
+    const { queryByText } = render(<HomeScreen />);
+
+    expect(queryByText('Kết quả học tập')).toBeNull();
+    expect(queryByText('Xem nhanh GPA và số tín chỉ.')).toBeNull();
+  });
 });

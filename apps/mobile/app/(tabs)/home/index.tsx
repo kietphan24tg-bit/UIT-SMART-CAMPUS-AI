@@ -25,6 +25,7 @@ import {
   getGreetingName,
   getRoleLabel,
   getRoleQuickActions,
+  isLecturerRole,
   getTelemetryHealthLabel,
   isAdminRole,
 } from '@/utils/app';
@@ -35,6 +36,7 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   alerts: 'Xem thông báo mới và cảnh báo.',
   parking: 'Theo dõi chỗ trống và cảm biến.',
   operations: 'Theo dõi vận hành campus.',
+  services: 'Mở trung tâm dịch vụ theo vai trò.',
 };
 
 export default function HomeScreen() {
@@ -55,15 +57,12 @@ export default function HomeScreen() {
 
   const quickActions = getRoleQuickActions(user?.role);
   const isOperationsRole = isAdminRole(user?.role);
+  const isLecturer = isLecturerRole(user?.role);
   const shouldShowParkingHealth =
     snapshot.telemetryHealth !== 'online' && snapshot.telemetryHealth !== 'no-data';
-
-  const quickColumns = layout.getGridColumns({
-    minItemWidth: 150,
-    gap: 12,
-    maxColumns: layout.isTablet ? 3 : 2,
-  });
-  const quickCardWidth = layout.getGridItemWidth({ columns: quickColumns, gap: 12 });
+  const quickActionRows = Array.from({ length: Math.ceil(quickActions.length / 2) }, (_, index) =>
+    quickActions.slice(index * 2, index * 2 + 2),
+  );
 
   const healthTone =
     snapshot.telemetryHealth === 'fire-alert'
@@ -166,7 +165,10 @@ export default function HomeScreen() {
 
               <View style={styles.opsButtons}>
                 <PrimaryButton label="Mở Parking" onPress={() => router.push('/parking')} />
-                <SecondaryButton label="Trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
+                <SecondaryButton
+                  label="Trung tâm cảnh báo"
+                  onPress={() => router.push('/alerts')}
+                />
               </View>
             </View>
           </SectionCard>
@@ -180,18 +182,35 @@ export default function HomeScreen() {
           >
             {snapshot.nextClass ? (
               <View style={styles.sectionStack}>
-                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <View
+                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
+                >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                      ]}
+                    >
                       {snapshot.nextClass.course.name}
                     </Text>
-                    <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                    <Text
+                      style={[
+                        styles.metaText,
+                        { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                      ]}
+                    >
                       {snapshot.nextClass.course.code} · {snapshot.nextClass.instructor}
                     </Text>
                   </View>
                   <StatusBadge label={`Phòng ${snapshot.nextClass.room}`} tone="primary" />
                 </View>
-                <Text style={[styles.timeText, { color: theme.colors.primary, fontFamily: theme.fonts.bold }]}>
+                <Text
+                  style={[
+                    styles.timeText,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                  ]}
+                >
                   {snapshot.nextClass.startTime} - {snapshot.nextClass.endTime}
                 </Text>
               </View>
@@ -215,14 +234,28 @@ export default function HomeScreen() {
           {snapshot.parking ? (
             <View style={styles.sectionStack}>
               <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
-                <Text style={[styles.parkingTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                <Text
+                  style={[
+                    styles.parkingTitle,
+                    { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                  ]}
+                >
                   {snapshot.parking.availableSlots}/{snapshot.parking.totalSlots} chỗ trống
                 </Text>
-                <StatusBadge label={getTelemetryHealthLabel(snapshot.telemetryHealth)} tone={healthTone} />
+                <StatusBadge
+                  label={getTelemetryHealthLabel(snapshot.telemetryHealth)}
+                  tone={healthTone}
+                />
               </View>
 
-              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                {snapshot.parking.activeSessions} lượt gửi xe · cập nhật {formatDateTime(snapshot.parking.lastUpdated)}
+              <Text
+                style={[
+                  styles.metaText,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                ]}
+              >
+                {snapshot.parking.activeSessions} lượt gửi xe · cập nhật{' '}
+                {formatDateTime(snapshot.parking.lastUpdated)}
               </Text>
 
               <View style={styles.badgeRow}>
@@ -230,8 +263,14 @@ export default function HomeScreen() {
                   label={`Nhiệt độ ${snapshot.parking.sensors.temperature ?? '--'}°C`}
                   tone="info"
                 />
-                <StatusBadge label={`Độ ẩm ${snapshot.parking.sensors.humidity ?? '--'}%`} tone="success" />
-                <StatusBadge label={snapshot.parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                <StatusBadge
+                  label={`Độ ẩm ${snapshot.parking.sensors.humidity ?? '--'}%`}
+                  tone="success"
+                />
+                <StatusBadge
+                  label={snapshot.parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                  tone="warning"
+                />
                 {snapshot.parking.sensors.fireDetected ? (
                   <StatusBadge label="Cảnh báo cháy" tone="danger" />
                 ) : null}
@@ -260,31 +299,46 @@ export default function HomeScreen() {
           variant="outlined"
         >
           <View style={styles.quickGrid}>
-            {quickActions.map((action) => (
-              <QuickActionTile
-                key={action.id}
-                icon={action.icon as never}
-                label={action.label}
-                description={ACTION_DESCRIPTIONS[action.id] ?? 'Mở để tiếp tục.'}
-                route={action.route}
-                width={quickCardWidth}
-              />
+            {quickActionRows.map((row, rowIndex) => (
+              <View key={`quick-row-${rowIndex}`} style={styles.quickRow}>
+                {row.map((action) => (
+                  <QuickActionTile
+                    key={action.id}
+                    icon={action.icon as never}
+                    label={action.label}
+                    description={ACTION_DESCRIPTIONS[action.id] ?? 'Mở để tiếp tục.'}
+                    route={action.route}
+                  />
+                ))}
+                {row.length === 1 ? <View style={styles.quickCardSpacer} /> : null}
+              </View>
             ))}
           </View>
         </SectionCard>
 
-        {!isOperationsRole ? (
+        {!isOperationsRole && !isLecturer ? (
           <SectionCard
             title="Kết quả học tập"
             subtitle="Xem nhanh GPA và số tín chỉ."
             variant="outlined"
           >
             <View style={styles.sectionStack}>
-              <Text style={[styles.gpaValue, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+              <Text
+                style={[
+                  styles.gpaValue,
+                  { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                ]}
+              >
                 {formatGpaValue(snapshot.gpa?.gpa)}
               </Text>
-              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                {snapshot.gpa?.totalCourses ?? 0} học phần · {snapshot.gpa?.totalCredits ?? 0} tín chỉ
+              <Text
+                style={[
+                  styles.metaText,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                ]}
+              >
+                {snapshot.gpa?.totalCourses ?? 0} học phần · {snapshot.gpa?.totalCredits ?? 0} tín
+                chỉ
               </Text>
             </View>
           </SectionCard>
@@ -299,13 +353,11 @@ function QuickActionTile({
   label,
   description,
   route,
-  width,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
   route: string;
-  width: number;
 }) {
   const theme = useAppTheme();
   const router = useRouter();
@@ -316,7 +368,6 @@ function QuickActionTile({
       onPress={() => router.push(route as never)}
       style={({ pressed }) => [
         styles.quickCard,
-        { width },
         {
           backgroundColor: theme.colors.surfaceSubtle,
           borderColor: theme.colors.border,
@@ -330,7 +381,11 @@ function QuickActionTile({
         </View>
         <Ionicons name="chevron-forward" size={18} color={theme.colors.textSoft} />
       </View>
-      <Text style={[styles.quickLabel, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>{label}</Text>
+      <Text
+        style={[styles.quickLabel, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}
+      >
+        {label}
+      </Text>
       <Text
         style={[
           styles.quickDescription,
@@ -390,15 +445,37 @@ function ParkingHealthCallout({
       ]}
     >
       <Ionicons
-        name={tone === 'danger' ? 'flame-outline' : tone === 'warning' ? 'cloud-offline-outline' : 'alert-circle-outline'}
+        name={
+          tone === 'danger'
+            ? 'flame-outline'
+            : tone === 'warning'
+              ? 'cloud-offline-outline'
+              : 'alert-circle-outline'
+        }
         size={18}
-        color={tone === 'danger' ? theme.colors.emergency : tone === 'warning' ? theme.colors.warning : theme.colors.info}
+        color={
+          tone === 'danger'
+            ? theme.colors.emergency
+            : tone === 'warning'
+              ? theme.colors.warning
+              : theme.colors.info
+        }
       />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.calloutTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+        <Text
+          style={[
+            styles.calloutTitle,
+            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+          ]}
+        >
           {title}
         </Text>
-        <Text style={[styles.calloutBody, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+        <Text
+          style={[
+            styles.calloutBody,
+            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+          ]}
+        >
           {description}
         </Text>
       </View>
@@ -465,15 +542,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickGrid: {
+    gap: 12,
+  },
+  quickRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
   },
   quickCard: {
+    flex: 1,
+    minWidth: 0,
     borderRadius: 20,
     borderWidth: 1,
     padding: 14,
     gap: 10,
+  },
+  quickCardSpacer: {
+    flex: 1,
   },
   quickHeader: {
     flexDirection: 'row',

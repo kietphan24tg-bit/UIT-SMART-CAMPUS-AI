@@ -15,9 +15,29 @@ import { useAlertFeed } from '@/hooks/use-alert-feed';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import type { AlertCategory, AlertFeedItem } from '@/types/app-data';
 import { formatDateTime, getRoleLabel, getSeverityLabel, isAdminRole } from '@/utils/app';
 
-type FilterKey = 'all' | 'unread' | 'emergency';
+type FilterKey = 'all' | 'general' | 'academic' | 'payment' | 'emergency' | 'unread';
+
+const FILTER_OPTIONS: Array<{ key: FilterKey; label: string }> = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'general', label: 'Chung' },
+  { key: 'academic', label: 'Học vụ' },
+  { key: 'payment', label: 'Thanh toán' },
+  { key: 'emergency', label: 'Khẩn cấp' },
+  { key: 'unread', label: 'Chưa đọc' },
+];
+
+const CATEGORY_LABELS: Record<AlertCategory, string> = {
+  general: 'Chung',
+  academic: 'Học vụ',
+  payment: 'Thanh toán',
+  emergency: 'Khẩn cấp',
+};
+
+const CATEGORY_ORDER: AlertCategory[] = ['emergency', 'payment', 'academic', 'general'];
+const EMPTY_FEED_ITEMS: AlertFeedItem[] = [];
 
 export default function AlertsScreen() {
   const theme = useAppTheme();
@@ -25,24 +45,35 @@ export default function AlertsScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const router = useRouter();
   const alerts = useAlertFeed(role);
-  const feedItems = alerts.data ?? [];
+  const feedItems = alerts.data ?? EMPTY_FEED_ITEMS;
   const [filter, setFilter] = useState<FilterKey>('all');
   const feedColumns = layout.isTablet ? 2 : 1;
   const feedItemWidth = layout.getGridItemWidth({ columns: feedColumns, gap: 10 });
 
   const filteredItems = useMemo(() => {
-    const items = alerts.data ?? [];
     if (filter === 'unread') {
-      return items.filter((item) => !item.isRead);
+      return feedItems.filter((item) => !item.isRead);
     }
-    if (filter === 'emergency') {
-      return items.filter((item) => item.severity === 'critical');
-    }
-    return items;
-  }, [alerts.data, filter]);
 
-  const emergencyItems = filteredItems.filter((item) => item.severity === 'critical');
-  const normalItems = filteredItems.filter((item) => item.severity !== 'critical');
+    if (filter === 'all') {
+      return feedItems;
+    }
+
+    return feedItems.filter((item) => item.category === filter);
+  }, [feedItems, filter]);
+
+  const groupedSections = useMemo(
+    () =>
+      CATEGORY_ORDER.map((category) => ({
+        category,
+        items: filteredItems.filter((item) => item.category === category),
+      })).filter((section) => section.items.length > 0),
+    [filteredItems],
+  );
+
+  const subtitle = isAdminRole(role)
+    ? 'Gồm fire alert, thông báo hệ thống và các nhóm Chung, Học vụ, Thanh toán, Khẩn cấp.'
+    : 'Theo dõi thông báo theo nhóm Chung, Học vụ, Thanh toán và Khẩn cấp.';
 
   return (
     <Screen
@@ -57,12 +88,9 @@ export default function AlertsScreen() {
       <TopHero
         eyebrow="Cảnh báo"
         title="Cảnh báo và thông báo"
-        subtitle={
-          isAdminRole(role)
-            ? 'Gồm fire alert từ gateway và thông báo hệ thống.'
-            : 'Thông báo học vụ, nhắc việc và cảnh báo theo quyền hiện tại.'
-        }
+        subtitle={subtitle}
         badge={{ label: getRoleLabel(role), tone: 'info' }}
+        showBrand
       />
 
       <ContentStack>
@@ -73,9 +101,14 @@ export default function AlertsScreen() {
           onActionPress={() => void alerts.markAllAsRead()}
         >
           <View style={styles.filterRow}>
-            <FilterChip label="Tất cả" active={filter === 'all'} onPress={() => setFilter('all')} />
-            <FilterChip label="Chưa đọc" active={filter === 'unread'} onPress={() => setFilter('unread')} />
-            <FilterChip label="Khẩn cấp" active={filter === 'emergency'} onPress={() => setFilter('emergency')} />
+            {FILTER_OPTIONS.map((option) => (
+              <FilterChip
+                key={option.key}
+                label={option.label}
+                active={filter === option.key}
+                onPress={() => setFilter(option.key)}
+              />
+            ))}
           </View>
         </SectionCard>
 
@@ -87,79 +120,45 @@ export default function AlertsScreen() {
           />
         ) : null}
 
-        <SectionCard
-          title="Khẩn cấp"
-          subtitle={
-            isAdminRole(role)
-              ? 'Ưu tiên fire alert ở đầu danh sách.'
-              : 'Các mục quan trọng sẽ hiển thị ở phần đầu.'
-          }
-        >
-          {emergencyItems.length > 0 ? (
-            <View style={styles.feed}>
-              {emergencyItems.map((item) => (
-                <AlertRow
-                  key={`${item.kind}-${item.id}`}
-                  title={item.title}
-                  body={item.body}
-                  meta={`${getSeverityLabel(item.severity)} · ${formatDateTime(item.timestamp)}`}
-                  severity={item.severity}
-                  width={feedItemWidth}
-                  unread={!item.isRead}
-                  onPress={() =>
-                    router.push(
-                      {
-                        pathname: '/alerts/[id]',
-                        params: { id: item.id, kind: item.kind },
-                      } as never,
-                    )
-                  }
-                />
-              ))}
-            </View>
-          ) : (
-            <EmptyState
-              icon="shield-checkmark-outline"
-              title="Không có mục khẩn cấp"
-              description="Khi có cảnh báo nghiêm trọng, mục liên quan sẽ xuất hiện tại đây."
-            />
-          )}
-        </SectionCard>
+        {groupedSections.length > 0 ? (
+          groupedSections.map(({ category, items }) => (
+            <SectionCard
+              key={category}
+              title={CATEGORY_LABELS[category]}
+              subtitle={`${items.length} mục ${filter === 'all' ? 'trong nhóm này' : 'phù hợp bộ lọc'}`}
+            >
+              <View style={styles.feed}>
+                {items.map((item) => (
+                  <AlertRow
+                    key={`${item.kind}-${item.id}`}
+                    title={item.title}
+                    body={item.body}
+                    meta={`${getSeverityLabel(item.severity)} · ${formatDateTime(item.timestamp)}`}
+                    severity={item.severity}
+                    width={feedItemWidth}
+                    unread={!item.isRead}
+                    onPress={async () => {
+                      if (item.kind === 'notification' && !item.isRead) {
+                        await alerts.markAsRead(item.id);
+                      }
 
-        <SectionCard title="Thông báo gần đây" subtitle="Gồm học vụ, hệ thống và nhắc việc.">
-          {normalItems.length > 0 ? (
-            <View style={styles.feed}>
-              {normalItems.map((item) => (
-                <AlertRow
-                  key={`${item.kind}-${item.id}`}
-                  title={item.title}
-                  body={item.body}
-                  meta={`${getSeverityLabel(item.severity)} · ${formatDateTime(item.timestamp)}`}
-                  severity={item.severity}
-                  width={feedItemWidth}
-                  unread={!item.isRead}
-                  onPress={async () => {
-                    if (item.kind === 'notification' && !item.isRead) {
-                      await alerts.markAsRead(item.id);
-                    }
-                    router.push(
-                      {
+                      router.push({
                         pathname: '/alerts/[id]',
                         params: { id: item.id, kind: item.kind },
-                      } as never,
-                    );
-                  }}
-                />
-              ))}
-            </View>
-          ) : (
-            <EmptyState
-              icon="notifications-off-outline"
-              title="Không có thông báo phù hợp bộ lọc"
-              description="Đổi bộ lọc hoặc kéo xuống để làm mới."
-            />
-          )}
-        </SectionCard>
+                      } as never);
+                    }}
+                  />
+                ))}
+              </View>
+            </SectionCard>
+          ))
+        ) : (
+          <EmptyState
+            icon={filter === 'unread' ? 'notifications-off-outline' : 'shield-checkmark-outline'}
+            title="Không có mục phù hợp bộ lọc"
+            description="Đổi bộ lọc hoặc kéo xuống để làm mới."
+          />
+        )}
       </ContentStack>
     </Screen>
   );
@@ -187,7 +186,12 @@ function FilterChip({
         },
       ]}
     >
-      <Text style={[styles.filterLabel, { color: active ? theme.colors.primary : theme.colors.textMuted }]}>
+      <Text
+        style={[
+          styles.filterLabel,
+          { color: active ? theme.colors.primary : theme.colors.textMuted },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>

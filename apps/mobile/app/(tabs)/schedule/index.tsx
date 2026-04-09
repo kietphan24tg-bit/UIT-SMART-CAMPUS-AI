@@ -44,14 +44,13 @@ export default function ScheduleScreen() {
     const telemetry = operationsState.data?.telemetry ?? null;
     const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
     const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
-    const healthTone =
-      telemetry?.fireDetected
-        ? 'danger'
-        : telemetry?.reportedAt
-          ? 'success'
-          : parking?.lastUpdated
-            ? 'warning'
-            : 'info';
+    const healthTone = telemetry?.fireDetected
+      ? 'danger'
+      : telemetry?.reportedAt
+        ? 'success'
+        : parking?.lastUpdated
+          ? 'warning'
+          : 'info';
 
     return (
       <Screen
@@ -68,6 +67,7 @@ export default function ScheduleScreen() {
           title={role === 'super_admin' ? 'Trung tâm vận hành UIT' : 'Điều phối campus'}
           subtitle="Tập trung parking, telemetry và fire alert."
           badge={{ label: getRoleLabel(role), tone: 'info' }}
+          showBrand
         />
 
         <ContentStack>
@@ -100,10 +100,7 @@ export default function ScheduleScreen() {
             ]}
           />
 
-          <SectionCard
-            title="Lối vào vận hành"
-            subtitle="Các điểm vào quan trọng cho vận hành."
-          >
+          <SectionCard title="Lối vào vận hành" subtitle="Các điểm vào quan trọng cho vận hành.">
             <View style={styles.column}>
               <NavigationRow
                 icon="flame-outline"
@@ -150,22 +147,40 @@ export default function ScheduleScreen() {
           >
             {parking ? (
               <View style={styles.column}>
-                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <View
+                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
+                >
                   <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
                     {parking.availableSlots}/{parking.totalSlots} chỗ trống
                   </Text>
                   <StatusBadge
-                    label={getTelemetryHealthLabel(telemetry?.fireDetected ? 'fire-alert' : parking.lastUpdated ? 'online' : 'no-data')}
+                    label={getTelemetryHealthLabel(
+                      telemetry?.fireDetected
+                        ? 'fire-alert'
+                        : parking.lastUpdated
+                          ? 'online'
+                          : 'no-data',
+                    )}
                     tone={healthTone}
                   />
                 </View>
                 <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                  {parking.activeSessions} lượt gửi xe đang mở · cập nhật {formatDateTime(parking.lastUpdated)}
+                  {parking.activeSessions} lượt gửi xe đang mở · cập nhật{' '}
+                  {formatDateTime(parking.lastUpdated)}
                 </Text>
                 <View style={styles.badgeRow}>
-                  <StatusBadge label={`Nhiệt độ ${parking.sensors.temperature ?? '--'}°C`} tone="info" />
-                  <StatusBadge label={`Độ ẩm ${parking.sensors.humidity ?? '--'}%`} tone="success" />
-                  <StatusBadge label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                  <StatusBadge
+                    label={`Nhiệt độ ${parking.sensors.temperature ?? '--'}°C`}
+                    tone="info"
+                  />
+                  <StatusBadge
+                    label={`Độ ẩm ${parking.sensors.humidity ?? '--'}%`}
+                    tone="success"
+                  />
+                  <StatusBadge
+                    label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                    tone="warning"
+                  />
                   <StatusBadge
                     label={parking.sensors.fireDetected ? 'Cảnh báo cháy' : 'An toàn'}
                     tone={parking.sensors.fireDetected ? 'danger' : 'success'}
@@ -184,7 +199,9 @@ export default function ScheduleScreen() {
           <SectionCard title="Telemetry mới nhất" subtitle="Dữ liệu cảm biến mới nhất.">
             {telemetry ? (
               <View style={styles.column}>
-                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <View
+                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
+                >
                   <StatusBadge
                     label={telemetry.fireDetected ? 'Cảnh báo cháy' : 'Thiết bị đang gửi dữ liệu'}
                     tone={telemetry.fireDetected ? 'danger' : 'success'}
@@ -199,7 +216,10 @@ export default function ScheduleScreen() {
                 <View style={styles.badgeRow}>
                   <StatusBadge label={`Nhiệt độ ${telemetry.temperature ?? '--'}°C`} tone="info" />
                   <StatusBadge label={`Độ ẩm ${telemetry.humidity ?? '--'}%`} tone="success" />
-                  <StatusBadge label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" />
+                  <StatusBadge
+                    label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                    tone="warning"
+                  />
                 </View>
               </View>
             ) : (
@@ -211,10 +231,7 @@ export default function ScheduleScreen() {
             )}
           </SectionCard>
 
-          <SectionCard
-            title="Cảnh báo gần đây"
-            subtitle="Ưu tiên các mục cần xử lý trước."
-          >
+          <SectionCard title="Cảnh báo gần đây" subtitle="Ưu tiên các mục cần xử lý trước.">
             {fireAlerts.length > 0 ? (
               <View style={styles.column}>
                 {fireAlerts.slice(0, 5).map((item) => (
@@ -285,8 +302,8 @@ export default function ScheduleScreen() {
     {
       label: 'Học kỳ',
       value:
-        scheduleState.semesters.find((item) => item.id === scheduleState.resolvedSemesterId)?.name ??
-        '--',
+        scheduleState.semesters.find((item) => item.id === scheduleState.resolvedSemesterId)
+          ?.name ?? '--',
       helper: 'Bộ lọc hiện tại',
       tone: 'primary' as const,
     },
@@ -317,6 +334,7 @@ export default function ScheduleScreen() {
             : 'Lịch học theo học kỳ, buổi gần nhất và theo ngày.'
         }
         badge={{ label: getRoleLabel(role), tone: 'info' }}
+        showBrand
       />
 
       <ContentStack>
@@ -370,7 +388,9 @@ export default function ScheduleScreen() {
                 {scheduleState.schedule[0].course.name}
               </Text>
               <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                {getDayLabel(scheduleState.schedule[0].dayOfWeek)} · {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} · Phòng {scheduleState.schedule[0].room}
+                {getDayLabel(scheduleState.schedule[0].dayOfWeek)} ·{' '}
+                {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} · Phòng{' '}
+                {scheduleState.schedule[0].room}
               </Text>
               <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
                 {scheduleState.schedule[0].instructor}
