@@ -30,9 +30,14 @@ export function useDashboardSnapshot(role?: string | null) {
         resolvedRole === USER_ROLES.STUDENT || resolvedRole === USER_ROLES.LECTURER;
 
       const [schedule, gpa, unreadCount, parking] = await Promise.all([
-        isAcademicRole ? scheduleApi.getSchedule() : Promise.resolve<ScheduleRecord[]>([]),
         isAcademicRole
-          ? gradesApi.getGpa().catch(() => null as GPASummary | null)
+          ? scheduleApi
+              .getCurrentSchedule()
+              .then((semester) => semester.sessions)
+              .catch(() => [] as ScheduleRecord[])
+          : Promise.resolve<ScheduleRecord[]>([]),
+        isAcademicRole
+          ? gradesApi.getGradesSummary().catch(() => null as GPASummary | null)
           : Promise.resolve<GPASummary | null>(null),
         notificationsApi.getUnreadCount().catch(() => 0),
         parkingApi.getStatus().catch(() => null as ParkingStatus | null),

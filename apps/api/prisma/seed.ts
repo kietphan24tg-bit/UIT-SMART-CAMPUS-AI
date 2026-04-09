@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
+﻿import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { PrismaClient, Role, SubscriptionStatus } from '@prisma/client';
+import { PrismaClient, Role, ScheduleSessionType, SubscriptionStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 
@@ -10,6 +10,712 @@ dotenv.config({
 });
 
 const prisma = new PrismaClient();
+
+const semesterSeeds = [
+  {
+    id: 'sem-2024-2025-1',
+    name: 'HK1 2024-2025',
+    academicYear: '2024-2025',
+    term: 1,
+    startDate: new Date('2024-09-09T00:00:00.000Z'),
+    endDate: new Date('2024-12-28T23:59:59.000Z'),
+    isCurrent: false,
+  },
+  {
+    id: 'sem-2024-2025-2',
+    name: 'HK2 2024-2025',
+    academicYear: '2024-2025',
+    term: 2,
+    startDate: new Date('2025-01-06T00:00:00.000Z'),
+    endDate: new Date('2025-05-31T23:59:59.000Z'),
+    isCurrent: false,
+  },
+  {
+    id: 'sem-2025-2026-1',
+    name: 'HK1 2025-2026',
+    academicYear: '2025-2026',
+    term: 1,
+    startDate: new Date('2025-09-08T00:00:00.000Z'),
+    endDate: new Date('2026-01-03T23:59:59.000Z'),
+    isCurrent: false,
+  },
+  {
+    id: 'sem-2025-2026-2',
+    name: 'HK2 2025-2026',
+    academicYear: '2025-2026',
+    term: 2,
+    startDate: new Date('2026-01-05T00:00:00.000Z'),
+    endDate: new Date('2026-05-31T23:59:59.000Z'),
+    isCurrent: true,
+  },
+] as const;
+
+const courseSeeds = [
+  { code: 'ENG01', name: 'Anh văn 1', credits: 4, faculty: 'Trung tâm Ngoại ngữ' },
+  { code: 'ENG02', name: 'Anh văn 2', credits: 4, faculty: 'Trung tâm Ngoại ngữ' },
+  { code: 'IT001', name: 'Nhập môn lập trình - VN', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'IT002', name: 'Lập trình hướng đối tượng', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'IT003', name: 'Cấu trúc dữ liệu và giải thuật', credits: 4, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'IT007', name: 'Hệ điều hành', credits: 4, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'IT008', name: 'Lập trình trực quan', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'MA003', name: 'Đại số tuyến tính - VN', credits: 3, faculty: 'Khoa Toán ứng dụng' },
+  { code: 'MA004', name: 'Cấu trúc rời rạc', credits: 4, faculty: 'Khoa Toán ứng dụng' },
+  { code: 'MA005', name: 'Xác suất thống kê', credits: 3, faculty: 'Khoa Toán ứng dụng' },
+  { code: 'MA006', name: 'Giải tích - VN', credits: 4, faculty: 'Khoa Toán ứng dụng' },
+  { code: 'IT012', name: 'Tổ chức và cấu trúc máy tính 2 - VN', credits: 4, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'SE005', name: 'Giới thiệu ngành Kỹ thuật phần mềm - VN', credits: 1, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'SS006', name: 'Pháp luật đại cương', credits: 2, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'SS007', name: 'Triết học Mác - Lênin', credits: 3, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'SS008', name: 'Kinh tế chính trị Mác - Lênin', credits: 2, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'SS009', name: 'Chủ nghĩa xã hội khoa học', credits: 2, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'SE104', name: 'Phân tích yêu cầu phần mềm - VN', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'CS221', name: 'Cấu trúc dữ liệu và giải thuật', credits: 4, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'NT213', name: 'Mạng máy tính cơ bản - VN', credits: 4, faculty: 'Khoa Mạng máy tính và truyền thông' },
+  { code: 'SS004', name: 'Tư tưởng Hồ Chí Minh - VN', credits: 2, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'PE201', name: 'Giáo dục thể chất 1 - VN', credits: 1, faculty: 'Bộ môn Giáo dục thể chất' },
+  { code: 'SE346', name: 'Internet of Things', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'SE347', name: 'Kiểm thử phần mềm - VN', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'IS252', name: 'Khai phá dữ liệu - VN', credits: 3, faculty: 'Khoa Hệ thống thông tin' },
+  { code: 'NT208', name: 'Lập trình mạng căn bản - VN', credits: 4, faculty: 'Khoa Mạng máy tính và truyền thông' },
+  { code: 'PE232', name: 'Giáo dục thể chất 2 - VN', credits: 1, faculty: 'Bộ môn Giáo dục thể chất' },
+  { code: 'CS312', name: 'Trí tuệ nhân tạo - VN', credits: 3, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'IS401', name: 'Quản trị dự án hệ thống thông tin', credits: 3, faculty: 'Khoa Hệ thống thông tin' },
+  { code: 'SE334', name: 'Phân tích và thiết kế hệ thống thông tin - VN', credits: 4, faculty: 'Khoa Công nghệ phần mềm' },
+  { code: 'AI301', name: 'Machine Learning cơ bản - VN', credits: 3, faculty: 'Khoa Khoa học máy tính' },
+  { code: 'LAW200', name: 'Pháp luật đại cương - VN', credits: 2, faculty: 'Khoa Lý luận chính trị' },
+  { code: 'DS302', name: 'Trực quan hóa dữ liệu - VN', credits: 3, faculty: 'Khoa Hệ thống thông tin' },
+] as const;
+
+interface ScheduleSeed {
+  classCode: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  startPeriod: number | null;
+  endPeriod: number | null;
+  sessionType: ScheduleSessionType;
+  note?: string;
+  room?: string;
+  instructor?: string;
+}
+
+const scheduleSeedsBySemester: Array<{
+  semesterId: (typeof semesterSeeds)[number]['id'];
+  items: ScheduleSeed[];
+}> = [
+  {
+    semesterId: 'sem-2024-2025-1',
+    items: [
+      {
+        classCode: 'IT001.P17',
+        dayOfWeek: 2,
+        startTime: '07:30',
+        endTime: '09:00',
+        startPeriod: 1,
+        endPeriod: 2,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B4.420',
+        instructor: 'Tran Anh Dung',
+      },
+      {
+        classCode: 'MA006.P17',
+        dayOfWeek: 4,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B4.320',
+        instructor: 'Nguyen Minh Tri',
+      },
+      {
+        classCode: 'IT012.P11.2',
+        dayOfWeek: 5,
+        startTime: '07:30',
+        endTime: '09:45',
+        startPeriod: 1,
+        endPeriod: 3,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B3.06',
+        instructor: 'Tran Thi Diem',
+        note: 'Phòng máy, cách 2 tuần',
+      },
+      {
+        classCode: 'SE005.P11',
+        dayOfWeek: 6,
+        startTime: '07:30',
+        endTime: '09:45',
+        startPeriod: 1,
+        endPeriod: 3,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B4.14',
+        instructor: 'Dang Viet Dung',
+      },
+      {
+        classCode: 'IT001.P17.2',
+        dayOfWeek: 2,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B2.16',
+        instructor: 'Le Tan Trong Khiem',
+        note: 'Thực hành PM, cách 2 tuần',
+      },
+      {
+        classCode: 'MA003.P17',
+        dayOfWeek: 3,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B4.18',
+        instructor: 'Dang Le Thuy',
+      },
+      {
+        classCode: 'ENG02.P112',
+        dayOfWeek: 4,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'A3.15',
+        instructor: 'Tat Duong Khanh Linh',
+      },
+      {
+        classCode: 'IT012.P11',
+        dayOfWeek: 5,
+        startTime: '13:00',
+        endTime: '14:30',
+        startPeriod: 6,
+        endPeriod: 7,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B6.08',
+        instructor: 'Tran Thi Diem',
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2024-2025-2',
+    items: [
+      {
+        classCode: 'SE104.P21',
+        dayOfWeek: 1,
+        startTime: '09:00',
+        endTime: '11:30',
+        startPeriod: 3,
+        endPeriod: 5,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'E1.204',
+        instructor: 'Do Thanh Phuong',
+      },
+      {
+        classCode: 'CS221.P12',
+        dayOfWeek: 2,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B1.203',
+        instructor: 'Pham Duc Long',
+      },
+      {
+        classCode: 'NT213.P11',
+        dayOfWeek: 3,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'PM1.102',
+        instructor: 'Tran Quoc Bao',
+      },
+      {
+        classCode: 'SS004.P18',
+        dayOfWeek: 4,
+        startTime: '09:00',
+        endTime: '11:30',
+        startPeriod: 3,
+        endPeriod: 5,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'A2.101',
+        instructor: 'Vo Minh Tam',
+      },
+      {
+        classCode: 'PE201.P03',
+        dayOfWeek: 6,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'San TDTT 1',
+        instructor: 'Tran Cong Hau',
+      },
+      {
+        classCode: 'SE104.P21.1',
+        dayOfWeek: 2,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.SE-01',
+        instructor: 'Do Thanh Phuong',
+        note: 'Workshop nhóm đồ án',
+      },
+      {
+        classCode: 'CS221.P12.1',
+        dayOfWeek: 5,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.CS-02',
+        instructor: 'Pham Duc Long',
+        note: 'Lab cấu trúc dữ liệu',
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2025-2026-1',
+    items: [
+      {
+        classCode: 'SE346.Q22',
+        dayOfWeek: 1,
+        startTime: '09:00',
+        endTime: '11:30',
+        startPeriod: 3,
+        endPeriod: 5,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'E4.1',
+        instructor: 'Le Minh Quan',
+      },
+      {
+        classCode: 'SE347.Q11',
+        dayOfWeek: 2,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'A2.305',
+        instructor: 'Nguyen Hoang Phuc',
+      },
+      {
+        classCode: 'IS252.Q15',
+        dayOfWeek: 4,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'C1.107',
+        instructor: 'Vo Ngoc Hung',
+      },
+      {
+        classCode: 'NT208.Q13',
+        dayOfWeek: 3,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'PM1.102',
+        instructor: 'Tran Quoc Bao',
+      },
+      {
+        classCode: 'PE232.Q01',
+        dayOfWeek: 6,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'San TDTT 2',
+        instructor: 'Tran Cong Hau',
+      },
+      {
+        classCode: 'SE347.Q11.1',
+        dayOfWeek: 2,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.GCS-02',
+        instructor: 'Le Minh Quan',
+        note: 'Lab tăng cường',
+      },
+      {
+        classCode: 'NT208.Q13.1',
+        dayOfWeek: 4,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.NET-01',
+        instructor: 'Tran Quoc Bao',
+        note: 'Thực hành mạng',
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2025-2026-2',
+    items: [
+      {
+        classCode: 'CS312.Q14',
+        dayOfWeek: 1,
+        startTime: '09:00',
+        endTime: '11:30',
+        startPeriod: 3,
+        endPeriod: 5,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'B1.203',
+        instructor: 'Pham Thu Ha',
+      },
+      {
+        classCode: 'SE334.Q12',
+        dayOfWeek: 2,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'A2.305',
+        instructor: 'Nguyen Hoang Phuc',
+      },
+      {
+        classCode: 'AI301.Q11',
+        dayOfWeek: 3,
+        startTime: '13:00',
+        endTime: '15:15',
+        startPeriod: 6,
+        endPeriod: 8,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'PM2.201',
+        instructor: 'Le Thanh Son',
+      },
+      {
+        classCode: 'IS401.Q31',
+        dayOfWeek: 4,
+        startTime: '09:00',
+        endTime: '11:30',
+        startPeriod: 3,
+        endPeriod: 5,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'E2.201',
+        instructor: 'Nguyen Bao Chau',
+      },
+      {
+        classCode: 'DS302.Q21',
+        dayOfWeek: 5,
+        startTime: '07:30',
+        endTime: '10:00',
+        startPeriod: 1,
+        endPeriod: 4,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'E3.3',
+        instructor: 'Vo Ngoc Hung',
+      },
+      {
+        classCode: 'LAW200.Q16',
+        dayOfWeek: 5,
+        startTime: '13:00',
+        endTime: '14:30',
+        startPeriod: 6,
+        endPeriod: 7,
+        sessionType: ScheduleSessionType.daytime,
+        room: 'A3.101',
+        instructor: 'Do Thi Nha',
+      },
+      {
+        classCode: 'CS312.Q14.1',
+        dayOfWeek: 2,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.AI-01',
+        instructor: 'Pham Thu Ha',
+        note: 'Lab thuật toán thông minh',
+      },
+      {
+        classCode: 'AI301.Q11.1',
+        dayOfWeek: 6,
+        startTime: '17:45',
+        endTime: '20:45',
+        startPeriod: null,
+        endPeriod: null,
+        sessionType: ScheduleSessionType.evening,
+        room: 'LAB.DATA-02',
+        instructor: 'Le Thanh Son',
+        note: 'Chuyên đề mô hình dự đoán',
+      },
+    ],
+  },
+] as const;
+
+interface GradeSeed {
+  courseCode: string;
+  assignment?: number | null;
+  midterm?: number | null;
+  finalExam?: number | null;
+  totalScore?: number | null;
+  isExempt?: boolean;
+  earnedCredits?: number;
+}
+
+const gradeSeedsBySemester: Array<{
+  semesterId: (typeof semesterSeeds)[number]['id'];
+  items: GradeSeed[];
+}> = [
+  {
+    semesterId: 'sem-2024-2025-1',
+    items: [
+      {
+        courseCode: 'ENG01',
+        isExempt: true,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'ENG02',
+        midterm: 7,
+        totalScore: 7,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'IT001',
+        midterm: 8,
+        assignment: 8,
+        finalExam: 6.5,
+        totalScore: 7.4,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'IT012',
+        midterm: 9.5,
+        assignment: 8,
+        finalExam: 6.5,
+        totalScore: 7.4,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'MA003',
+        midterm: 8,
+        assignment: 7,
+        finalExam: 8,
+        totalScore: 7.8,
+        earnedCredits: 3,
+      },
+      {
+        courseCode: 'MA006',
+        midterm: 8.5,
+        assignment: 8,
+        finalExam: 8,
+        totalScore: 8.1,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'SE005',
+        midterm: 9,
+        finalExam: 9.5,
+        totalScore: 9.3,
+        earnedCredits: 1,
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2024-2025-2',
+    items: [
+      {
+        courseCode: 'IT002',
+        midterm: 9,
+        assignment: 9,
+        finalExam: 8.5,
+        totalScore: 8.8,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'IT003',
+        midterm: 10,
+        assignment: 7.5,
+        finalExam: 9,
+        totalScore: 8.6,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'MA004',
+        midterm: 10,
+        assignment: 9.5,
+        finalExam: 8.5,
+        totalScore: 9,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'MA005',
+        midterm: 10,
+        assignment: 9,
+        finalExam: 8.5,
+        totalScore: 8.9,
+        earnedCredits: 3,
+      },
+      {
+        courseCode: 'SS006',
+        assignment: 6.5,
+        finalExam: 5.5,
+        totalScore: 5.9,
+        earnedCredits: 2,
+      },
+      {
+        courseCode: 'SS007',
+        midterm: 8,
+        finalExam: 9.5,
+        totalScore: 8.8,
+        earnedCredits: 3,
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2025-2026-1',
+    items: [
+      {
+        courseCode: 'SE104',
+        assignment: 8.8,
+        midterm: 8.3,
+        finalExam: 8,
+        totalScore: 8.3,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'CS221',
+        assignment: 8.5,
+        midterm: 8,
+        finalExam: 7.8,
+        totalScore: 8.1,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'NT213',
+        assignment: 8.2,
+        midterm: 7.7,
+        finalExam: 7.5,
+        totalScore: 7.8,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'SS004',
+        assignment: 8,
+        midterm: 7.5,
+        finalExam: 7.3,
+        totalScore: 7.6,
+        earnedCredits: 2,
+      },
+      {
+        courseCode: 'IT007',
+        midterm: 8,
+        assignment: 7,
+        finalExam: 8,
+        totalScore: 7.6,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'IT008',
+        midterm: 10,
+        finalExam: 9.5,
+        totalScore: 9.3,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'SS008',
+        midterm: 8,
+        finalExam: 7.5,
+        totalScore: 7.8,
+        earnedCredits: 2,
+      },
+      {
+        courseCode: 'SS009',
+        midterm: 8.5,
+        finalExam: 6,
+        totalScore: 7.3,
+        earnedCredits: 2,
+      },
+    ],
+  },
+  {
+    semesterId: 'sem-2025-2026-2',
+    items: [
+      {
+        courseCode: 'SE346',
+        assignment: 9,
+        midterm: 8.5,
+        finalExam: 8.5,
+        totalScore: 8.7,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'SE347',
+        assignment: 8.8,
+        midterm: 8.2,
+        finalExam: 8,
+        totalScore: 8.4,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'IS252',
+        assignment: 8.5,
+        midterm: 8,
+        finalExam: 7.7,
+        totalScore: 8.1,
+        earnedCredits: 3,
+      },
+      {
+        courseCode: 'NT208',
+        assignment: 8.1,
+        midterm: 7.8,
+        finalExam: 7.4,
+        totalScore: 7.8,
+        earnedCredits: 4,
+      },
+      {
+        courseCode: 'CS312',
+        assignment: 8.6,
+        midterm: 8.1,
+        finalExam: 8.2,
+        totalScore: 8.3,
+        earnedCredits: 3,
+      },
+      {
+        courseCode: 'AI301',
+        assignment: 8.9,
+        midterm: 8.4,
+        finalExam: 8,
+        totalScore: 8.5,
+        earnedCredits: 3,
+      },
+    ],
+  },
+] as const;
+
+function parseClassCode(classCode: string) {
+  const [courseCode, ...sectionParts] = classCode.split('.');
+
+  if (!courseCode) {
+    throw new Error(`Invalid class code: ${classCode}`);
+  }
+
+  return {
+    courseCode,
+    sectionCode: sectionParts.join('.'),
+  };
+}
 
 async function main() {
   const passwordHash = await bcrypt.hash('Password123', 10);
@@ -54,10 +760,10 @@ async function main() {
       create: {
         email: 'lecturer@uit.edu.vn',
         passwordHash,
-        firstName: 'Giang',
-        lastName: 'Vien',
+        firstName: 'Giảng',
+        lastName: 'Viên',
         role: Role.lecturer,
-        faculty: 'Khoa Cong nghe thong tin',
+        faculty: 'Khoa Công nghệ thông tin',
         isActive: true,
       },
     }),
@@ -65,6 +771,13 @@ async function main() {
       where: { email: 'student@gm.uit.edu.vn' },
       update: {
         passwordHash,
+        studentId: '22520001',
+        firstName: 'Nguyen',
+        lastName: 'Van A',
+        role: Role.student,
+        faculty: 'Khoa Công nghệ Phần mềm',
+        major: 'Công nghệ phần mềm',
+        yearOfAdmission: 2022,
         isActive: true,
       },
       create: {
@@ -74,25 +787,183 @@ async function main() {
         firstName: 'Nguyen',
         lastName: 'Van A',
         role: Role.student,
-        faculty: 'Khoa Cong nghe Phan mem',
-        major: 'Cong nghe phan mem',
+        faculty: 'Khoa Công nghệ Phần mềm',
+        major: 'Công nghệ phần mềm',
         yearOfAdmission: 2022,
         isActive: true,
       },
     }),
   ]);
 
-  const semester = await prisma.semester.upsert({
-    where: { id: 'sem-2024-2025-2' },
-    update: {},
-    create: {
-      id: 'sem-2024-2025-2',
-      name: 'HK2 2024-2025',
-      startDate: new Date('2025-01-06'),
-      endDate: new Date('2025-05-30'),
-      isCurrent: true,
+  await prisma.semester.updateMany({
+    data: { isCurrent: false },
+  });
+
+  const semesters = new Map<string, Awaited<ReturnType<typeof prisma.semester.upsert>>>();
+
+  for (const semesterSeed of semesterSeeds) {
+    const semester = await prisma.semester.upsert({
+      where: { id: semesterSeed.id },
+      update: {
+        name: semesterSeed.name,
+        academicYear: semesterSeed.academicYear,
+        term: semesterSeed.term,
+        startDate: semesterSeed.startDate,
+        endDate: semesterSeed.endDate,
+        isCurrent: semesterSeed.isCurrent,
+      },
+      create: semesterSeed,
+    });
+
+    semesters.set(semester.id, semester);
+  }
+
+  const courses = new Map<string, Awaited<ReturnType<typeof prisma.course.upsert>>>();
+
+  for (const courseSeed of courseSeeds) {
+    const course = await prisma.course.upsert({
+      where: { code: courseSeed.code },
+      update: {
+        name: courseSeed.name,
+        credits: courseSeed.credits,
+        faculty: courseSeed.faculty,
+      },
+      create: {
+        code: courseSeed.code,
+        name: courseSeed.name,
+        credits: courseSeed.credits,
+        faculty: courseSeed.faculty,
+      },
+    });
+
+    courses.set(course.code, course);
+  }
+
+  const classSections = new Map<string, Awaited<ReturnType<typeof prisma.classSection.upsert>>>();
+  const allScheduleSeeds = scheduleSeedsBySemester.flatMap((entry) =>
+    entry.items.map((item) => ({ ...item, semesterId: entry.semesterId })),
+  );
+
+  for (const item of allScheduleSeeds) {
+    const { courseCode, sectionCode } = parseClassCode(item.classCode);
+    const course = courses.get(courseCode);
+    const semester = semesters.get(item.semesterId);
+
+    if (!course) {
+      throw new Error(`Course ${courseCode} was not seeded`);
+    }
+
+    if (!semester) {
+      throw new Error(`Semester ${item.semesterId} was not seeded`);
+    }
+
+    const classSection = await prisma.classSection.upsert({
+      where: { classCode: item.classCode },
+      update: {
+        semesterId: semester.id,
+        courseId: course.id,
+        sectionCode,
+        note: item.note ?? null,
+      },
+      create: {
+        semesterId: semester.id,
+        courseId: course.id,
+        classCode: item.classCode,
+        sectionCode,
+        note: item.note ?? null,
+      },
+    });
+
+    classSections.set(item.classCode, classSection);
+  }
+
+  await prisma.scheduleItem.deleteMany({
+    where: {
+      userId: student.id,
     },
   });
+
+  await prisma.scheduleItem.createMany({
+    data: allScheduleSeeds.map((item) => {
+      const classSection = classSections.get(item.classCode);
+
+      if (!classSection) {
+        throw new Error(`Class section ${item.classCode} was not seeded`);
+      }
+
+      return {
+        userId: student.id,
+        classSectionId: classSection.id,
+        dayOfWeek: item.dayOfWeek,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        startPeriod: item.startPeriod,
+        endPeriod: item.endPeriod,
+        sessionType: item.sessionType,
+        room: item.room ?? null,
+        instructor: item.instructor ?? null,
+      };
+    }),
+  });
+
+  await prisma.grade.deleteMany({
+    where: {
+      userId: student.id,
+    },
+  });
+
+  for (const entry of gradeSeedsBySemester) {
+    const semester = semesters.get(entry.semesterId);
+
+    if (!semester) {
+      throw new Error(`Semester ${entry.semesterId} was not seeded for grades`);
+    }
+
+    for (const item of entry.items) {
+      const course = courses.get(item.courseCode);
+
+      if (!course) {
+        throw new Error(`Course ${item.courseCode} was not seeded for grades`);
+      }
+
+      await prisma.grade.upsert({
+        where: {
+          userId_courseId_semesterId: {
+            userId: student.id,
+            courseId: course.id,
+            semesterId: semester.id,
+          },
+        },
+        update: {
+          assignment: item.assignment ?? null,
+          midterm: item.midterm ?? null,
+          finalExam: item.finalExam ?? null,
+          totalScore: item.totalScore ?? null,
+          letterGrade: null,
+          gradePoint: item.totalScore ?? null,
+          isExempt: item.isExempt ?? false,
+          earnedCredits:
+            item.earnedCredits ??
+            (item.totalScore !== null && item.totalScore !== undefined && item.totalScore >= 5 ? course.credits : 0),
+        },
+        create: {
+          userId: student.id,
+          courseId: course.id,
+          semesterId: semester.id,
+          assignment: item.assignment ?? null,
+          midterm: item.midterm ?? null,
+          finalExam: item.finalExam ?? null,
+          totalScore: item.totalScore ?? null,
+          letterGrade: null,
+          gradePoint: item.totalScore ?? null,
+          isExempt: item.isExempt ?? false,
+          earnedCredits:
+            item.earnedCredits ??
+            (item.totalScore !== null && item.totalScore !== undefined && item.totalScore >= 5 ? course.credits : 0),
+        },
+      });
+    }
+  }
 
   const vehicle = await prisma.vehicle.upsert({
     where: { plateNumber: '51F44614' },
@@ -101,7 +972,7 @@ async function main() {
       userId: student.id,
       plateNumber: '51F44614',
       rfidTag: 'DEMO-RFID-0001',
-      label: 'Xe may demo',
+      label: 'Xe máy demo',
       isActive: true,
     },
   });
@@ -142,7 +1013,11 @@ async function main() {
     admin: admin.email,
     lecturer: lecturer.email,
     student: student.email,
-    semester: semester.name,
+    semesters: semesterSeeds.length,
+    currentSemester: semesterSeeds.find((item) => item.isCurrent)?.name ?? null,
+    sections: classSections.size,
+    scheduleItems: allScheduleSeeds.length,
+    grades: gradeSeedsBySemester.reduce((total, semester) => total + semester.items.length, 0),
     vehicle: vehicle.plateNumber,
   });
 }
@@ -155,3 +1030,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

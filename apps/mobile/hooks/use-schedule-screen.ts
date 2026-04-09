@@ -10,38 +10,48 @@ import type {
   GPASummary,
   ParkingStatus,
   ScheduleRecord,
+  SemesterScheduleRecord,
   SemesterRecord,
   TelemetrySnapshotRecord,
 } from '@/types/app-data';
 
 export function useScheduleScreenData(selectedSemesterId?: string) {
-  const semestersQuery = useQuery({
-    queryKey: ['semesters'],
-    queryFn: scheduleApi.getSemesters,
+  const allSemestersQuery = useQuery({
+    queryKey: ['schedule', 'semesters-with-sessions'],
+    queryFn: scheduleApi.getAllSemestersWithSchedules,
   });
 
   const resolvedSemesterId =
     selectedSemesterId ??
-    semestersQuery.data?.find((item) => item.isCurrent)?.id ??
-    semestersQuery.data?.[0]?.id;
+    allSemestersQuery.data?.find((item) => item.isCurrent)?.id ??
+    allSemestersQuery.data?.[0]?.id;
 
   const scheduleQuery = useQuery({
-    queryKey: ['schedule', resolvedSemesterId],
-    queryFn: () => scheduleApi.getSchedule(resolvedSemesterId),
+    queryKey: ['schedule', 'semester', resolvedSemesterId],
+    queryFn: () => scheduleApi.getScheduleBySemesterId(resolvedSemesterId as string),
     enabled: Boolean(resolvedSemesterId),
-    placeholderData: [] as ScheduleRecord[],
+    placeholderData: undefined as SemesterScheduleRecord | undefined,
   });
 
   return {
-    semesters: semestersQuery.data ?? ([] as SemesterRecord[]),
+    semesters:
+      allSemestersQuery.data?.map(({ id, name, academicYear, term, startDate, endDate, isCurrent }) => ({
+        id,
+        name,
+        academicYear,
+        term,
+        startDate,
+        endDate,
+        isCurrent,
+      })) ?? ([] as SemesterRecord[]),
     resolvedSemesterId,
-    isLoading: semestersQuery.isLoading || scheduleQuery.isLoading,
-    isError: semestersQuery.isError || scheduleQuery.isError,
-    error: semestersQuery.error ?? scheduleQuery.error,
+    isLoading: allSemestersQuery.isLoading || scheduleQuery.isLoading,
+    isError: allSemestersQuery.isError || scheduleQuery.isError,
+    error: allSemestersQuery.error ?? scheduleQuery.error,
     refetch: async () => {
-      await Promise.all([semestersQuery.refetch(), scheduleQuery.refetch()]);
+      await Promise.all([allSemestersQuery.refetch(), scheduleQuery.refetch()]);
     },
-    schedule: scheduleQuery.data ?? ([] as ScheduleRecord[]),
+    schedule: scheduleQuery.data?.sessions ?? ([] as ScheduleRecord[]),
   };
 }
 
@@ -60,7 +70,7 @@ export function useOperationsScreenData() {
             }) as FireAlertsPayload,
         ),
         notificationsApi.getUnreadCount().catch(() => 0),
-        gradesApi.getGpa().catch(() => null as GPASummary | null),
+        gradesApi.getGradesSummary().catch(() => null as GPASummary | null),
       ]);
 
       return {

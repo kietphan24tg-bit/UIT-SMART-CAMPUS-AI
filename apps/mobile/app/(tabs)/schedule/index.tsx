@@ -27,6 +27,14 @@ import {
   isLecturerRole,
 } from '@/utils/app';
 
+function getScheduleRoomLabel(room?: string | null) {
+  return room ? `Phòng ${room}` : 'Chưa cập nhật phòng';
+}
+
+function getScheduleInstructorLabel(instructor?: string | null) {
+  return instructor ?? 'Chưa cập nhật giảng viên';
+}
+
 export default function ScheduleScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
@@ -310,7 +318,10 @@ export default function ScheduleScreen() {
     {
       label: 'Tiếp theo',
       value: scheduleState.schedule[0]?.startTime ?? '--',
-      helper: scheduleState.schedule[0]?.course.code ?? 'Chưa có dữ liệu',
+      helper:
+        scheduleState.schedule[0]?.classCode ??
+        scheduleState.schedule[0]?.course.code ??
+        'Chưa có dữ liệu',
       tone: 'warning' as const,
     },
   ];
@@ -389,11 +400,11 @@ export default function ScheduleScreen() {
               </Text>
               <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
                 {getDayLabel(scheduleState.schedule[0].dayOfWeek)} ·{' '}
-                {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} · Phòng{' '}
-                {scheduleState.schedule[0].room}
+                {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} ·{' '}
+                {getScheduleRoomLabel(scheduleState.schedule[0].room)}
               </Text>
               <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                {scheduleState.schedule[0].instructor}
+                {getScheduleInstructorLabel(scheduleState.schedule[0].instructor)}
               </Text>
             </View>
           ) : (
@@ -463,7 +474,8 @@ export default function ScheduleScreen() {
                         {item.course.name}
                       </Text>
                       <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                        {item.startTime} - {item.endTime} · {item.room} · {item.instructor}
+                        {item.startTime} - {item.endTime} · {getScheduleRoomLabel(item.room)} ·{' '}
+                        {getScheduleInstructorLabel(item.instructor)}
                       </Text>
                     </View>
                   ))}

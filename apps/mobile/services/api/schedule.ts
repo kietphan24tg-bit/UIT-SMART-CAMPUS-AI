@@ -1,16 +1,18 @@
 import { apiClient } from './client';
 
-import type { ScheduleRecord, SemesterRecord } from '@/types/app-data';
+import type { SemesterScheduleRecord } from '@/types/app-data';
 
 
 export const scheduleApi = {
-  getSchedule: async (semesterId?: string): Promise<ScheduleRecord[]> => {
-    return apiClient.get('/schedules', {
-      params: semesterId ? { semesterId } : undefined,
-    }) as Promise<ScheduleRecord[]>;
+  getAllSemestersWithSchedules: async (): Promise<SemesterScheduleRecord[]> => {
+    return apiClient.get('/schedules') as Promise<SemesterScheduleRecord[]>;
   },
 
-  getSemesters: async (): Promise<SemesterRecord[]> => {
-    return apiClient.get('/schedules/semesters') as Promise<SemesterRecord[]>;
+  getCurrentSchedule: async (): Promise<SemesterScheduleRecord> => {
+    return apiClient.get('/schedules/current') as Promise<SemesterScheduleRecord>;
+  },
+
+  getScheduleBySemesterId: async (semesterId: string): Promise<SemesterScheduleRecord> => {
+    return apiClient.get(`/schedules/semesters/${semesterId}`) as Promise<SemesterScheduleRecord>;
   },
 };

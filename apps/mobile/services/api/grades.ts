@@ -1,18 +1,22 @@
 import { apiClient } from './client';
 
-import type { GPASummary, GradeRecord } from '@/types/app-data';
+import type { GPASummary, SemesterGradesRecord } from '@/types/app-data';
 
 
 export const gradesApi = {
-  getGrades: async (semesterId?: string): Promise<GradeRecord[]> => {
-    return apiClient.get('/grades', {
-      params: semesterId ? { semesterId } : undefined,
-    }) as Promise<GradeRecord[]>;
+  getAllSemesterGrades: async (): Promise<SemesterGradesRecord[]> => {
+    return apiClient.get('/grades') as Promise<SemesterGradesRecord[]>;
   },
 
-  getGpa: async (semesterId?: string): Promise<GPASummary> => {
-    return apiClient.get('/grades/gpa', {
-      params: semesterId ? { semesterId } : undefined,
-    }) as Promise<GPASummary>;
+  getGradesSummary: async (): Promise<GPASummary> => {
+    return apiClient.get('/grades/summary') as Promise<GPASummary>;
+  },
+
+  getCurrentSemesterGrades: async (): Promise<SemesterGradesRecord> => {
+    return apiClient.get('/grades/current') as Promise<SemesterGradesRecord>;
+  },
+
+  getSemesterGradesById: async (semesterId: string): Promise<SemesterGradesRecord> => {
+    return apiClient.get(`/grades/semesters/${semesterId}`) as Promise<SemesterGradesRecord>;
   },
 };

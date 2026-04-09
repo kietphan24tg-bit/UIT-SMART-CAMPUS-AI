@@ -6,11 +6,17 @@ export type TelemetryHealthState = 'online' | 'stale' | 'offline' | 'fire-alert'
 
 export interface DashboardClassItem {
   id: string;
-  instructor: string;
-  room: string;
+  classCode?: string;
+  sectionCode?: string;
+  note?: string | null;
+  instructor: string | null;
+  room: string | null;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  startPeriod?: number | null;
+  endPeriod?: number | null;
+  sessionType?: 'daytime' | 'evening';
   startDate: string;
   endDate: string;
   course: {

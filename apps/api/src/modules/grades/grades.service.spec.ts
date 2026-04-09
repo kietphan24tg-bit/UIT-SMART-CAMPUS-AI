@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -18,10 +19,19 @@ describe('GradesService', () => {
       finalExam: 7,
       assignment: 9,
       totalScore: 7.8,
-      letterGrade: 'B+',
-      gradePoint: 3.5,
+      letterGrade: null,
+      gradePoint: 7.8,
+      earnedCredits: 4,
       course: { code: 'SE346', name: 'IoT', credits: 4 },
-      semester: { name: 'HK2' },
+      semester: {
+        id: 's1',
+        name: 'HK2 2024-2025',
+        academicYear: '2024-2025',
+        term: 2,
+        startDate: new Date('2025-01-06T00:00:00.000Z'),
+        endDate: new Date('2025-05-31T23:59:59.000Z'),
+        isCurrent: false,
+      },
     },
     {
       id: 'g2',
@@ -32,10 +42,42 @@ describe('GradesService', () => {
       finalExam: 9,
       assignment: 10,
       totalScore: 9.2,
-      letterGrade: 'A',
-      gradePoint: 4.0,
+      letterGrade: null,
+      gradePoint: 9.2,
+      earnedCredits: 3,
       course: { code: 'SE347', name: 'Mobile', credits: 3 },
-      semester: { name: 'HK2' },
+      semester: {
+        id: 's1',
+        name: 'HK2 2024-2025',
+        academicYear: '2024-2025',
+        term: 2,
+        startDate: new Date('2025-01-06T00:00:00.000Z'),
+        endDate: new Date('2025-05-31T23:59:59.000Z'),
+        isCurrent: false,
+      },
+    },
+    {
+      id: 'g3',
+      userId: 'user-1',
+      courseId: 'c3',
+      semesterId: 's2',
+      midterm: null,
+      finalExam: null,
+      assignment: null,
+      totalScore: null,
+      letterGrade: null,
+      gradePoint: null,
+      earnedCredits: 4,
+      course: { code: 'ENG01', name: 'Anh van 1', credits: 4 },
+      semester: {
+        id: 's2',
+        name: 'HK1 2024-2025',
+        academicYear: '2024-2025',
+        term: 1,
+        startDate: new Date('2024-09-09T00:00:00.000Z'),
+        endDate: new Date('2024-12-28T23:59:59.000Z'),
+        isCurrent: false,
+      },
     },
   ];
 
@@ -56,64 +98,136 @@ describe('GradesService', () => {
     prisma = module.get(PrismaService);
   });
 
-  describe('getGrades', () => {
-    it('should return all grades for a user', async () => {
+  describe('getAllSemesterGrades', () => {
+    it('should return all semester grades of the current user', async () => {
       (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
 
-      const result = await service.getGrades('user-1');
+      const result = await service.getAllSemesterGrades('user-1');
 
-      expect(result).toHaveLength(2);
       expect(prisma.grade.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 'user-1' } }),
       );
-    });
-
-    it('should filter by semesterId when provided', async () => {
-      (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
-
-      await service.getGrades('user-1', 's1');
-
-      expect(prisma.grade.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 'user-1', semesterId: 's1' },
-        }),
-      );
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        id: 's1',
+        name: 'HK2 2024-2025',
+        summary: {
+          gpa: 8.4,
+          totalCredits: 7,
+          totalEarnedCredits: 7,
+          totalCourses: 2,
+          totalSemesters: 1,
+        },
+      });
+      expect(result[0]?.grades[0]?.course.code).toBe('SE346');
+      expect(result[0]?.grades[1]?.course.code).toBe('SE347');
     });
   });
 
-  describe('calculateGPA', () => {
-    it('should calculate correct GPA from grades', async () => {
+  describe('getGradesSummary', () => {
+    it('should return cumulative summary across semesters', async () => {
       (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
 
-      const result = await service.calculateGPA('user-1');
+      const result = await service.getGradesSummary('user-1');
 
-      // (3.5*4 + 4.0*3) / (4+3) = (14+12)/7 = 26/7 = 3.714... => rounded to 3.71
-      expect(result.gpa).toBe(3.71);
-      expect(result.totalCredits).toBe(7);
-      expect(result.totalCourses).toBe(2);
+      expect(result).toEqual({
+        gpa: 8.4,
+        totalCredits: 7,
+        totalEarnedCredits: 11,
+        totalCourses: 3,
+        totalSemesters: 2,
+      });
     });
 
-    it('should return zero GPA when no grades exist', async () => {
+    it('should return zero summary when no grades exist', async () => {
       (prisma.grade.findMany as jest.Mock).mockResolvedValue([]);
 
-      const result = await service.calculateGPA('user-1');
+      const result = await service.getGradesSummary('user-1');
 
-      expect(result).toEqual({ gpa: 0, totalCredits: 0, totalCourses: 0 });
+      expect(result).toEqual({
+        gpa: 0,
+        totalCredits: 0,
+        totalEarnedCredits: 0,
+        totalCourses: 0,
+        totalSemesters: 0,
+      });
     });
+  });
 
-    it('should ignore grades with null gradePoint', async () => {
+  describe('getCurrentSemesterGrades', () => {
+    it('should return the semester marked as current', async () => {
       (prisma.grade.findMany as jest.Mock).mockResolvedValue([
         {
-          ...mockGrades[0],
-          gradePoint: null,
+          ...mockGrades[0]!,
+          semester: { ...mockGrades[0]!.semester, isCurrent: true },
         },
-        mockGrades[1],
+        {
+          ...mockGrades[1]!,
+          semester: { ...mockGrades[1]!.semester, isCurrent: true },
+        },
+        mockGrades[2]!,
       ]);
 
-      const result = await service.calculateGPA('user-1');
+      const result = await service.getCurrentSemesterGrades('user-1');
 
-      expect(result.gpa).toBe(4.0);
-      expect(result.totalCredits).toBe(3);
+      expect(result.id).toBe('s1');
+      expect(result.isCurrent).toBe(true);
+      expect(result.summary.totalSemesters).toBe(1);
+    });
+
+    it('should fallback to the newest semester when no semester is current', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
+
+      const result = await service.getCurrentSemesterGrades('user-1');
+
+      expect(result.id).toBe('s1');
+      expect(result.name).toBe('HK2 2024-2025');
+    });
+
+    it('should return an empty payload when the user has no grades', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.getCurrentSemesterGrades('user-1');
+
+      expect(result).toEqual({
+        id: '',
+        name: '',
+        academicYear: '',
+        term: 0,
+        startDate: '',
+        endDate: '',
+        isCurrent: false,
+        summary: {
+          gpa: 0,
+          totalCredits: 0,
+          totalEarnedCredits: 0,
+          totalCourses: 0,
+          totalSemesters: 0,
+        },
+        grades: [],
+      });
+    });
+  });
+
+  describe('getSemesterGradesById', () => {
+    it('should return a specific semester by id', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
+
+      const result = await service.getSemesterGradesById('user-1', 's1');
+
+      expect(result).toMatchObject({
+        id: 's1',
+        name: 'HK2 2024-2025',
+      });
+      expect(result.summary.totalSemesters).toBe(1);
+    });
+
+    it('should throw NotFoundException when semester grades are not found', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue(mockGrades);
+
+      await expect(service.getSemesterGradesById('user-1', 'missing')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

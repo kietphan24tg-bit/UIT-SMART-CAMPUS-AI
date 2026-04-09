@@ -1,9 +1,19 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
+import {
+  ScheduleSemesterWithSessionsDto,
+} from './dto/schedule-response.dto';
 import { ScheduleService } from './schedule.service';
 
 @ApiTags('Schedule')
@@ -14,27 +24,52 @@ export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get current user schedule' })
-  @ApiQuery({ name: 'semesterId', required: false })
-  getSchedule(
-    @CurrentUser('id') userId: string,
-    @Query('semesterId') semesterId?: string,
-  ) {
-    return this.scheduleService.getSchedule(userId, semesterId);
+  @ApiOperation({
+    summary: 'Get all semesters with schedule sessions',
+    description: 'Returns all semesters of the current user, each with its schedule sessions.',
+  })
+  @ApiOkResponse({
+    description: 'All semesters with schedule sessions of the current user.',
+    type: ScheduleSemesterWithSessionsDto,
+    isArray: true,
+  })
+  getAllSemestersWithSchedules(@CurrentUser('id') userId: string) {
+    return this.scheduleService.getAllSemestersWithSchedules(userId);
   }
 
-  @Get('semesters')
-  @ApiOperation({ summary: 'Get all semesters' })
-  getSemesters() {
-    return this.scheduleService.getSemesters();
+  @Get('current')
+  @ApiOperation({
+    summary: 'Get current semester schedule',
+    description: 'Returns the current semester and its schedule sessions for the current user.',
+  })
+  @ApiOkResponse({
+    description: 'Current semester with schedule sessions.',
+    type: ScheduleSemesterWithSessionsDto,
+  })
+  @ApiNotFoundResponse({ description: 'Current semester not found.' })
+  getCurrentSemesterSchedule(@CurrentUser('id') userId: string) {
+    return this.scheduleService.getCurrentSemesterSchedule(userId);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a schedule item by ID' })
-  getScheduleItem(
-    @Param('id') id: string,
+  @Get('semesters/:semesterId')
+  @ApiOperation({
+    summary: 'Get schedule by semester ID',
+    description: 'Returns the requested semester and its schedule sessions for the current user.',
+  })
+  @ApiParam({
+    name: 'semesterId',
+    description: 'Semester ID.',
+    example: 'sem-2025-2026-2',
+  })
+  @ApiOkResponse({
+    description: 'Semester with schedule sessions.',
+    type: ScheduleSemesterWithSessionsDto,
+  })
+  @ApiNotFoundResponse({ description: 'Semester not found.' })
+  getSemesterScheduleById(
+    @Param('semesterId') semesterId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.scheduleService.getScheduleItemById(id, userId);
+    return this.scheduleService.getSemesterScheduleById(userId, semesterId);
   }
 }

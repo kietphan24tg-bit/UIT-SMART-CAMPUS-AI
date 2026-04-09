@@ -39,6 +39,14 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   services: 'Mở trung tâm dịch vụ theo vai trò.',
 };
 
+function getScheduleRoomLabel(room?: string | null) {
+  return room ? `Phòng ${room}` : 'Chưa cập nhật phòng';
+}
+
+function getScheduleInstructorLabel(instructor?: string | null) {
+  return instructor ?? 'Chưa cập nhật giảng viên';
+}
+
 export default function HomeScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
@@ -200,10 +208,15 @@ export default function HomeScreen() {
                         { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                       ]}
                     >
-                      {snapshot.nextClass.course.code} · {snapshot.nextClass.instructor}
+                      {(snapshot.nextClass.classCode ?? snapshot.nextClass.course.code) ||
+                        'Chưa có mã lớp'}{' '}
+                      · {getScheduleInstructorLabel(snapshot.nextClass.instructor)}
                     </Text>
                   </View>
-                  <StatusBadge label={`Phòng ${snapshot.nextClass.room}`} tone="primary" />
+                  <StatusBadge
+                    label={getScheduleRoomLabel(snapshot.nextClass.room)}
+                    tone="primary"
+                  />
                 </View>
                 <Text
                   style={[

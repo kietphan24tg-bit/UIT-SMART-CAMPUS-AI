@@ -4,29 +4,36 @@ export type { ParkingStatus, RegisteredVehicle, UserRole } from '@smart-campus/s
 
 export interface ScheduleRecord {
   id: string;
-  instructor: string;
-  room: string;
+  classCode: string;
+  sectionCode: string;
+  note?: string | null;
+  instructor: string | null;
+  room: string | null;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
-  startDate: string;
-  endDate: string;
+  startPeriod?: number | null;
+  endPeriod?: number | null;
+  sessionType: 'daytime' | 'evening';
   course: {
     code: string;
     name: string;
     credits: number;
-  };
-  semester: {
-    name: string;
   };
 }
 
 export interface SemesterRecord {
   id: string;
   name: string;
+  academicYear: string;
+  term: number;
   startDate: string;
   endDate: string;
   isCurrent: boolean;
+}
+
+export interface SemesterScheduleRecord extends SemesterRecord {
+  sessions: ScheduleRecord[];
 }
 
 export interface GradeRecord {
@@ -37,20 +44,33 @@ export interface GradeRecord {
   totalScore: number | null;
   letterGrade: string | null;
   gradePoint: number | null;
+  isExempt?: boolean;
+  earnedCredits?: number;
   course: {
     code: string;
     name: string;
     credits: number;
-  };
-  semester: {
-    name: string;
   };
 }
 
 export interface GPASummary {
   gpa: number;
   totalCredits: number;
+  totalEarnedCredits?: number;
   totalCourses: number;
+  totalSemesters?: number;
+}
+
+export interface SemesterGradesRecord {
+  id: string;
+  name: string;
+  academicYear: string;
+  term: number;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  summary: GPASummary;
+  grades: GradeRecord[];
 }
 
 export interface NotificationRecord {

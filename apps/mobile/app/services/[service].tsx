@@ -16,7 +16,7 @@ import {
 import { gradesApi } from '@/services/api/grades';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import type { GradeRecord, GPASummary } from '@/types/app-data';
+import type { GPASummary, SemesterGradesRecord } from '@/types/app-data';
 import {
   formatGpaValue,
   getServiceEntries,
@@ -37,8 +37,12 @@ export default function ServiceDetailScreen() {
   const gradesQuery = useQuery({
     queryKey: ['service-grades'],
     queryFn: async () => {
-      const [gpa, grades] = await Promise.all([gradesApi.getGpa(), gradesApi.getGrades()]);
-      return { gpa, grades };
+      const [overview, semesters] = await Promise.all([
+        gradesApi.getGradesSummary(),
+        gradesApi.getAllSemesterGrades(),
+      ]);
+
+      return { overview, semesters };
     },
     enabled: isGradesViewer,
   });
@@ -48,9 +52,9 @@ export default function ServiceDetailScreen() {
       <Screen>
         <ContentStack>
           <EmptyState
-            title="Dịch vụ không tồn tại"
-            description="Mục này chưa có trong Services Hub."
-            actionLabel="Quay lại dịch vụ"
+            title="Dich vu khong ton tai"
+            description="Muc nay chua co trong Services Hub."
+            actionLabel="Quay lai dich vu"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -62,7 +66,7 @@ export default function ServiceDetailScreen() {
     return (
       <Screen>
         <TopHero
-          eyebrow="Dịch vụ học vụ"
+          eyebrow="Dich vu hoc vu"
           title={service.title}
           subtitle={service.description}
           badge={{
@@ -73,8 +77,8 @@ export default function ServiceDetailScreen() {
         <ContentStack narrow overlapHero={false}>
           <GradesPanel
             loading={gradesQuery.isLoading}
-            gpa={gradesQuery.data?.gpa ?? null}
-            grades={gradesQuery.data?.grades ?? ([] as GradeRecord[])}
+            overview={gradesQuery.data?.overview ?? null}
+            semesters={gradesQuery.data?.semesters ?? []}
           />
         </ContentStack>
       </Screen>
@@ -85,7 +89,7 @@ export default function ServiceDetailScreen() {
     return (
       <Screen>
         <TopHero
-          eyebrow="Dịch vụ quản trị"
+          eyebrow="Dich vu quan tri"
           title={service.title}
           subtitle={service.description}
           badge={{
@@ -95,23 +99,24 @@ export default function ServiceDetailScreen() {
         />
 
         <ContentStack narrow overlapHero={false}>
-          <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
+          <SectionCard title="Trang thai hien tai" subtitle={service.summary}>
             <Text style={styles.body}>
-              Ứng dụng đang tập trung vào tác vụ quản trị có dữ liệu thật: parking, telemetry, fire alert và thông báo.
+              Ung dung dang tap trung vao cac tac vu quan tri co du lieu that: parking, telemetry,
+              fire alert va thong bao.
             </Text>
           </SectionCard>
 
-          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
+          <SectionCard title="Khu vuc dang ho tro" subtitle="Chi hien thi loi vao co du lieu that.">
             <View style={styles.column}>
-              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
-              <InfoRow label="Thông báo" value="Danh sách, chưa đọc, đánh dấu đã đọc" />
-              <InfoRow label="Hồ sơ" value="Xem và cập nhật thông tin cá nhân" />
+              <InfoRow label="Van hanh campus" value="Parking, telemetry, fire alert" />
+              <InfoRow label="Thong bao" value="Danh sach, chua doc, danh dau da doc" />
+              <InfoRow label="Ho so" value="Xem va cap nhat thong tin ca nhan" />
             </View>
           </SectionCard>
 
-          <PrimaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
-          <SecondaryButton label="Mở trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
-          <SecondaryButton label="Mở parking + IoT" onPress={() => router.push('/parking')} />
+          <PrimaryButton label="Mo van hanh campus" onPress={() => router.push('/schedule')} />
+          <SecondaryButton label="Mo trung tam canh bao" onPress={() => router.push('/alerts')} />
+          <SecondaryButton label="Mo parking + IoT" onPress={() => router.push('/parking')} />
         </ContentStack>
       </Screen>
     );
@@ -120,7 +125,7 @@ export default function ServiceDetailScreen() {
   return (
     <Screen>
       <TopHero
-        eyebrow="Dịch vụ campus"
+        eyebrow="Dich vu campus"
         title={service.title}
         subtitle={service.description}
         badge={{
@@ -130,39 +135,39 @@ export default function ServiceDetailScreen() {
       />
 
       <ContentStack narrow={service.id === 'chatbot' || service.id === 'library'} overlapHero={false}>
-        <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
+        <SectionCard title="Trang thai hien tai" subtitle={service.summary}>
           <Text style={styles.body}>
-            {service.disabledReason || 'Dịch vụ này đang hoạt động trong phạm vi hiện tại của ứng dụng.'}
+            {service.disabledReason || 'Dich vu nay dang hoat dong trong pham vi hien tai cua ung dung.'}
           </Text>
         </SectionCard>
 
-        <SectionCard title="Trạng thái dịch vụ" subtitle="Thông tin nhanh về mức độ sẵn sàng.">
+        <SectionCard title="Trang thai dich vu" subtitle="Thong tin nhanh ve muc do san sang.">
           <View style={styles.column}>
-            <InfoRow label="Trạng thái" value={getSupportStateLabel(service.supportState)} />
+            <InfoRow label="Trang thai" value={getSupportStateLabel(service.supportState)} />
             <InfoRow
-              label="Gợi ý"
+              label="Goi y"
               value={
                 service.supportState === 'live'
-                  ? 'Bạn có thể sử dụng ngay.'
+                  ? 'Ban co the su dung ngay.'
                   : service.supportState === 'partial'
-                    ? 'Một số hạng mục sẽ được mở dần.'
-                    : 'Sắp triển khai.'
+                    ? 'Mot so hang muc se duoc mo dan.'
+                    : 'Sap trien khai.'
               }
             />
           </View>
         </SectionCard>
 
-        <SectionCard title="Phạm vi hiện có" subtitle="Thông tin ngắn gọn theo trạng thái dịch vụ.">
+        <SectionCard title="Pham vi hien co" subtitle="Thong tin ngan gon theo trang thai dich vu.">
           <Text style={styles.body}>
             {service.supportState === 'unsupported'
-              ? 'Tạm thời chưa khả dụng trong phiên bản hiện tại.'
-              : 'Một phần dịch vụ đã sẵn sàng.'}
+              ? 'Tam thoi chua kha dung trong phien ban hien tai.'
+              : 'Mot phan dich vu da san sang.'}
           </Text>
         </SectionCard>
 
-        <PrimaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
+        <PrimaryButton label="Quay lai danh sach dich vu" onPress={() => router.replace('/services')} />
         <SecondaryButton
-          label="Liên hệ hỗ trợ"
+          label="Lien he ho tro"
           onPress={() =>
             void Linking.openURL(
               'mailto:support@uit.edu.vn?subject=Ho%20tro%20dich%20vu%20UIT%20Smart%20Campus',
@@ -176,18 +181,18 @@ export default function ServiceDetailScreen() {
 
 function GradesPanel({
   loading,
-  gpa,
-  grades,
+  overview,
+  semesters,
 }: {
   loading: boolean;
-  gpa: GPASummary | null;
-  grades: GradeRecord[];
+  overview: GPASummary | null;
+  semesters: SemesterGradesRecord[];
 }) {
   const theme = useAppTheme();
 
   return (
     <>
-      <SectionCard title="GPA hiện tại" subtitle="Tóm tắt nhanh trên thiết bị di động.">
+      <SectionCard title="Tong quan GPA" subtitle="Tom tat 4 hoc ky va ket qua tich luy.">
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={24} width="35%" />
@@ -196,51 +201,67 @@ function GradesPanel({
         ) : (
           <View style={styles.column}>
             <Text style={[styles.gpaValue, { color: theme.colors.text }]}>
-              {formatGpaValue(gpa?.gpa)}
+              {formatGpaValue(overview?.gpa)}
             </Text>
             <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-              {gpa?.totalCourses ?? 0} học phần · {gpa?.totalCredits ?? 0} tín chỉ
+              {overview?.totalCredits ?? 0} tin chi tinh GPA · {overview?.totalCourses ?? 0} hoc phan
+            </Text>
+            <Text style={[styles.body, { color: theme.colors.textMuted }]}>
+              Tich luy {overview?.totalEarnedCredits ?? 0} tin chi qua {overview?.totalSemesters ?? 0} hoc ky
             </Text>
           </View>
         )}
       </SectionCard>
 
-      <SectionCard title="Bảng điểm gần đây" subtitle="Chỉ hiển thị học phần có dữ liệu.">
+      <SectionCard title="Bang diem theo hoc ky" subtitle="Moi hoc ky co GPA rieng va danh sach hoc phan.">
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={96} />
             <SkeletonBlock height={96} />
           </View>
-        ) : grades.length > 0 ? (
+        ) : semesters.length > 0 ? (
           <View style={styles.column}>
-            {grades.map((grade) => (
-              <View
-                key={grade.id}
-                style={[
-                  styles.gradeCard,
-                  {
-                    backgroundColor: theme.colors.surfaceSubtle,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>
-                  {grade.course.name}
-                </Text>
-                <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                  {grade.course.code} · {grade.semester.name}
-                </Text>
-                <Text style={[styles.gradeScore, { color: theme.colors.primary }]}>
-                  {grade.totalScore ?? '--'} · {grade.letterGrade ?? 'Chưa có điểm chữ'}
-                </Text>
+            {semesters.map((semesterGroup) => (
+              <View key={semesterGroup.id} style={styles.semesterBlock}>
+                <View style={styles.column}>
+                  <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>
+                    {semesterGroup.name}
+                  </Text>
+                  <Text style={[styles.body, { color: theme.colors.textMuted }]}>
+                    GPA {formatGpaValue(semesterGroup.summary.gpa)} · {semesterGroup.summary.totalCredits} tin chi
+                  </Text>
+                </View>
+
+                {semesterGroup.grades.map((grade) => (
+                  <View
+                    key={grade.id}
+                    style={[
+                      styles.gradeCard,
+                      {
+                        backgroundColor: theme.colors.surfaceSubtle,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>{grade.course.name}</Text>
+                    <Text style={[styles.body, { color: theme.colors.textMuted }]}>
+                      {grade.course.code} · {grade.course.credits} tin chi
+                    </Text>
+                    <Text style={[styles.gradeScore, { color: theme.colors.primary }]}>
+                      {grade.isExempt
+                        ? `Mien · +${grade.earnedCredits ?? 0} tin chi`
+                        : `${grade.totalScore ?? '--'} / 10`}
+                    </Text>
+                  </View>
+                ))}
               </View>
             ))}
           </View>
         ) : (
           <EmptyState
             icon="bar-chart-outline"
-            title="Chưa có dữ liệu điểm"
-            description="Bảng điểm sẽ hiển thị khi hệ thống có dữ liệu."
+            title="Chua co du lieu diem"
+            description="Bang diem se hien thi khi he thong co du lieu."
           />
         )}
       </SectionCard>
@@ -254,6 +275,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   column: {
+    gap: 12,
+  },
+  semesterBlock: {
     gap: 12,
   },
   gpaValue: {
