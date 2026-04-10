@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, View } from 'react-native';
@@ -26,7 +27,29 @@ import {
   isLecturerRole,
 } from '@/utils/app';
 
+const CAMPUS_MAP_GUIDE = [
+  {
+    id: 'start',
+    icon: 'pin-outline',
+    label: 'Điểm bắt đầu',
+    value: 'Cổng trước UIT',
+  },
+  {
+    id: 'study-zone',
+    icon: 'school-outline',
+    label: 'Khu học tập',
+    value: 'Giảng đường nhà A, thư viện nhà E',
+  },
+  {
+    id: 'controls',
+    icon: 'compass-outline',
+    label: 'Điều hướng',
+    value: 'Danh sách scene, nút xoay và thu phóng',
+  },
+] as const;
+
 export default function ServiceDetailScreen() {
+  const theme = useAppTheme();
   const role = useAuthStore((state) => state.user?.role);
   const router = useRouter();
   const params = useLocalSearchParams<{ service?: string }>();
@@ -76,6 +99,124 @@ export default function ServiceDetailScreen() {
             overview={gradesQuery.data?.overview ?? null}
             semesters={gradesQuery.data?.semesters ?? []}
           />
+        </ContentStack>
+      </Screen>
+    );
+  }
+
+  if (service.id === 'campus-map') {
+    return (
+      <Screen>
+        <TopHero
+          eyebrow="Bản đồ khuôn viên"
+          title={service.title}
+          subtitle={service.description}
+          badge={{
+            label: getSupportStateLabel(service.supportState),
+            tone: getSupportStateTone(service.supportState),
+          }}
+        />
+
+        <ContentStack narrow overlapHero={false}>
+          <SectionCard
+            title="Tổng quan dịch vụ"
+            subtitle="Hỗ trợ tham quan khuôn viên UIT bằng mô hình 360 trực tiếp trong ứng dụng."
+          >
+            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+              Dịch vụ cho phép tham quan các khu vực chính của khuôn viên UIT mà không cần chuyển sang trình duyệt
+              ngoài.
+            </Text>
+            <View
+              style={[
+                styles.mapMetaPanel,
+                {
+                  backgroundColor: theme.colors.primarySurface,
+                  borderColor: theme.colors.primaryMuted,
+                },
+              ]}
+            >
+              <View style={styles.mapMetaRow}>
+                <Text
+                  style={[
+                    styles.mapMetaLabel,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
+                  Nguồn dữ liệu
+                </Text>
+                <Text
+                  style={[
+                    styles.mapMetaValue,
+                    { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                  ]}
+                >
+                  UIT Tour 360
+                </Text>
+              </View>
+              <View style={[styles.mapMetaDivider, { backgroundColor: theme.colors.primary }]} />
+              <Text
+                style={[
+                  styles.mapMetaNote,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                ]}
+              >
+                Nội dung hiển thị hoàn toàn trong app.
+              </Text>
+            </View>
+          </SectionCard>
+
+          <SectionCard
+            title="Hướng dẫn nhanh"
+            subtitle="Các bước đề xuất để bắt đầu tham quan."
+          >
+            <View style={styles.mapGuideColumn}>
+              {CAMPUS_MAP_GUIDE.map((item) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.mapGuideItem,
+                    {
+                      backgroundColor: theme.colors.surfaceSubtle,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.mapGuideIconWrap,
+                      {
+                        backgroundColor: theme.colors.infoSurface,
+                        borderColor: theme.colors.info,
+                      },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={18} color={theme.colors.info} />
+                  </View>
+                  <View style={styles.mapGuideTextWrap}>
+                    <Text
+                      style={[
+                        styles.mapGuideLabel,
+                        { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.mapGuideValue,
+                        { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                      ]}
+                    >
+                      {item.value}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </SectionCard>
+
+          <PrimaryButton label="Mở tour 3D UIT" onPress={() => router.push('/services/campus-map/view')} />
+          <SecondaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
         </ContentStack>
       </Screen>
     );
@@ -275,6 +416,66 @@ const styles = StyleSheet.create({
   },
   column: {
     gap: 12,
+  },
+  mapMetaPanel: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  mapMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapMetaLabel: {
+    fontSize: 12,
+  },
+  mapMetaValue: {
+    fontSize: 14,
+  },
+  mapMetaDivider: {
+    height: 1,
+    opacity: 0.24,
+  },
+  mapMetaNote: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  mapGuideColumn: {
+    gap: 10,
+  },
+  mapGuideItem: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapGuideIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapGuideTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  mapGuideLabel: {
+    fontSize: 12,
+  },
+  mapGuideValue: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   semesterBlock: {
     gap: 12,

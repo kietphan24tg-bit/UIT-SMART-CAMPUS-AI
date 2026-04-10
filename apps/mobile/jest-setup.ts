@@ -54,6 +54,17 @@ jest.mock('expo-image', () => {
   };
 });
 
+jest.mock('react-native-webview', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    WebView: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(View, { ...props, ref }),
+    ),
+  };
+});
+
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn().mockResolvedValue(undefined),

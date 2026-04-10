@@ -53,6 +53,7 @@ export default function RootLayout() {
         <Stack.Screen name="operations/[task]" />
         <Stack.Screen name="parking/[task]" />
         <Stack.Screen name="services/[service]" />
+        <Stack.Screen name="services/campus-map/view" />
         <Stack.Screen name="alerts/[id]" />
         <Stack.Screen name="settings/index" />
         <Stack.Screen name="settings/[task]" />
