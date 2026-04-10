@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, EmptyState, Screen, SectionCard, StatusBadge, TopHero } from '@/components/ui';
+import { ContentStack, EmptyState, Screen, SectionCard, TopHero } from '@/components/ui';
 import { scheduleApi } from '@/services/api/schedule';
 import { useAppTheme } from '@/theme';
 import type { ScheduleRecord } from '@/types/app-data';
@@ -19,6 +19,10 @@ const SEGMENT_OPTIONS: Array<{ key: SegmentKey; label: string }> = [
 
 function getScheduleRoomText(room?: string | null) {
   return room ? `Phòng ${room}` : 'Chưa có phòng';
+}
+
+function getClassMetaText(item: ScheduleRecord) {
+  return `${item.classCode} · ${getScheduleRoomText(item.room)}`;
 }
 
 function getPeriodText(item: ScheduleRecord) {
@@ -168,11 +172,16 @@ export default function SemesterScheduleDetailScreen() {
           </SectionCard>
         ) : groupedEntries.length > 0 ? (
           groupedEntries.map(([day, items]) => (
-            <SectionCard
-              key={day}
-              title={getDayLabel(Number(day))}
-              variant="outlined"
-            >
+            <View key={day} style={styles.daySection}>
+              <Text
+                style={[
+                  styles.dayHeading,
+                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                ]}
+              >
+                {getDayLabel(Number(day)).toUpperCase()}
+              </Text>
+
               <View style={styles.sessionList}>
                 {items.map((item) => (
                   <View
@@ -188,22 +197,35 @@ export default function SemesterScheduleDetailScreen() {
                     <View style={[styles.sessionBar, { backgroundColor: theme.colors.primary }]} />
                     <View style={styles.sessionBody}>
                       <View style={styles.sessionHeader}>
-                        <Text
-                          style={[
-                            styles.sessionTitle,
-                            { color: theme.colors.text, fontFamily: theme.fonts.bold },
-                          ]}
-                        >
-                          {item.course.name}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.sessionTime,
-                            { color: theme.colors.primary, fontFamily: theme.fonts.bold },
-                          ]}
-                        >
-                          {item.startTime} - {item.endTime}
-                        </Text>
+                        <View style={styles.sessionHeaderMain}>
+                          <Text
+                            style={[
+                              styles.sessionTitle,
+                              { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                            ]}
+                          >
+                            {item.course.name}
+                          </Text>
+                        </View>
+
+                        <View style={styles.sessionTimeBlock}>
+                          <Text
+                            style={[
+                              styles.sessionTime,
+                              { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                            ]}
+                          >
+                            {item.startTime}-{item.endTime}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.sessionPeriodText,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                            ]}
+                          >
+                            {getPeriodText(item)}
+                          </Text>
+                        </View>
                       </View>
 
                       <Text
@@ -211,30 +233,33 @@ export default function SemesterScheduleDetailScreen() {
                           styles.sessionMeta,
                           { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                         ]}
+                        numberOfLines={1}
                       >
-                        {item.classCode} · {getScheduleRoomText(item.room)}
+                        {getClassMetaText(item)}
                       </Text>
                       <Text
                         style={[
                           styles.sessionMeta,
                           { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                         ]}
+                        numberOfLines={1}
                       >
                         {item.instructor ?? 'Chưa cập nhật giảng viên'}
                       </Text>
 
-                      <View style={styles.sessionFooter}>
-                        <StatusBadge label={getPeriodText(item)} tone="neutral" />
-                        <StatusBadge
-                          label={item.course.code}
-                          tone={item.sessionType === 'daytime' ? 'primary' : 'info'}
-                        />
-                      </View>
+                      <Text
+                        style={[
+                          styles.sessionCode,
+                          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                        ]}
+                      >
+                        {item.course.code}
+                      </Text>
                     </View>
                   </View>
                 ))}
               </View>
-            </SectionCard>
+            </View>
           ))
         ) : (
           <EmptyState
@@ -351,10 +376,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sessionList: {
-    gap: 10,
+    gap: 8,
+  },
+  daySection: {
+    gap: 8,
+  },
+  dayHeading: {
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.8,
   },
   sessionCard: {
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
@@ -364,30 +397,45 @@ const styles = StyleSheet.create({
   },
   sessionBody: {
     flex: 1,
-    padding: 14,
-    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 2,
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
+  },
+  sessionHeaderMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sessionTimeBlock: {
+    alignItems: 'flex-end',
+    gap: 0,
+    minWidth: 88,
   },
   sessionTitle: {
-    flex: 1,
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 20,
   },
   sessionTime: {
-    fontSize: 14,
-  },
-  sessionMeta: {
     fontSize: 13,
     lineHeight: 18,
   },
-  sessionFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
+  sessionMeta: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  sessionPeriodText: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'right',
+  },
+  sessionCode: {
+    fontSize: 11,
+    lineHeight: 14,
+    marginTop: 2,
   },
 });

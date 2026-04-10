@@ -1,1 +1,8 @@
 export { Colors } from './colors';
+export {
+  getStudentSemesterGradesById,
+  getStudentSemesterScheduleById,
+  STUDENT_GRADES_SUMMARY,
+  STUDENT_SEMESTER_GRADES,
+  STUDENT_SEMESTER_SCHEDULES,
+} from './student-academic-data';

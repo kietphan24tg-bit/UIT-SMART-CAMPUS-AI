@@ -12,8 +12,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { useAuthStore } from '@/stores/auth-store';
-
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
@@ -26,10 +24,7 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const hydrate = useAuthStore((s) => s.hydrate);
   const colorScheme = useColorScheme();
-  const [authReady, setAuthReady] = useState(false);
   const [fontsLoaded] = useFonts({
     BeVietnamPro_400Regular,
     BeVietnamPro_500Medium,
@@ -38,20 +33,12 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    hydrate()
-      .catch(() => undefined)
-      .finally(() => {
-        setAuthReady(true);
-      });
-  }, [hydrate]);
-
-  useEffect(() => {
-    if (authReady && fontsLoaded) {
+    if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [authReady, fontsLoaded]);
+  }, [fontsLoaded]);
 
-  if (!authReady || !fontsLoaded) {
+  if (!fontsLoaded) {
     return null;
   }
 
@@ -59,11 +46,8 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          <Stack.Screen name="(tabs)" />
-        ) : (
-          <Stack.Screen name="(auth)" />
-        )}
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" />
         <Stack.Screen name="schedule/semester/[id]" />
         <Stack.Screen name="schedule/[task]" />
         <Stack.Screen name="operations/[task]" />

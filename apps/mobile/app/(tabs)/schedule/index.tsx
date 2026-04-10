@@ -1,8 +1,8 @@
+import { MetricGrid } from '@/components/tasks';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { MetricGrid } from '@/components/tasks';
 import {
   ContentStack,
   EmptyState,
@@ -19,6 +19,8 @@ import type { FireAlertRecord, ScheduleRecord } from '@/types/app-data';
 import {
   formatDateTime,
   getDayLabel,
+  getDayLabelShort,
+  getNextClass,
   getRoleLabel,
   getTelemetryHealthLabel,
   getTodayDayOfWeek,
@@ -35,12 +37,31 @@ function getScheduleInstructorLabel(instructor?: string | null) {
   return instructor ?? 'Chưa cập nhật giảng viên';
 }
 
+function getClassMetaText(item: ScheduleRecord) {
+  return `${item.classCode} · ${getScheduleRoomLabel(item.room)}`;
+}
+
 function getPeriodText(item: ScheduleRecord) {
   if (typeof item.startPeriod === 'number' && typeof item.endPeriod === 'number') {
     return `Tiết ${item.startPeriod}-${item.endPeriod}`;
   }
 
   return 'Chưa có tiết';
+}
+
+function getSemesterStatusText(isCurrent: boolean) {
+  return isCurrent ? 'Đang học' : 'Đã kết thúc';
+}
+
+function getNextOccurrence(item: ScheduleRecord) {
+  const now = new Date();
+  const jsDay = now.getDay();
+  const today = jsDay === 0 ? 7 : jsDay;
+  const delta = (item.dayOfWeek + 7 - today) % 7;
+  const date = new Date(now);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + delta);
+  return date;
 }
 
 export default function ScheduleScreen() {
@@ -299,39 +320,10 @@ export default function ScheduleScreen() {
     (item) => item.id === scheduleState.resolvedSemesterId,
   );
   const groupedSchedule = groupScheduleByDay(scheduleState.schedule);
+  const nextClass = getNextClass(scheduleState.schedule);
   const todayScheduleCount = scheduleState.schedule.filter(
     (item: ScheduleRecord) => item.dayOfWeek === getTodayDayOfWeek(),
   ).length;
-
-  const scheduleMetrics = [
-    {
-      label: 'Trong tuần',
-      value: `${scheduleState.schedule.length}`,
-      helper: isLecturer ? 'Buổi dạy đã có lịch' : 'Buổi học đã có lịch',
-      tone: 'info' as const,
-    },
-    {
-      label: 'Hôm nay',
-      value: `${todayScheduleCount}`,
-      helper: isLecturer ? 'Buổi dạy hôm nay' : 'Buổi học hôm nay',
-      tone: 'success' as const,
-    },
-    {
-      label: 'Học kỳ',
-      value: selectedSemester?.name ?? '--',
-      helper: 'Học kỳ hiện tại',
-      tone: 'primary' as const,
-    },
-    {
-      label: 'Tiếp theo',
-      value: scheduleState.schedule[0]?.startTime ?? '--',
-      helper:
-        scheduleState.schedule[0]?.classCode ??
-        scheduleState.schedule[0]?.course.code ??
-        'Chưa có dữ liệu',
-      tone: 'warning' as const,
-    },
-  ];
 
   return (
     <Screen
@@ -356,17 +348,15 @@ export default function ScheduleScreen() {
       />
 
       <ContentStack>
-        <MetricGrid items={scheduleMetrics} />
-
         <SectionCard title="Học kỳ" subtitle="Chọn học kỳ để xem lịch.">
-          <View style={styles.chips}>
+          <View style={styles.semesterGrid}>
             {scheduleState.semesters.map((semester) => (
               <Pressable
                 key={semester.id}
                 accessibilityRole="button"
                 onPress={() => router.push(`/schedule/semester/${semester.id}` as never)}
                 style={[
-                  styles.chip,
+                  styles.semesterCard,
                   {
                     backgroundColor: semester.isCurrent
                       ? theme.colors.primarySurface
@@ -377,13 +367,25 @@ export default function ScheduleScreen() {
               >
                 <Text
                   style={[
-                    styles.chipLabel,
+                    styles.semesterTitle,
                     {
-                      color: semester.isCurrent ? theme.colors.primary : theme.colors.textMuted,
+                      color: semester.isCurrent ? theme.colors.primary : theme.colors.text,
+                      fontFamily: theme.fonts.bold,
                     },
                   ]}
                 >
                   {semester.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.semesterStatus,
+                    {
+                      color: semester.isCurrent ? theme.colors.primary : theme.colors.textMuted,
+                      fontFamily: theme.fonts.medium,
+                    },
+                  ]}
+                >
+                  {getSemesterStatusText(semester.isCurrent)}
                 </Text>
               </Pressable>
             ))}
@@ -394,19 +396,135 @@ export default function ScheduleScreen() {
           title={isLecturer ? 'Buổi dạy gần nhất' : 'Buổi học gần nhất'}
           subtitle="Thông tin ưu tiên hiển thị đầu tiên."
         >
-          {scheduleState.schedule[0] ? (
-            <View style={styles.column}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-                {scheduleState.schedule[0].course.name}
-              </Text>
-              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                {getDayLabel(scheduleState.schedule[0].dayOfWeek)} ·{' '}
-                {scheduleState.schedule[0].startTime} - {scheduleState.schedule[0].endTime} ·{' '}
-                {getScheduleRoomLabel(scheduleState.schedule[0].room)}
-              </Text>
-              <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                {getScheduleInstructorLabel(scheduleState.schedule[0].instructor)}
-              </Text>
+          {nextClass ? (
+            <View
+              style={[
+                styles.nextClassCard,
+                {
+                  backgroundColor: theme.colors.surfaceSubtle,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.nextClassDate,
+                  {
+                    backgroundColor: theme.colors.primarySurface,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.nextClassDateNumber,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                  ]}
+                >
+                  {getNextOccurrence(nextClass).getDate()}
+                </Text>
+                <Text
+                  style={[
+                    styles.nextClassDateLabel,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
+                  {getDayLabelShort(nextClass.dayOfWeek)}
+                </Text>
+              </View>
+
+              <View style={styles.nextClassBody}>
+                <Text
+                  style={[
+                    styles.nextClassTitle,
+                    { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                  ]}
+                >
+                  {nextClass.course.name}
+                </Text>
+
+                <View style={styles.nextClassMetaRow}>
+                  <View
+                    style={[
+                      styles.nextClassMetaChip,
+                      { backgroundColor: theme.colors.primarySurface },
+                    ]}
+                  >
+                    <Ionicons name="time-outline" size={14} color={theme.colors.primary} />
+                    <Text
+                      style={[
+                        styles.nextClassMetaText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
+                      {nextClass.startTime} - {nextClass.endTime}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.nextClassMetaChip,
+                      { backgroundColor: theme.colors.primarySurface },
+                    ]}
+                  >
+                    <Ionicons name="location-outline" size={14} color={theme.colors.primary} />
+                    <Text
+                      style={[
+                        styles.nextClassMetaText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {getScheduleRoomLabel(nextClass.room)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.nextClassMetaChip,
+                    styles.nextClassInstructorChip,
+                    { backgroundColor: theme.colors.primarySurface },
+                  ]}
+                >
+                  <Ionicons name="person-outline" size={14} color={theme.colors.primary} />
+                  <Text
+                    style={[
+                      styles.nextClassMetaText,
+                      { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {getScheduleInstructorLabel(nextClass.instructor)}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.nextClassStatus,
+                    {
+                      backgroundColor: theme.colors.successSurface ?? theme.colors.primarySurface,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.nextClassStatusDot,
+                      { backgroundColor: theme.colors.success ?? theme.colors.primary },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.nextClassStatusText,
+                      {
+                        color: theme.colors.success ?? theme.colors.primary,
+                        fontFamily: theme.fonts.semibold,
+                      },
+                    ]}
+                  >
+                    {`${getPeriodText(nextClass)} · ${todayScheduleCount > 0 ? 'Đang diễn ra' : 'Sắp diễn ra'}`}
+                  </Text>
+                </View>
+              </View>
             </View>
           ) : (
             <EmptyState
@@ -455,7 +573,15 @@ export default function ScheduleScreen() {
           {Object.keys(groupedSchedule).length > 0 ? (
             <View style={styles.column}>
               {Object.entries(groupedSchedule).map(([day, items]) => (
-                <SectionCard key={day} title={getDayLabel(Number(day))} variant="outlined">
+                <View key={day} style={styles.daySection}>
+                  <Text
+                    style={[
+                      styles.dayHeading,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
+                    {getDayLabel(Number(day)).toUpperCase()}
+                  </Text>
                   <View style={styles.sessionList}>
                     {items.map((item) => (
                       <View
@@ -471,22 +597,35 @@ export default function ScheduleScreen() {
                         <View style={[styles.sessionBar, { backgroundColor: theme.colors.primary }]} />
                         <View style={styles.sessionBody}>
                           <View style={styles.sessionHeader}>
-                            <Text
-                              style={[
-                                styles.sessionTitle,
-                                { color: theme.colors.text, fontFamily: theme.fonts.bold },
-                              ]}
-                            >
-                              {item.course.name}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.sessionTime,
-                                { color: theme.colors.primary, fontFamily: theme.fonts.bold },
-                              ]}
-                            >
-                              {item.startTime} - {item.endTime}
-                            </Text>
+                            <View style={styles.sessionHeaderMain}>
+                              <Text
+                                style={[
+                                  styles.sessionTitle,
+                                  { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                                ]}
+                              >
+                                {item.course.name}
+                              </Text>
+                            </View>
+
+                            <View style={styles.sessionTimeBlock}>
+                              <Text
+                                style={[
+                                  styles.sessionTime,
+                                  { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                                ]}
+                              >
+                                {item.startTime}-{item.endTime}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.sessionPeriodText,
+                                  { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                                ]}
+                              >
+                                {getPeriodText(item)}
+                              </Text>
+                            </View>
                           </View>
 
                           <Text
@@ -494,27 +633,33 @@ export default function ScheduleScreen() {
                               styles.sessionMeta,
                               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                             ]}
+                            numberOfLines={1}
                           >
-                            {item.classCode} · {getScheduleRoomLabel(item.room)}
+                            {getClassMetaText(item)}
                           </Text>
                           <Text
                             style={[
                               styles.sessionMeta,
                               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                             ]}
+                            numberOfLines={1}
                           >
                             {getScheduleInstructorLabel(item.instructor)}
                           </Text>
 
-                          <View style={styles.sessionFooter}>
-                            <StatusBadge label={getPeriodText(item)} tone="neutral" />
-                            <StatusBadge label={item.course.code} tone="primary" />
-                          </View>
+                          <Text
+                            style={[
+                              styles.sessionCode,
+                              { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                            ]}
+                          >
+                            {item.course.code}
+                          </Text>
                         </View>
                       </View>
                     ))}
                   </View>
-                </SectionCard>
+                </View>
               ))}
             </View>
           ) : (
@@ -581,20 +726,28 @@ function NavigationRow({
 }
 
 const styles = StyleSheet.create({
-  chips: {
+  semesterGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
-  chip: {
-    borderRadius: 999,
+  semesterCard: {
+    width: '48%',
+    minHeight: 64,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: 'center',
   },
-  chipLabel: {
+  semesterTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  semesterStatus: {
+    marginTop: 4,
     fontSize: 13,
-    fontWeight: '700',
+    lineHeight: 18,
   },
   column: {
     gap: 10,
@@ -636,6 +789,77 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  nextClassCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 16,
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  nextClassDate: {
+    width: 72,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextClassDateNumber: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  nextClassDateLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  nextClassBody: {
+    flex: 1,
+    gap: 10,
+  },
+  nextClassTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  nextClassMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  nextClassMetaChip: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nextClassInstructorChip: {
+    alignSelf: 'flex-start',
+  },
+  nextClassMetaText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  nextClassStatus: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nextClassStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  nextClassStatusText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   inlineTitle: {
     flex: 1,
     fontSize: 15,
@@ -646,10 +870,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   sessionList: {
-    gap: 10,
+    gap: 8,
+  },
+  daySection: {
+    gap: 8,
+  },
+  dayHeading: {
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.8,
   },
   sessionCard: {
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
@@ -659,30 +891,45 @@ const styles = StyleSheet.create({
   },
   sessionBody: {
     flex: 1,
-    padding: 14,
-    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 2,
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
+  },
+  sessionHeaderMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sessionTimeBlock: {
+    alignItems: 'flex-end',
+    gap: 0,
+    minWidth: 88,
   },
   sessionTitle: {
-    flex: 1,
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 20,
   },
   sessionTime: {
-    fontSize: 14,
-  },
-  sessionMeta: {
     fontSize: 13,
     lineHeight: 18,
   },
-  sessionFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
+  sessionMeta: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  sessionPeriodText: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'right',
+  },
+  sessionCode: {
+    fontSize: 11,
+    lineHeight: 14,
+    marginTop: 2,
   },
 });
