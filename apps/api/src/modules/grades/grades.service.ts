@@ -91,7 +91,7 @@ export class GradesService {
       gpa: totalCredits > 0 ? Math.round((totalPoints / totalCredits) * 100) / 100 : 0,
       totalCredits,
       totalEarnedCredits,
-      totalCourses: grades.length,
+      totalCourses: gradedCourses.length,
       totalSemesters: 1,
     };
   }

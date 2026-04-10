@@ -52,9 +52,9 @@ export default function ServiceDetailScreen() {
       <Screen>
         <ContentStack>
           <EmptyState
-            title="Dich vu khong ton tai"
-            description="Muc nay chua co trong Services Hub."
-            actionLabel="Quay lai dich vu"
+            title="Dịch vụ không tồn tại"
+            description="Mục này chưa có trong Services Hub."
+            actionLabel="Quay lại dịch vụ"
             onActionPress={() => router.back()}
           />
         </ContentStack>
@@ -66,13 +66,9 @@ export default function ServiceDetailScreen() {
     return (
       <Screen>
         <TopHero
-          eyebrow="Dich vu hoc vu"
+          eyebrow="Dịch vụ học vụ"
           title={service.title}
           subtitle={service.description}
-          badge={{
-            label: getSupportStateLabel(service.supportState),
-            tone: getSupportStateTone(service.supportState),
-          }}
         />
         <ContentStack narrow overlapHero={false}>
           <GradesPanel
@@ -89,7 +85,7 @@ export default function ServiceDetailScreen() {
     return (
       <Screen>
         <TopHero
-          eyebrow="Dich vu quan tri"
+          eyebrow="Dịch vụ quản trị"
           title={service.title}
           subtitle={service.description}
           badge={{
@@ -99,23 +95,23 @@ export default function ServiceDetailScreen() {
         />
 
         <ContentStack narrow overlapHero={false}>
-          <SectionCard title="Trang thai hien tai" subtitle={service.summary}>
+          <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
             <Text style={styles.body}>
-              Ung dung dang tap trung vao cac tac vu quan tri co du lieu that: parking, telemetry,
-              fire alert va thong bao.
+              Ứng dụng đang tập trung vào các tác vụ quản trị có dữ liệu thật: parking, telemetry,
+              fire alert và thông báo.
             </Text>
           </SectionCard>
 
-          <SectionCard title="Khu vuc dang ho tro" subtitle="Chi hien thi loi vao co du lieu that.">
+          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
             <View style={styles.column}>
-              <InfoRow label="Van hanh campus" value="Parking, telemetry, fire alert" />
-              <InfoRow label="Thong bao" value="Danh sach, chua doc, danh dau da doc" />
-              <InfoRow label="Ho so" value="Xem va cap nhat thong tin ca nhan" />
+              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
+              <InfoRow label="Thông báo" value="Danh sách, chưa đọc, đánh dấu đã đọc" />
+              <InfoRow label="Hồ sơ" value="Xem và cập nhật thông tin cá nhân" />
             </View>
           </SectionCard>
 
-          <PrimaryButton label="Mo van hanh campus" onPress={() => router.push('/schedule')} />
-          <SecondaryButton label="Mo trung tam canh bao" onPress={() => router.push('/alerts')} />
+          <PrimaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
+          <SecondaryButton label="Mở trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
           <SecondaryButton label="Mo parking + IoT" onPress={() => router.push('/parking')} />
         </ContentStack>
       </Screen>
@@ -125,7 +121,7 @@ export default function ServiceDetailScreen() {
   return (
     <Screen>
       <TopHero
-        eyebrow="Dich vu campus"
+        eyebrow="Dịch vụ campus"
         title={service.title}
         subtitle={service.description}
         badge={{
@@ -135,39 +131,39 @@ export default function ServiceDetailScreen() {
       />
 
       <ContentStack narrow={service.id === 'chatbot' || service.id === 'library'} overlapHero={false}>
-        <SectionCard title="Trang thai hien tai" subtitle={service.summary}>
+        <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
           <Text style={styles.body}>
-            {service.disabledReason || 'Dich vu nay dang hoat dong trong pham vi hien tai cua ung dung.'}
+            {service.disabledReason || 'Dịch vụ này đang hoạt động trong phạm vi hiện tại của ứng dụng.'}
           </Text>
         </SectionCard>
 
-        <SectionCard title="Trang thai dich vu" subtitle="Thong tin nhanh ve muc do san sang.">
+        <SectionCard title="Trạng thái dịch vụ" subtitle="Thông tin nhanh về mức độ sẵn sàng.">
           <View style={styles.column}>
-            <InfoRow label="Trang thai" value={getSupportStateLabel(service.supportState)} />
+            <InfoRow label="Trạng thái" value={getSupportStateLabel(service.supportState)} />
             <InfoRow
-              label="Goi y"
+              label="Gợi ý"
               value={
                 service.supportState === 'live'
-                  ? 'Ban co the su dung ngay.'
+                  ? 'Bạn có thể sử dụng ngay.'
                   : service.supportState === 'partial'
-                    ? 'Mot so hang muc se duoc mo dan.'
-                    : 'Sap trien khai.'
+                    ? 'Một số hạng mục sẽ được mở dần.'
+                    : 'Sắp triển khai.'
               }
             />
           </View>
         </SectionCard>
 
-        <SectionCard title="Pham vi hien co" subtitle="Thong tin ngan gon theo trang thai dich vu.">
+        <SectionCard title="Phạm vi hiện có" subtitle="Thông tin ngắn gọn theo trạng thái dịch vụ.">
           <Text style={styles.body}>
             {service.supportState === 'unsupported'
-              ? 'Tam thoi chua kha dung trong phien ban hien tai.'
-              : 'Mot phan dich vu da san sang.'}
+              ? 'Tạm thời chưa khả dụng trong phiên bản hiện tại.'
+              : 'Một phần dịch vụ đã sẵn sàng.'}
           </Text>
         </SectionCard>
 
-        <PrimaryButton label="Quay lai danh sach dich vu" onPress={() => router.replace('/services')} />
+        <PrimaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
         <SecondaryButton
-          label="Lien he ho tro"
+          label="Liên hệ hỗ trợ"
           onPress={() =>
             void Linking.openURL(
               'mailto:support@uit.edu.vn?subject=Ho%20tro%20dich%20vu%20UIT%20Smart%20Campus',
@@ -192,7 +188,10 @@ function GradesPanel({
 
   return (
     <>
-      <SectionCard title="Tong quan GPA" subtitle="Tom tat 4 hoc ky va ket qua tich luy.">
+      <SectionCard
+        title="Tổng quan GPA"
+        subtitle="Điểm trung bình tích lũy toàn khóa."
+      >
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={24} width="35%" />
@@ -204,16 +203,16 @@ function GradesPanel({
               {formatGpaValue(overview?.gpa)}
             </Text>
             <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-              {overview?.totalCredits ?? 0} tin chi tinh GPA · {overview?.totalCourses ?? 0} hoc phan
-            </Text>
-            <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-              Tich luy {overview?.totalEarnedCredits ?? 0} tin chi qua {overview?.totalSemesters ?? 0} hoc ky
+              Tích lũy {overview?.totalEarnedCredits ?? 0} tín chỉ qua {overview?.totalSemesters ?? 0} học kỳ
             </Text>
           </View>
         )}
       </SectionCard>
 
-      <SectionCard title="Bang diem theo hoc ky" subtitle="Moi hoc ky co GPA rieng va danh sach hoc phan.">
+      <SectionCard
+        title="Bảng điểm theo học kỳ"
+        subtitle="Mỗi học kỳ hiển thị GPA và các học phần đã có điểm."
+      >
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={96} />
@@ -228,7 +227,7 @@ function GradesPanel({
                     {semesterGroup.name}
                   </Text>
                   <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                    GPA {formatGpaValue(semesterGroup.summary.gpa)} · {semesterGroup.summary.totalCredits} tin chi
+                    GPA {formatGpaValue(semesterGroup.summary.gpa)} · {semesterGroup.summary.totalCredits} tín chỉ
                   </Text>
                 </View>
 
@@ -245,11 +244,11 @@ function GradesPanel({
                   >
                     <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>{grade.course.name}</Text>
                     <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                      {grade.course.code} · {grade.course.credits} tin chi
+                      {grade.course.code} · {grade.course.credits} tín chỉ
                     </Text>
                     <Text style={[styles.gradeScore, { color: theme.colors.primary }]}>
                       {grade.isExempt
-                        ? `Mien · +${grade.earnedCredits ?? 0} tin chi`
+                        ? `Miễn · +${grade.earnedCredits ?? 0} tín chỉ`
                         : `${grade.totalScore ?? '--'} / 10`}
                     </Text>
                   </View>
@@ -260,8 +259,8 @@ function GradesPanel({
         ) : (
           <EmptyState
             icon="bar-chart-outline"
-            title="Chua co du lieu diem"
-            description="Bang diem se hien thi khi he thong co du lieu."
+            title="Chưa có dữ liệu điểm"
+            description="Bảng điểm sẽ hiển thị khi hệ thống có dữ liệu."
           />
         )}
       </SectionCard>

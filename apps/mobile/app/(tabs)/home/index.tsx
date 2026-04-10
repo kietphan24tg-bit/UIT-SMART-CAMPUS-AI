@@ -130,7 +130,12 @@ export default function HomeScreen() {
             subtitle="Tóm tắt parking, gateway và cảnh báo."
             variant="elevated"
           >
-            <View style={styles.sectionStack}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Mở trang Điểm và GPA"
+              onPress={() => router.push('/services/grades')}
+              style={({ pressed }) => [styles.sectionStack, pressed ? { opacity: 0.86 } : null]}
+            >
               <MetricGrid
                 items={[
                   {
@@ -178,7 +183,7 @@ export default function HomeScreen() {
                   onPress={() => router.push('/alerts')}
                 />
               </View>
-            </View>
+            </Pressable>
           </SectionCard>
         ) : (
           <SectionCard
@@ -333,6 +338,8 @@ export default function HomeScreen() {
           <SectionCard
             title="Kết quả học tập"
             subtitle="Xem nhanh GPA và số tín chỉ."
+            actionLabel="Xem GPA"
+            onActionPress={() => router.push('/services/grades')}
             variant="outlined"
           >
             <View style={styles.sectionStack}>

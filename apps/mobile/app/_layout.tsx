@@ -64,6 +64,7 @@ export default function RootLayout() {
         ) : (
           <Stack.Screen name="(auth)" />
         )}
+        <Stack.Screen name="schedule/semester/[id]" />
         <Stack.Screen name="schedule/[task]" />
         <Stack.Screen name="operations/[task]" />
         <Stack.Screen name="parking/[task]" />

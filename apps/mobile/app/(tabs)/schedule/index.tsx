@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { MetricGrid } from '@/components/tasks';
@@ -22,6 +21,7 @@ import {
   getDayLabel,
   getRoleLabel,
   getTelemetryHealthLabel,
+  getTodayDayOfWeek,
   groupScheduleByDay,
   isAdminRole,
   isLecturerRole,
@@ -35,16 +35,23 @@ function getScheduleInstructorLabel(instructor?: string | null) {
   return instructor ?? 'Chưa cập nhật giảng viên';
 }
 
+function getPeriodText(item: ScheduleRecord) {
+  if (typeof item.startPeriod === 'number' && typeof item.endPeriod === 'number') {
+    return `Tiết ${item.startPeriod}-${item.endPeriod}`;
+  }
+
+  return 'Chưa có tiết';
+}
+
 export default function ScheduleScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
-  const [selectedSemesterId, setSelectedSemesterId] = useState<string | undefined>(undefined);
 
   const isOperationsRole = isAdminRole(role);
   const isLecturer = isLecturerRole(role);
-  const scheduleState = useScheduleScreenData(selectedSemesterId);
+  const scheduleState = useScheduleScreenData();
   const operationsState = useOperationsScreenData();
 
   if (isOperationsRole) {
@@ -288,11 +295,13 @@ export default function ScheduleScreen() {
     );
   }
 
+  const selectedSemester = scheduleState.semesters.find(
+    (item) => item.id === scheduleState.resolvedSemesterId,
+  );
   const groupedSchedule = groupScheduleByDay(scheduleState.schedule);
-  const dayColumns = layout.isTablet
-    ? layout.getGridColumns({ minItemWidth: 280, gap: 12, maxColumns: 2 })
-    : 1;
-  const dayBlockWidth = layout.getGridItemWidth({ columns: dayColumns, gap: 12 });
+  const todayScheduleCount = scheduleState.schedule.filter(
+    (item: ScheduleRecord) => item.dayOfWeek === getTodayDayOfWeek(),
+  ).length;
 
   const scheduleMetrics = [
     {
@@ -303,16 +312,14 @@ export default function ScheduleScreen() {
     },
     {
       label: 'Hôm nay',
-      value: `${scheduleState.schedule.filter((item: ScheduleRecord) => item.dayOfWeek === currentDayOfWeek()).length}`,
+      value: `${todayScheduleCount}`,
       helper: isLecturer ? 'Buổi dạy hôm nay' : 'Buổi học hôm nay',
       tone: 'success' as const,
     },
     {
       label: 'Học kỳ',
-      value:
-        scheduleState.semesters.find((item) => item.id === scheduleState.resolvedSemesterId)
-          ?.name ?? '--',
-      helper: 'Bộ lọc hiện tại',
+      value: selectedSemester?.name ?? '--',
+      helper: 'Học kỳ hiện tại',
       tone: 'primary' as const,
     },
     {
@@ -351,23 +358,20 @@ export default function ScheduleScreen() {
       <ContentStack>
         <MetricGrid items={scheduleMetrics} />
 
-        <SectionCard title="Học kỳ" subtitle="Chọn học kỳ cần theo dõi.">
+        <SectionCard title="Học kỳ" subtitle="Chọn học kỳ để xem lịch.">
           <View style={styles.chips}>
             {scheduleState.semesters.map((semester) => (
               <Pressable
                 key={semester.id}
-                onPress={() => setSelectedSemesterId(semester.id)}
+                accessibilityRole="button"
+                onPress={() => router.push(`/schedule/semester/${semester.id}` as never)}
                 style={[
                   styles.chip,
                   {
-                    backgroundColor:
-                      scheduleState.resolvedSemesterId === semester.id
-                        ? theme.colors.primarySurface
-                        : theme.colors.surfaceSubtle,
-                    borderColor:
-                      scheduleState.resolvedSemesterId === semester.id
-                        ? theme.colors.primary
-                        : theme.colors.border,
+                    backgroundColor: semester.isCurrent
+                      ? theme.colors.primarySurface
+                      : theme.colors.surfaceSubtle,
+                    borderColor: semester.isCurrent ? theme.colors.primary : theme.colors.border,
                   },
                 ]}
               >
@@ -375,10 +379,7 @@ export default function ScheduleScreen() {
                   style={[
                     styles.chipLabel,
                     {
-                      color:
-                        scheduleState.resolvedSemesterId === semester.id
-                          ? theme.colors.primary
-                          : theme.colors.textMuted,
+                      color: semester.isCurrent ? theme.colors.primary : theme.colors.textMuted,
                     },
                   ]}
                 >
@@ -450,43 +451,77 @@ export default function ScheduleScreen() {
           </SectionCard>
         ) : null}
 
-        <SectionCard title="Theo ngày" subtitle="Gom lịch theo thứ để đọc nhanh.">
+        <SectionCard title="Theo ngày">
           {Object.keys(groupedSchedule).length > 0 ? (
-            <View style={styles.grid}>
+            <View style={styles.column}>
               {Object.entries(groupedSchedule).map(([day, items]) => (
-                <View
-                  key={day}
-                  style={[
-                    styles.dayBlock,
-                    { width: dayBlockWidth },
-                    {
-                      backgroundColor: theme.colors.surfaceSubtle,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-                    {getDayLabel(Number(day))}
-                  </Text>
-                  {items.map((item) => (
-                    <View key={item.id} style={styles.column}>
-                      <Text style={[styles.className, { color: theme.colors.text }]}>
-                        {item.course.name}
-                      </Text>
-                      <Text style={[styles.metaText, { color: theme.colors.textMuted }]}>
-                        {item.startTime} - {item.endTime} · {getScheduleRoomLabel(item.room)} ·{' '}
-                        {getScheduleInstructorLabel(item.instructor)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                <SectionCard key={day} title={getDayLabel(Number(day))} variant="outlined">
+                  <View style={styles.sessionList}>
+                    {items.map((item) => (
+                      <View
+                        key={item.id}
+                        style={[
+                          styles.sessionCard,
+                          {
+                            backgroundColor: theme.colors.surfaceSubtle,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.sessionBar, { backgroundColor: theme.colors.primary }]} />
+                        <View style={styles.sessionBody}>
+                          <View style={styles.sessionHeader}>
+                            <Text
+                              style={[
+                                styles.sessionTitle,
+                                { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                              ]}
+                            >
+                              {item.course.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.sessionTime,
+                                { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                              ]}
+                            >
+                              {item.startTime} - {item.endTime}
+                            </Text>
+                          </View>
+
+                          <Text
+                            style={[
+                              styles.sessionMeta,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                            ]}
+                          >
+                            {item.classCode} · {getScheduleRoomLabel(item.room)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.sessionMeta,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                            ]}
+                          >
+                            {getScheduleInstructorLabel(item.instructor)}
+                          </Text>
+
+                          <View style={styles.sessionFooter}>
+                            <StatusBadge label={getPeriodText(item)} tone="neutral" />
+                            <StatusBadge label={item.course.code} tone="primary" />
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </SectionCard>
               ))}
             </View>
           ) : (
             <EmptyState
               icon="albums-outline"
               title="Chưa có lịch học nào"
-              description="Danh sách sẽ xuất hiện khi có dữ liệu cho học kỳ đang chọn."
+              description="Danh sách sẽ xuất hiện khi có dữ liệu cho học kỳ hiện tại."
             />
           )}
         </SectionCard>
@@ -545,11 +580,6 @@ function NavigationRow({
   );
 }
 
-function currentDayOfWeek() {
-  const day = new Date().getDay();
-  return day === 0 ? 7 : day;
-}
-
 const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
@@ -568,17 +598,6 @@ const styles = StyleSheet.create({
   },
   column: {
     gap: 10,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  dayBlock: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
-    gap: 12,
   },
   inlineCard: {
     borderRadius: 18,
@@ -617,10 +636,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-  className: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   inlineTitle: {
     flex: 1,
     fontSize: 15,
@@ -629,5 +644,45 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  sessionList: {
+    gap: 10,
+  },
+  sessionCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  sessionBar: {
+    width: 6,
+  },
+  sessionBody: {
+    flex: 1,
+    padding: 14,
+    gap: 6,
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  sessionTitle: {
+    flex: 1,
+    fontSize: 16,
+  },
+  sessionTime: {
+    fontSize: 14,
+  },
+  sessionMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sessionFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
   },
 });

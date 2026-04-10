@@ -134,7 +134,7 @@ describe('GradesService', () => {
         gpa: 8.4,
         totalCredits: 7,
         totalEarnedCredits: 11,
-        totalCourses: 3,
+        totalCourses: 2,
         totalSemesters: 2,
       });
     });
