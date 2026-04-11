@@ -1,9 +1,9 @@
-import type { GPASummary, SemesterGradesRecord } from '@/types/app-data';
 import {
   getStudentSemesterGradesById,
   STUDENT_GRADES_SUMMARY,
   STUDENT_SEMESTER_GRADES,
 } from '@/constants/student-academic-data';
+import type { GPASummary, SemesterGradesRecord } from '@/types/app-data';
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

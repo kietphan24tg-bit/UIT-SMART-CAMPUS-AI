@@ -21,31 +21,22 @@ import type { DashboardSnapshot } from '@/types/app-data';
 import {
   formatDateTime,
   formatGpaValue,
-  getDashboardHeroSummary,
   getGreetingName,
   getRoleLabel,
   getRoleQuickActions,
-  isLecturerRole,
   getTelemetryHealthLabel,
   isAdminRole,
+  isLecturerRole,
 } from '@/utils/app';
 
-const ACTION_DESCRIPTIONS: Record<string, string> = {
-  schedule: 'Xem lịch học hoặc lịch dạy.',
-  grades: 'Theo dõi điểm và GPA theo học kỳ.',
-  alerts: 'Xem thông báo mới và cảnh báo.',
-  parking: 'Theo dõi chỗ trống và cảm biến.',
-  operations: 'Theo dõi vận hành campus.',
-  services: 'Mở trung tâm dịch vụ theo vai trò.',
+const QUICK_COPY: Record<string, string> = {
+  schedule: 'Lịch học.',
+  grades: 'Xem GPA.',
+  alerts: 'Cảnh báo.',
+  parking: 'Parking.',
+  operations: 'Vận hành.',
+  services: 'Dịch vụ.',
 };
-
-function getScheduleRoomLabel(room?: string | null) {
-  return room ? `Phòng ${room}` : 'Chưa cập nhật phòng';
-}
-
-function getScheduleInstructorLabel(instructor?: string | null) {
-  return instructor ?? 'Chưa cập nhật giảng viên';
-}
 
 export default function HomeScreen() {
   const theme = useAppTheme();
@@ -71,7 +62,6 @@ export default function HomeScreen() {
   const quickActionRows = Array.from({ length: Math.ceil(quickActions.length / 2) }, (_, index) =>
     quickActions.slice(index * 2, index * 2 + 2),
   );
-
   const healthTone =
     snapshot.telemetryHealth === 'fire-alert'
       ? 'danger'
@@ -92,11 +82,12 @@ export default function HomeScreen() {
       }
     >
       <TopHero
-        eyebrow="Trang chủ"
-        title={`Xin chào, ${getGreetingName(user)}!`}
-        subtitle={getDashboardHeroSummary(snapshot)}
+        eyebrow="Bảng điều khiển"
+        title={`Xin chào, ${getGreetingName(user)}`}
+        subtitle={getHomeSubtitle(snapshot, user?.role)}
         badge={{ label: getRoleLabel(user?.role), tone: 'info' }}
         showBrand
+        variant="accent"
         headerRight={
           <Pressable
             accessibilityRole="button"
@@ -114,7 +105,12 @@ export default function HomeScreen() {
             <Ionicons name="notifications-outline" size={20} color={theme.colors.textMuted} />
             {snapshot.unreadCount > 0 ? (
               <View style={[styles.bellBadge, { backgroundColor: theme.colors.primary }]}>
-                <Text style={[styles.bellBadgeText, { fontFamily: theme.fonts.bold }]}>
+                <Text
+                  style={[
+                    styles.bellBadgeText,
+                    { color: theme.colors.onPrimary, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
                   {snapshot.unreadCount > 9 ? '9+' : `${snapshot.unreadCount}`}
                 </Text>
               </View>
@@ -123,89 +119,234 @@ export default function HomeScreen() {
         }
       />
 
-      <ContentStack>
-        {isOperationsRole ? (
-          <SectionCard
-            title="Tổng quan vận hành"
-            subtitle="Tóm tắt parking, gateway và cảnh báo."
-            variant="elevated"
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Mở trang Điểm và GPA"
-              onPress={() => router.push('/services/grades')}
-              style={({ pressed }) => [styles.sectionStack, pressed ? { opacity: 0.86 } : null]}
-            >
-              <MetricGrid
-                items={[
-                  {
-                    label: 'Chỗ trống',
-                    value: snapshot.parking
-                      ? `${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots}`
-                      : '--',
-                    helper: 'A1-A4',
-                    tone: 'success',
-                  },
-                  {
-                    label: 'Phiên mở',
-                    value: `${snapshot.parking?.activeSessions ?? 0}`,
-                    helper: 'Đang gửi xe',
-                    tone: 'info',
-                  },
-                  {
-                    label: 'Chưa đọc',
-                    value: `${snapshot.unreadCount}`,
-                    helper: 'Cần theo dõi',
-                    tone: 'warning',
-                  },
-                  {
-                    label: 'Gateway',
-                    value: getTelemetryHealthLabel(snapshot.telemetryHealth),
-                    helper: 'Cảm biến',
-                    tone: healthTone,
-                  },
-                ]}
-                minItemWidth={156}
-              />
-
-              {shouldShowParkingHealth ? (
-                <ParkingHealthCallout
-                  state={snapshot.telemetryHealth}
-                  tone={healthTone}
-                  onPress={() => router.push('/parking')}
-                />
-              ) : null}
-
-              <View style={styles.opsButtons}>
-                <PrimaryButton label="Mở Parking" onPress={() => router.push('/parking')} />
-                <SecondaryButton
-                  label="Trung tâm cảnh báo"
-                  onPress={() => router.push('/alerts')}
-                />
-              </View>
-            </Pressable>
-          </SectionCard>
-        ) : (
-          <SectionCard
-            title="Buổi tiếp theo"
-            subtitle={`Hôm nay có ${snapshot.todayClasses.length} buổi trong lịch.`}
-            actionLabel="Xem lịch"
-            onActionPress={() => router.push('/schedule')}
-            variant="elevated"
-          >
-            {snapshot.nextClass ? (
-              <View style={styles.sectionStack}>
-                <View
-                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
-                >
-                  <View style={{ flex: 1 }}>
+      <ContentStack gap={16} overlapHero={false}>
+        <View style={styles.bentoGrid}>
+          <View style={styles.primaryColumn}>
+            {isOperationsRole ? (
+              <SectionCard
+                title="Tổng quan vận hành"
+                subtitle="Số liệu chính trong ngày."
+                variant="highlight"
+                tone="academic"
+                headerAccessory={
+                  <StatusBadge
+                    label={getTelemetryHealthLabel(snapshot.telemetryHealth)}
+                    tone={healthTone}
+                    size="sm"
+                  />
+                }
+              >
+                <View style={styles.sectionStack}>
+                  <MetricGrid
+                    items={[
+                      {
+                        label: 'Chỗ trống',
+                        value: snapshot.parking
+                          ? `${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots}`
+                          : '--',
+                        helper: 'Parking A1-A4',
+                        tone: 'success',
+                      },
+                      {
+                        label: 'Phiên mở',
+                        value: `${snapshot.parking?.activeSessions ?? 0}`,
+                        helper: 'Đang gửi xe',
+                        tone: 'info',
+                      },
+                      {
+                        label: 'Chưa đọc',
+                        value: `${snapshot.unreadCount}`,
+                        helper: 'Cần xem',
+                        tone: 'warning',
+                      },
+                      {
+                        label: 'Cảm biến',
+                        value: getTelemetryHealthLabel(snapshot.telemetryHealth),
+                        helper: 'Gateway',
+                        tone: healthTone,
+                      },
+                    ]}
+                    minItemWidth={132}
+                    maxColumns={4}
+                    compactColumns={2}
+                    cardMinHeight={112}
+                  />
+                  <View style={styles.inlineActions}>
+                    <PrimaryButton label="Parking" onPress={() => router.push('/parking')} />
+                    <SecondaryButton label="Cảnh báo" onPress={() => router.push('/alerts')} />
+                  </View>
+                </View>
+              </SectionCard>
+            ) : (
+              <SectionCard
+                title="Buổi tiếp theo"
+                subtitle="Tóm tắt ngắn cho buổi gần nhất."
+                variant="highlight"
+                tone="academic"
+                actionLabel="Lịch học"
+                onActionPress={() => router.push('/schedule')}
+              >
+                {snapshot.nextClass ? (
+                  <View style={styles.sectionStack}>
+                    <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.cardTitle,
+                            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                          ]}
+                        >
+                          {snapshot.nextClass.course.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.metaText,
+                            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                          ]}
+                        >
+                          {(snapshot.nextClass.classCode ?? snapshot.nextClass.course.code) ||
+                            'Chưa có mã lớp'}{' '}
+                          · {getInstructorLabel(snapshot.nextClass.instructor)}
+                        </Text>
+                      </View>
+                      <StatusBadge
+                        label={getRoomLabel(snapshot.nextClass.room)}
+                        tone="primary"
+                        size="sm"
+                      />
+                    </View>
                     <Text
                       style={[
-                        styles.cardTitle,
-                        { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                        styles.timeText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
                       ]}
                     >
-                      {snapshot.nextClass.course.name}
+                      {snapshot.nextClass.startTime} - {snapshot.nextClass.endTime}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.metaText,
+                        { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+                      ]}
+                    >
+                      Hôm nay: {snapshot.todayClasses.length} buổi
+                    </Text>
+                  </View>
+                ) : (
+                  <EmptyState
+                    icon="calendar-clear-outline"
+                    title="Chưa có lịch gần nhất"
+                    description="Dữ liệu sẽ hiển thị khi đồng bộ."
+                  />
+                )}
+              </SectionCard>
+            )}
+          </View>
+
+          <View style={styles.secondaryColumn}>
+            <SectionCard
+              title="Parking"
+              subtitle="Trạng thái bãi xe và cảm biến."
+              actionLabel="Mở Parking"
+              onActionPress={() => router.push('/parking')}
+              variant="glass"
+              tone="telemetry"
+              headerAccessory={
+                snapshot.parking ? (
+                  <StatusBadge
+                    label={getTelemetryHealthLabel(snapshot.telemetryHealth)}
+                    tone={healthTone}
+                    size="sm"
+                  />
+                ) : null
+              }
+            >
+              {snapshot.parking ? (
+                <View style={styles.sectionStack}>
+                  <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                    <Text
+                      style={[
+                        styles.parkingTitle,
+                        { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                      ]}
+                    >
+                      {snapshot.parking.availableSlots}/{snapshot.parking.totalSlots} chỗ trống
+                    </Text>
+                    <Text
+                      style={[
+                        styles.metaText,
+                        { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
+                      {snapshot.parking.activeSessions} phiên
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.metaText,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                    ]}
+                  >
+                    Cập nhật {formatDateTime(snapshot.parking.lastUpdated)}
+                  </Text>
+
+                  <View style={styles.badgeRow}>
+                    <StatusBadge
+                      label={`Nhiệt ${snapshot.parking.sensors.temperature ?? '--'}°C`}
+                      tone="info"
+                      size="sm"
+                    />
+                    <StatusBadge
+                      label={`Ẩm ${snapshot.parking.sensors.humidity ?? '--'}%`}
+                      tone="success"
+                      size="sm"
+                    />
+                    <StatusBadge
+                      label={snapshot.parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                      tone="warning"
+                      size="sm"
+                    />
+                    {snapshot.parking.sensors.fireDetected ? (
+                      <StatusBadge label="Cảnh báo cháy" tone="danger" size="sm" />
+                    ) : null}
+                  </View>
+
+                  {shouldShowParkingHealth ? (
+                    <ParkingHealthCallout
+                      state={snapshot.telemetryHealth}
+                      tone={healthTone}
+                      onPress={() => router.push('/parking')}
+                    />
+                  ) : null}
+                </View>
+              ) : (
+                <EmptyState
+                  icon="car-sport-outline"
+                  title="Chưa có dữ liệu parking"
+                  description="Kéo xuống để làm mới."
+                />
+              )}
+            </SectionCard>
+
+            {isOperationsRole ? (
+              <SectionCard
+                title="Cảnh báo"
+                subtitle="Mục chưa đọc trong ngày."
+                actionLabel="Mở cảnh báo"
+                onActionPress={() => router.push('/alerts')}
+                variant="outlined"
+                tone="danger"
+              >
+                {snapshot.unreadCount > 0 ? (
+                  <View style={styles.sectionStack}>
+                    <Text
+                      style={[
+                        styles.gpaValue,
+                        { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                      ]}
+                    >
+                      {snapshot.unreadCount}
                     </Text>
                     <Text
                       style={[
@@ -213,107 +354,53 @@ export default function HomeScreen() {
                         { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                       ]}
                     >
-                      {(snapshot.nextClass.classCode ?? snapshot.nextClass.course.code) ||
-                        'Chưa có mã lớp'}{' '}
-                      · {getScheduleInstructorLabel(snapshot.nextClass.instructor)}
+                      Mục chưa đọc cần theo dõi
                     </Text>
+                    <StatusBadge label="Cần xử lý" tone="warning" size="sm" />
                   </View>
-                  <StatusBadge
-                    label={getScheduleRoomLabel(snapshot.nextClass.room)}
-                    tone="primary"
+                ) : (
+                  <EmptyState
+                    icon="checkmark-circle-outline"
+                    title="Không có cảnh báo"
+                    description="Hệ thống đang ổn định."
                   />
-                </View>
-                <Text
-                  style={[
-                    styles.timeText,
-                    { color: theme.colors.primary, fontFamily: theme.fonts.bold },
-                  ]}
-                >
-                  {snapshot.nextClass.startTime} - {snapshot.nextClass.endTime}
-                </Text>
-              </View>
-            ) : (
-              <EmptyState
-                icon="calendar-clear-outline"
-                title="Chưa có lịch gần nhất"
-                description="Buổi gần nhất sẽ hiển thị tại đây khi có dữ liệu."
-              />
-            )}
-          </SectionCard>
-        )}
-
-        <SectionCard
-          title="Parking + IoT"
-          subtitle="Số chỗ trống A1-A4 và trạng thái cảm biến."
-          actionLabel="Mở Parking"
-          onActionPress={() => router.push('/parking')}
-          variant="outlined"
-        >
-          {snapshot.parking ? (
-            <View style={styles.sectionStack}>
-              <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
-                <Text
-                  style={[
-                    styles.parkingTitle,
-                    { color: theme.colors.text, fontFamily: theme.fonts.bold },
-                  ]}
-                >
-                  {snapshot.parking.availableSlots}/{snapshot.parking.totalSlots} chỗ trống
-                </Text>
-                <StatusBadge
-                  label={getTelemetryHealthLabel(snapshot.telemetryHealth)}
-                  tone={healthTone}
-                />
-              </View>
-
-              <Text
-                style={[
-                  styles.metaText,
-                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                ]}
+                )}
+              </SectionCard>
+            ) : !isLecturer ? (
+              <SectionCard
+                title="Kết quả"
+                subtitle="GPA và tín chỉ."
+                actionLabel="Xem GPA"
+                onActionPress={() => router.push('/services/grades')}
+                variant="outlined"
+                tone="campus"
               >
-                {snapshot.parking.activeSessions} lượt gửi xe · cập nhật{' '}
-                {formatDateTime(snapshot.parking.lastUpdated)}
-              </Text>
-
-              <View style={styles.badgeRow}>
-                <StatusBadge
-                  label={`Nhiệt độ ${snapshot.parking.sensors.temperature ?? '--'}°C`}
-                  tone="info"
-                />
-                <StatusBadge
-                  label={`Độ ẩm ${snapshot.parking.sensors.humidity ?? '--'}%`}
-                  tone="success"
-                />
-                <StatusBadge
-                  label={snapshot.parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
-                  tone="warning"
-                />
-                {snapshot.parking.sensors.fireDetected ? (
-                  <StatusBadge label="Cảnh báo cháy" tone="danger" />
-                ) : null}
-              </View>
-
-              {shouldShowParkingHealth ? (
-                <ParkingHealthCallout
-                  state={snapshot.telemetryHealth}
-                  tone={healthTone}
-                  onPress={() => router.push('/parking')}
-                />
-              ) : null}
-            </View>
-          ) : (
-            <EmptyState
-              icon="car-sport-outline"
-              title="Chưa có dữ liệu parking"
-              description="Kéo xuống để làm mới."
-            />
-          )}
-        </SectionCard>
+                <View style={styles.sectionStack}>
+                  <Text
+                    style={[
+                      styles.gpaValue,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
+                    {formatGpaValue(snapshot.gpa?.gpa)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.metaText,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                    ]}
+                  >
+                    {snapshot.gpa?.totalCourses ?? 0} học phần · {snapshot.gpa?.totalCredits ?? 0} tín chỉ
+                  </Text>
+                </View>
+              </SectionCard>
+            ) : null}
+          </View>
+        </View>
 
         <SectionCard
-          title="Truy cập nhanh"
-          subtitle="Các tính năng dùng nhiều nhất."
+          title="Lối tắt"
+          subtitle="Truy cập nhanh các mục thường dùng."
           variant="outlined"
         >
           <View style={styles.quickGrid}>
@@ -323,9 +410,10 @@ export default function HomeScreen() {
                   <QuickActionTile
                     key={action.id}
                     icon={action.icon as never}
-                    label={action.label}
-                    description={ACTION_DESCRIPTIONS[action.id] ?? 'Mở để tiếp tục.'}
+                    label={getQuickLabel(action.id, action.label)}
+                    description={QUICK_COPY[action.id] ?? 'Mở nhanh.'}
                     route={action.route}
+                    tone={getQuickTone(action.id)}
                   />
                 ))}
                 {row.length === 1 ? <View style={styles.quickCardSpacer} /> : null}
@@ -333,36 +421,6 @@ export default function HomeScreen() {
             ))}
           </View>
         </SectionCard>
-
-        {!isOperationsRole && !isLecturer ? (
-          <SectionCard
-            title="Kết quả học tập"
-            subtitle="Xem nhanh GPA và số tín chỉ."
-            actionLabel="Xem GPA"
-            onActionPress={() => router.push('/services/grades')}
-            variant="outlined"
-          >
-            <View style={styles.sectionStack}>
-              <Text
-                style={[
-                  styles.gpaValue,
-                  { color: theme.colors.text, fontFamily: theme.fonts.bold },
-                ]}
-              >
-                {formatGpaValue(snapshot.gpa?.gpa)}
-              </Text>
-              <Text
-                style={[
-                  styles.metaText,
-                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                ]}
-              >
-                {snapshot.gpa?.totalCourses ?? 0} học phần · {snapshot.gpa?.totalCredits ?? 0} tín
-                chỉ
-              </Text>
-            </View>
-          </SectionCard>
-        ) : null}
       </ContentStack>
     </Screen>
   );
@@ -373,14 +431,18 @@ function QuickActionTile({
   label,
   description,
   route,
+  tone,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
   route: string;
+  tone: 'primary' | 'campus' | 'academic' | 'telemetry' | 'success' | 'warning' | 'danger' | 'info';
 }) {
   const theme = useAppTheme();
   const router = useRouter();
+  const accentColor = getToneColor(theme, tone);
+  const accentSurface = getToneSurface(theme, tone);
 
   return (
     <Pressable
@@ -393,11 +455,12 @@ function QuickActionTile({
           borderColor: theme.colors.border,
           opacity: pressed ? 0.86 : 1,
         },
+        theme.elevation.level1 as never,
       ]}
     >
       <View style={styles.quickHeader}>
-        <View style={[styles.quickIconWrap, { backgroundColor: theme.colors.primarySurface }]}>
-          <Ionicons name={icon} size={20} color={theme.colors.primary} />
+        <View style={[styles.quickIconWrap, { backgroundColor: accentSurface }]}>
+          <Ionicons name={icon} size={20} color={accentColor} />
         </View>
         <Ionicons name="chevron-forward" size={18} color={theme.colors.textSoft} />
       </View>
@@ -430,16 +493,16 @@ function ParkingHealthCallout({
   const theme = useAppTheme();
   const title =
     state === 'fire-alert'
-      ? 'Cảnh báo cháy đang kích hoạt'
+      ? 'Cảnh báo cháy'
       : state === 'offline'
-        ? 'Gateway đang mất kết nối'
-        : 'Dữ liệu cảm biến chưa được làm mới';
+        ? 'Gateway mất kết nối'
+        : 'Dữ liệu chưa làm mới';
   const description =
     state === 'fire-alert'
-      ? 'Ưu tiên kiểm tra trạng thái an toàn và xử lý theo quy trình.'
+      ? 'Ưu tiên kiểm tra trạng thái an toàn.'
       : state === 'offline'
         ? 'Ứng dụng sẽ cập nhật lại khi gateway online.'
-        : 'Ứng dụng đang hiển thị dữ liệu gần nhất.';
+        : 'Dữ liệu đang hiển thị từ lần đồng bộ gần nhất.';
 
   return (
     <Pressable
@@ -503,35 +566,135 @@ function ParkingHealthCallout({
   );
 }
 
+function getHomeSubtitle(snapshot: DashboardSnapshot, role?: string | null) {
+  if (isAdminRole(role)) {
+    if (snapshot.parking) {
+      return `Parking còn ${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots} chỗ.`;
+    }
+
+    return 'Theo dõi vận hành và cảnh báo trong ngày.';
+  }
+
+  if (snapshot.nextClass) {
+    return `Buổi kế tiếp: ${snapshot.nextClass.course.name}.`;
+  }
+
+  if (typeof snapshot.gpa?.gpa === 'number') {
+    return `GPA hiện tại ${formatGpaValue(snapshot.gpa.gpa)}.`;
+  }
+
+  return 'Theo dõi lịch, parking và thông báo.';
+}
+
+function getRoomLabel(room?: string | null) {
+  return room ? `Phòng ${room}` : 'Chưa có phòng';
+}
+
+function getInstructorLabel(instructor?: string | null) {
+  return instructor ?? 'Chưa có giảng viên';
+}
+
+function getQuickLabel(id: string, fallback: string) {
+  switch (id) {
+    case 'schedule':
+      return 'Lịch';
+    case 'grades':
+      return 'GPA';
+    case 'alerts':
+      return 'Cảnh báo';
+    case 'parking':
+      return 'Parking';
+    case 'operations':
+      return 'Vận hành';
+    case 'services':
+      return 'Dịch vụ';
+    default:
+      return fallback;
+  }
+}
+
+function getQuickTone(actionId: string) {
+  switch (actionId) {
+    case 'schedule':
+      return 'academic';
+    case 'grades':
+      return 'campus';
+    case 'alerts':
+      return 'danger';
+    case 'parking':
+      return 'telemetry';
+    case 'operations':
+      return 'primary';
+    default:
+      return 'info';
+  }
+}
+
+function getToneColor(
+  theme: ReturnType<typeof useAppTheme>,
+  tone: 'primary' | 'campus' | 'academic' | 'telemetry' | 'success' | 'warning' | 'danger' | 'info',
+) {
+  switch (tone) {
+    case 'campus':
+      return theme.colors.accentCampus;
+    case 'academic':
+      return theme.colors.accentAcademic;
+    case 'telemetry':
+      return theme.colors.accentTelemetry;
+    case 'success':
+      return theme.colors.success;
+    case 'warning':
+      return theme.colors.warning;
+    case 'danger':
+      return theme.colors.danger;
+    case 'info':
+      return theme.colors.info;
+    default:
+      return theme.colors.primary;
+  }
+}
+
+function getToneSurface(
+  theme: ReturnType<typeof useAppTheme>,
+  tone: 'primary' | 'campus' | 'academic' | 'telemetry' | 'success' | 'warning' | 'danger' | 'info',
+) {
+  switch (tone) {
+    case 'campus':
+      return theme.colors.accentCampusSurface;
+    case 'academic':
+      return theme.colors.accentAcademicSurface;
+    case 'telemetry':
+      return theme.colors.accentTelemetrySurface;
+    case 'success':
+      return theme.colors.successSurface;
+    case 'warning':
+      return theme.colors.warningSurface;
+    case 'danger':
+      return theme.colors.dangerSurface;
+    case 'info':
+      return theme.colors.infoSurface;
+    default:
+      return theme.colors.primarySurface;
+  }
+}
+
 const styles = StyleSheet.create({
-  bellButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  bentoGrid: {
+    gap: 12,
   },
-  bellBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 5,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+  primaryColumn: {
+    gap: 12,
   },
-  bellBadgeText: {
-    fontSize: 10,
-    color: '#FFFFFF',
+  secondaryColumn: {
+    gap: 12,
   },
   sectionStack: {
     gap: 12,
   },
-  opsButtons: {
+  inlineActions: {
+    flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
   },
   rowBetween: {
     flexDirection: 'row',
@@ -544,7 +707,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardTitle: {
-    fontSize: 17,
+    fontSize: 18,
   },
   parkingTitle: {
     fontSize: 18,
@@ -616,5 +779,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     marginTop: 2,
+  },
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadgeText: {
+    fontSize: 10,
   },
 });

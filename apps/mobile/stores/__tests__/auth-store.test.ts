@@ -1,3 +1,4 @@
+import { USER_ROLES } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 
 import { useAuthStore } from '../auth-store';
@@ -18,7 +19,7 @@ const mockUser = {
   firstName: 'Nguyen',
   lastName: 'Van A',
   studentId: '22520001',
-  role: 'student',
+  role: USER_ROLES.STUDENT,
 };
 
 const mockTokens = {

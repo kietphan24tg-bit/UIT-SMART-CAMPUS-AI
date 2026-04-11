@@ -51,15 +51,15 @@ describe('AlertsScreen', () => {
   it('should render category sections and filter chips', () => {
     const { getByText, getAllByText } = render(<AlertsScreen />);
 
-    expect(getByText('Bộ lọc nhanh')).toBeTruthy();
+    expect(getByText('Bộ lọc')).toBeTruthy();
     expect(getByText('Tất cả')).toBeTruthy();
     expect(getByText('Chung')).toBeTruthy();
     expect(getAllByText('Học vụ').length).toBeGreaterThan(1);
     expect(getByText('Thanh toán')).toBeTruthy();
     expect(getAllByText('Khẩn cấp').length).toBeGreaterThan(1);
     expect(getByText('Chưa đọc')).toBeTruthy();
-    expect(getAllByText('Khẩn cấp').length).toBeGreaterThan(0);
     expect(getByText('Canh bao chay bai xe')).toBeTruthy();
     expect(getByText('Lich hoc thay doi')).toBeTruthy();
+    expect(getByText('Đọc tất cả')).toBeTruthy();
   });
 });

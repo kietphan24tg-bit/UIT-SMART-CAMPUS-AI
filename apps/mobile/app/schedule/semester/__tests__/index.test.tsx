@@ -118,8 +118,8 @@ describe('SemesterScheduleDetailScreen', () => {
 
     expect(getAllByText('Lịch chính').length).toBeGreaterThan(0);
     expect(getByText('Hình thức 2')).toBeTruthy();
-    expect(getByText('Thứ hai')).toBeTruthy();
-    expect(getAllByText('1 môn').length).toBeGreaterThan(0);
+    expect(getByText('THỨ HAI')).toBeTruthy();
+    expect(getByText('THỨ BA')).toBeTruthy();
     expect(getByText('Phát triển PM - Microsoft')).toBeTruthy();
     expect(queryByText('Giáo dục thể chất 1')).toBeNull();
     queryClient.clear();

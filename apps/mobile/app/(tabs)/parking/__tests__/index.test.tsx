@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+﻿import { render } from '@testing-library/react-native';
 import React from 'react';
 
 import ParkingScreen from '../index';
@@ -10,16 +10,16 @@ jest.mock('@/hooks/use-parking-overview');
 const mockUseParkingOverview = useParkingOverview as unknown as jest.Mock;
 
 describe('ParkingScreen', () => {
-  it('should render slot and vehicle information', () => {
+  it('renders the dashboard with real parking data', () => {
     mockUseParkingOverview.mockReturnValue({
       data: {
         telemetryHealth: 'online',
         status: {
+          gateId: 'uit-gate-a',
           availableSlots: 3,
           totalSlots: 4,
           occupiedSlots: 1,
           activeSessions: 1,
-          gateId: 'uit-gate-a',
           lastUpdated: '2026-04-07T05:00:00.000Z',
           sensors: {
             temperature: 29,
@@ -29,7 +29,7 @@ describe('ParkingScreen', () => {
             deviceIp: '192.168.1.10',
             reportedAt: '2026-04-07T05:00:00.000Z',
           },
-          slots: [{ slotNumber: 'A1', isOccupied: false }],
+          slots: [{ slotNumber: 'A1', isOccupied: false, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' }],
         },
         vehicles: [
           {
@@ -38,9 +38,12 @@ describe('ParkingScreen', () => {
             rfidTag: 'RFID-1',
             label: 'Xe máy cá nhân',
             updatedAt: '2026-04-07T05:00:00.000Z',
+            isActive: true,
+            createdAt: '2026-04-01T00:00:00.000Z',
             subscription: {
               status: 'active',
               monthlyFee: 40000,
+              startDate: '2026-04-01T00:00:00.000Z',
               endDate: '2026-05-01T00:00:00.000Z',
               lastPaymentAt: '2026-04-01T00:00:00.000Z',
             },
@@ -55,14 +58,26 @@ describe('ParkingScreen', () => {
       createPayment: jest.fn(),
     });
 
-    const { getByText } = render(<ParkingScreen />);
+    const { getByText, getAllByText, queryByText } = render(<ParkingScreen />);
 
-    expect(getByText('Bãi xe thông minh UIT')).toBeTruthy();
-    expect(getByText('A1')).toBeTruthy();
+    expect(getByText('Bãi xe UIT')).toBeTruthy();
+    expect(getAllByText('uit-gate-a').length).toBeGreaterThan(0);
+    expect(getByText('Chỗ trống')).toBeTruthy();
+    expect(getByText('3/4')).toBeTruthy();
+    expect(getByText('IR A1-A4')).toBeTruthy();
+    expect(getByText('Mưa')).toBeTruthy();
+    expect(getByText('Không mưa')).toBeTruthy();
+    expect(getByText('Nhiệt ẩm')).toBeTruthy();
+    expect(getByText('29°C · 65%')).toBeTruthy();
+    expect(getByText('Nhiệt độ · Độ ẩm')).toBeTruthy();
+    expect(getByText('Cháy')).toBeTruthy();
+    expect(getByText('Không cháy')).toBeTruthy();
+    expect(queryByText('Sức khỏe')).toBeNull();
     expect(getByText('51F44614')).toBeTruthy();
+    expect(getByText('Hiệu lực')).toBeTruthy();
   });
 
-  it('should render empty state when no vehicle exists', () => {
+  it('renders an empty state when parking data is unavailable', () => {
     mockUseParkingOverview.mockReturnValue({
       data: {
         telemetryHealth: 'offline',
@@ -79,6 +94,7 @@ describe('ParkingScreen', () => {
 
     const { getByText } = render(<ParkingScreen />);
 
-    expect(getByText('Bạn chưa đăng ký xe')).toBeTruthy();
+    expect(getByText('Chưa có telemetry')).toBeTruthy();
+    expect(getByText('Chưa có xe đăng ký')).toBeTruthy();
   });
 });

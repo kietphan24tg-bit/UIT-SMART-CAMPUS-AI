@@ -38,6 +38,10 @@ describe('UsersController', () => {
               ...mockProfile,
               phone: '0901234567',
             }),
+            updateAvatar: jest.fn().mockResolvedValue({
+              ...mockProfile,
+              avatarUrl: 'https://cdn.uit.edu.vn/avatars/user-1/avatar.png',
+            }),
           },
         },
       ],
@@ -64,6 +68,24 @@ describe('UsersController', () => {
 
       expect(usersService.updateProfile).toHaveBeenCalledWith('user-1', dto);
       expect(result.phone).toBe('0901234567');
+    });
+  });
+
+  describe('uploadAvatar', () => {
+    it('should upload and return updated profile', async () => {
+      const file = {
+        buffer: Buffer.from('avatar-bytes'),
+        mimetype: 'image/png',
+        size: 12,
+        originalname: 'avatar.png',
+      };
+
+      const result = await controller.uploadAvatar('user-1', file as never);
+
+      expect(usersService.updateAvatar).toHaveBeenCalledWith('user-1', file);
+      expect(result.avatarUrl).toBe(
+        'https://cdn.uit.edu.vn/avatars/user-1/avatar.png',
+      );
     });
   });
 });

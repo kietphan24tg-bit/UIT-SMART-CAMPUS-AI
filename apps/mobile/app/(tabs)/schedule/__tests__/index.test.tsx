@@ -1,10 +1,15 @@
-import { fireEvent, render } from '@testing-library/react-native';
+﻿import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
-import ScheduleScreen from '../index';
+import ScheduleScreen, {
+  buildSubjectColorIndex,
+  getSemesterColorByStatus,
+  getSubjectColorByCode,
+} from '../index';
 
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { useAuthStore } from '@/stores/auth-store';
+import type { ScheduleRecord, SemesterRecord } from '@/types/app-data';
 
 const mockRouter = {
   push: jest.fn(),
@@ -21,6 +26,47 @@ jest.mock('@/stores/auth-store');
 const mockUseScheduleScreenData = useScheduleScreenData as unknown as jest.Mock;
 const mockUseOperationsScreenData = useOperationsScreenData as unknown as jest.Mock;
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
+const mockColorTheme = {
+  isDark: false,
+  colors: {
+    border: '#D5E2F2',
+    info: '#2D8CFF',
+    infoSurface: '#E8F1FF',
+    primary: '#0E76FD',
+    primarySurface: '#EAF2FF',
+    surfaceSubtle: '#F5F8FD',
+    textMuted: '#334155',
+    textSoft: '#64748B',
+  },
+} as Parameters<typeof getSemesterColorByStatus>[0];
+
+function makeSemester(overrides: Partial<SemesterRecord>): SemesterRecord {
+  return {
+    id: 'sem',
+    name: 'HK2 2025-2026',
+    academicYear: '2025-2026',
+    term: 2,
+    startDate: '2026-01-01T00:00:00.000Z',
+    endDate: '2026-05-31T00:00:00.000Z',
+    isCurrent: false,
+    ...overrides,
+  };
+}
+
+function makeScheduleRecord(code: string): ScheduleRecord {
+  return {
+    id: `schedule-${code}`,
+    classCode: code,
+    sectionCode: `${code}.1`,
+    dayOfWeek: 2,
+    startTime: '09:00',
+    endTime: '11:00',
+    room: 'E3.1',
+    instructor: 'Cô Lan',
+    sessionType: 'daytime',
+    course: { name: code, code, credits: 3 },
+  };
+}
 
 describe('ScheduleScreen', () => {
   beforeEach(() => {
@@ -33,6 +79,7 @@ describe('ScheduleScreen', () => {
           totalSlots: 4,
           activeSessions: 1,
           occupiedSlots: 2,
+          gateId: 'uit-gate-a',
           lastUpdated: '2026-04-07T05:00:00.000Z',
           sensors: {
             temperature: 29,
@@ -60,8 +107,22 @@ describe('ScheduleScreen', () => {
               message: 'Phát hiện khói',
               isResolved: false,
               reportedAt: '2026-04-07T05:00:00.000Z',
+              resolvedAt: null,
+              telemetrySnapshot: {
+                id: 'snap-1',
+                gateId: 'uit-gate-a',
+                deviceIp: '192.168.1.10',
+                slotBitmap: null,
+                slots: [],
+                temperature: 29,
+                humidity: 65,
+                rainDetected: false,
+                fireDetected: true,
+                reportedAt: '2026-04-07T05:00:00.000Z',
+              },
             },
           ],
+          meta: { total: 1, page: 1, limit: 10, totalPages: 1 },
         },
         unreadCount: 3,
       },
@@ -71,7 +132,44 @@ describe('ScheduleScreen', () => {
     });
   });
 
-  it('should render academic schedule for student', () => {
+  it('uses status-based colors for semester cards', () => {
+    const current = getSemesterColorByStatus(mockColorTheme, makeSemester({ isCurrent: true }));
+    const finishedA = getSemesterColorByStatus(
+      mockColorTheme,
+      makeSemester({ name: 'HK1 2024-2025', startDate: '2024-09-01T00:00:00.000Z' }),
+    );
+    const finishedB = getSemesterColorByStatus(
+      mockColorTheme,
+      makeSemester({ name: 'HK2 2023-2024', startDate: '2024-01-01T00:00:00.000Z' }),
+    );
+    const future = getSemesterColorByStatus(
+      mockColorTheme,
+      makeSemester({ name: 'HK1 2100-2101', startDate: '2100-09-01T00:00:00.000Z' }),
+    );
+
+    expect(current.borderColor).toBe(mockColorTheme.colors.primary);
+    expect(finishedA.borderColor).toBe(mockColorTheme.colors.border);
+    expect(finishedB.borderColor).toBe(finishedA.borderColor);
+    expect(finishedB.titleColor).toBe(finishedA.titleColor);
+    expect(future.borderStyle).toBe('dashed');
+  });
+
+  it('maps daily schedule colors by subject code', () => {
+    const subjectColorIndex = buildSubjectColorIndex([
+      makeScheduleRecord('SE346'),
+      makeScheduleRecord('CS312'),
+      makeScheduleRecord('SE346'),
+    ]);
+
+    const se346 = getSubjectColorByCode(mockColorTheme, 'SE346', subjectColorIndex);
+    const cs312 = getSubjectColorByCode(mockColorTheme, 'CS312', subjectColorIndex);
+
+    expect(subjectColorIndex.size).toBe(2);
+    expect(se346).toEqual(getSubjectColorByCode(mockColorTheme, 'SE346', subjectColorIndex));
+    expect(se346.accent).not.toBe(cs312.accent);
+  });
+
+  it('renders academic schedule for student', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
@@ -116,7 +214,7 @@ describe('ScheduleScreen', () => {
     expect(getByText('Buổi học gần nhất')).toBeTruthy();
   });
 
-  it('should navigate to semester detail when pressing a semester chip', () => {
+  it('navigates to semester detail when pressing a semester chip', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
@@ -156,7 +254,7 @@ describe('ScheduleScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/schedule/semester/sem-2');
   });
 
-  it('should render lecturer support entries', () => {
+  it('renders lecturer support entries', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'lecturer' } };
       return selector(state);
@@ -200,7 +298,7 @@ describe('ScheduleScreen', () => {
     expect(getByText('Điểm danh QR')).toBeTruthy();
   });
 
-  it('should render operations variant for admin', () => {
+  it('renders operations variant for admin', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'admin' } };
       return selector(state);

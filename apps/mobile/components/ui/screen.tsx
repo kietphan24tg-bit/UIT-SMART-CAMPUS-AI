@@ -6,12 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/theme';
 
+type ScreenVariant = 'default' | 'muted' | 'glass' | 'fullBleed';
+
 interface ScreenProps {
   children: ReactNode;
   scroll?: boolean;
   contentContainerStyle?: ScrollViewProps['contentContainerStyle'];
   style?: ViewStyle;
   refreshControl?: ScrollViewProps['refreshControl'];
+  variant?: ScreenVariant;
 }
 
 interface ScreenScrollContextValue {
@@ -60,6 +63,7 @@ export function Screen({
   contentContainerStyle,
   style,
   refreshControl,
+  variant = 'default',
 }: ScreenProps) {
   const theme = useAppTheme();
   const scrollRef = useRef<ScrollViewWithResponder | null>(null);
@@ -69,6 +73,13 @@ export function Screen({
   const flattenedContentStyle = StyleSheet.flatten(contentContainerStyle) ?? {};
   const resolvedPaddingBottom =
     BASE_CONTENT_PADDING_BOTTOM + keyboardInset + resolvePaddingBottom(flattenedContentStyle);
+  const isFullBleed = variant === 'fullBleed';
+  const backgroundColor =
+    variant === 'muted'
+      ? theme.colors.backgroundMuted
+      : variant === 'glass'
+        ? theme.colors.surfaceGlass
+        : theme.colors.background;
 
   const scheduleKeyboardScroll = useCallback(
     (target: number | null, delay = KEYBOARD_SCROLL_DELAY) => {
@@ -142,33 +153,63 @@ export function Screen({
 
   return (
     <ScreenScrollContext.Provider value={contextValue}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }, style]}>
-        {scroll ? (
-          <ScrollView
-            ref={(instance) => {
-              scrollRef.current = instance as ScrollViewWithResponder | null;
-            }}
-            style={styles.scroll}
-            contentContainerStyle={[
-              styles.content,
-              {
-                ...flattenedContentStyle,
-                paddingBottom: resolvedPaddingBottom,
-              },
-            ]}
-            refreshControl={refreshControl}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.inner}>{children}</View>
-          </ScrollView>
-        ) : (
-          <View style={[styles.content, contentContainerStyle]}>
-            <View style={styles.inner}>{children}</View>
-          </View>
-        )}
-      </SafeAreaView>
+      {isFullBleed ? (
+        <View style={[styles.frame, { backgroundColor }, style]}>
+          {scroll ? (
+            <ScrollView
+              ref={(instance) => {
+                scrollRef.current = instance as ScrollViewWithResponder | null;
+              }}
+              style={styles.scroll}
+              contentContainerStyle={[
+                styles.content,
+                {
+                  ...flattenedContentStyle,
+                  paddingBottom: resolvedPaddingBottom,
+                },
+              ]}
+              refreshControl={refreshControl}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.inner}>{children}</View>
+            </ScrollView>
+          ) : (
+            <View style={[styles.staticContent, contentContainerStyle]}>
+              <View style={styles.inner}>{children}</View>
+            </View>
+          )}
+        </View>
+      ) : (
+        <SafeAreaView style={[styles.safeArea, { backgroundColor }, style]}>
+          {scroll ? (
+            <ScrollView
+              ref={(instance) => {
+                scrollRef.current = instance as ScrollViewWithResponder | null;
+              }}
+              style={styles.scroll}
+              contentContainerStyle={[
+                styles.content,
+                {
+                  ...flattenedContentStyle,
+                  paddingBottom: resolvedPaddingBottom,
+                },
+              ]}
+              refreshControl={refreshControl}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.inner}>{children}</View>
+            </ScrollView>
+          ) : (
+            <View style={[styles.staticContent, contentContainerStyle]}>
+              <View style={styles.inner}>{children}</View>
+            </View>
+          )}
+        </SafeAreaView>
+      )}
     </ScreenScrollContext.Provider>
   );
 }
@@ -177,10 +218,17 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  frame: {
+    flex: 1,
+  },
   scroll: {
     flex: 1,
   },
   content: {
+    paddingBottom: BASE_CONTENT_PADDING_BOTTOM,
+  },
+  staticContent: {
+    flex: 1,
     paddingBottom: BASE_CONTENT_PADDING_BOTTOM,
   },
   inner: {

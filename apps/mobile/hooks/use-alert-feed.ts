@@ -65,13 +65,13 @@ function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
 
 function toFireAlertFeed(item: FireAlertRecord): AlertFeedItem {
   const sensorContext = item.telemetrySnapshot
-    ? `IP gateway: ${item.telemetrySnapshot.deviceIp || 'Chua xac dinh'}`
-    : 'Khong co snapshot cam bien di kem.';
+    ? `Gateway ${item.gateId} · IP ${item.telemetrySnapshot.deviceIp || 'Chưa xác định'}`
+    : `Gateway ${item.gateId}`;
 
   return {
     id: item.id,
     kind: 'fire_alert',
-    title: 'Canh bao chay bai xe',
+    title: 'Cảnh báo cháy bãi xe',
     body: item.message,
     timestamp: item.reportedAt,
     severity: item.isResolved ? 'warning' : 'critical',

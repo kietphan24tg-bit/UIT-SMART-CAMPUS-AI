@@ -8,20 +8,27 @@ interface MetricGridProps {
   items: MetricItem[];
   minItemWidth?: number;
   maxColumns?: number;
+  compactColumns?: number;
+  cardMinHeight?: number;
 }
 
 export function MetricGrid({
   items,
   minItemWidth = 148,
   maxColumns = 4,
+  compactColumns,
+  cardMinHeight,
 }: MetricGridProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
-  const columns = layout.getGridColumns({
-    minItemWidth,
-    gap: 12,
-    maxColumns: layout.isTablet ? maxColumns : 2,
-  });
+  const columns =
+    !layout.isTablet && compactColumns
+      ? Math.max(1, Math.min(compactColumns, items.length))
+      : layout.getGridColumns({
+          minItemWidth,
+          gap: 12,
+          maxColumns: layout.isTablet ? maxColumns : 2,
+        });
   const width = layout.getGridItemWidth({ columns, gap: 12 });
 
   return (
@@ -31,7 +38,7 @@ export function MetricGrid({
           key={item.label}
           style={[
             styles.card,
-            { width },
+            { minHeight: cardMinHeight ?? 116, width },
             getMetricToneStyle(theme, item.tone),
             {
               borderRadius: theme.radii.xl,
@@ -50,10 +57,16 @@ export function MetricGrid({
                 fontFamily: theme.fonts.bold,
               },
             ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
           >
             {item.value}
           </Text>
-          <Text style={[styles.helper, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+          <Text
+            style={[styles.helper, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}
+            numberOfLines={2}
+          >
             {item.helper}
           </Text>
         </View>
@@ -115,7 +128,6 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     padding: 16,
-    minHeight: 116,
   },
   label: {
     fontSize: 13,

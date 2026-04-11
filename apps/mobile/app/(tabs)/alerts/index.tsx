@@ -36,6 +36,13 @@ const CATEGORY_LABELS: Record<AlertCategory, string> = {
   emergency: 'Khẩn cấp',
 };
 
+const CATEGORY_TONES: Record<AlertCategory, 'info' | 'warning' | 'danger'> = {
+  general: 'info',
+  academic: 'warning',
+  payment: 'warning',
+  emergency: 'danger',
+};
+
 const CATEGORY_ORDER: AlertCategory[] = ['emergency', 'payment', 'academic', 'general'];
 const EMPTY_FEED_ITEMS: AlertFeedItem[] = [];
 
@@ -47,8 +54,10 @@ export default function AlertsScreen() {
   const alerts = useAlertFeed(role);
   const feedItems = alerts.data ?? EMPTY_FEED_ITEMS;
   const [filter, setFilter] = useState<FilterKey>('all');
-  const feedColumns = layout.isTablet ? 2 : 1;
-  const feedItemWidth = layout.getGridItemWidth({ columns: feedColumns, gap: 10 });
+
+  const cardColumns = layout.isTablet ? 2 : 1;
+  const cardWidth = layout.getGridItemWidth({ columns: cardColumns, gap: 12 });
+  const unreadCount = feedItems.filter((item) => !item.isRead).length;
 
   const filteredItems = useMemo(() => {
     if (filter === 'unread') {
@@ -71,10 +80,6 @@ export default function AlertsScreen() {
     [filteredItems],
   );
 
-  const subtitle = isAdminRole(role)
-    ? 'Gồm fire alert, thông báo hệ thống và các nhóm Chung, Học vụ, Thanh toán, Khẩn cấp.'
-    : 'Theo dõi thông báo theo nhóm Chung, Học vụ, Thanh toán và Khẩn cấp.';
-
   return (
     <Screen
       refreshControl={
@@ -87,18 +92,25 @@ export default function AlertsScreen() {
     >
       <TopHero
         eyebrow="Cảnh báo"
-        title="Cảnh báo và thông báo"
-        subtitle={subtitle}
+        title="Trung tâm cảnh báo"
+        subtitle={
+          isAdminRole(role)
+            ? 'Theo dõi cảnh báo vận hành và thông báo ưu tiên.'
+            : 'Theo dõi thông báo mới và mục chưa đọc.'
+        }
         badge={{ label: getRoleLabel(role), tone: 'info' }}
         showBrand
+        variant="accent"
       />
 
       <ContentStack>
         <SectionCard
-          title="Bộ lọc nhanh"
-          subtitle={`${feedItems.length} mục trong feed hiện tại.`}
-          actionLabel="Đọc tất cả"
-          onActionPress={() => void alerts.markAllAsRead()}
+          title="Bộ lọc"
+          subtitle={`${feedItems.length} mục · ${unreadCount} chưa đọc`}
+          actionLabel={unreadCount > 0 ? 'Đọc tất cả' : undefined}
+          onActionPress={unreadCount > 0 ? () => void alerts.markAllAsRead() : undefined}
+          variant="highlight"
+          tone="academic"
         >
           <View style={styles.filterRow}>
             {FILTER_OPTIONS.map((option) => (
@@ -115,7 +127,7 @@ export default function AlertsScreen() {
         {alerts.isError ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="Không tải được danh sách cảnh báo"
+            title="Không tải được cảnh báo"
             description="Kéo xuống để thử lại."
           />
         ) : null}
@@ -125,18 +137,23 @@ export default function AlertsScreen() {
             <SectionCard
               key={category}
               title={CATEGORY_LABELS[category]}
-              subtitle={`${items.length} mục ${filter === 'all' ? 'trong nhóm này' : 'phù hợp bộ lọc'}`}
+              subtitle={`${items.length} mục`}
+              variant={category === 'emergency' ? 'danger' : 'list'}
+              tone={category === 'emergency' ? 'danger' : 'neutral'}
+              headerAccessory={
+                <StatusBadge
+                  label={CATEGORY_LABELS[category]}
+                  tone={CATEGORY_TONES[category]}
+                  size="sm"
+                />
+              }
             >
               <View style={styles.feed}>
                 {items.map((item) => (
                   <AlertRow
                     key={`${item.kind}-${item.id}`}
-                    title={item.title}
-                    body={item.body}
-                    meta={`${getSeverityLabel(item.severity)} · ${formatDateTime(item.timestamp)}`}
-                    severity={item.severity}
-                    width={feedItemWidth}
-                    unread={!item.isRead}
+                    item={item}
+                    width={cardWidth}
                     onPress={async () => {
                       if (item.kind === 'notification' && !item.isRead) {
                         await alerts.markAsRead(item.id);
@@ -155,7 +172,7 @@ export default function AlertsScreen() {
         ) : (
           <EmptyState
             icon={filter === 'unread' ? 'notifications-off-outline' : 'shield-checkmark-outline'}
-            title="Không có mục phù hợp bộ lọc"
+            title="Không có mục phù hợp"
             description="Đổi bộ lọc hoặc kéo xuống để làm mới."
           />
         )}
@@ -177,6 +194,7 @@ function FilterChip({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={[
         styles.filterChip,
@@ -199,24 +217,22 @@ function FilterChip({
 }
 
 function AlertRow({
-  title,
-  body,
-  meta,
-  severity,
+  item,
   width,
-  unread,
   onPress,
 }: {
-  title: string;
-  body: string;
-  meta: string;
-  severity: 'normal' | 'warning' | 'critical';
+  item: AlertFeedItem;
   width: number;
-  unread: boolean;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
-  const tone = severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info';
+  const tone =
+    item.severity === 'critical' ? 'danger' : item.severity === 'warning' ? 'warning' : 'info';
+
+  const metaParts = [getSeverityLabel(item.severity), formatDateTime(item.timestamp)];
+  if (!item.isRead) {
+    metaParts.unshift('Chưa đọc');
+  }
 
   return (
     <TouchableOpacity
@@ -224,20 +240,42 @@ function AlertRow({
       onPress={onPress}
       style={[
         styles.alertRow,
-        { width },
         {
+          width,
           backgroundColor: theme.colors.surfaceSubtle,
-          borderColor: theme.colors.border,
+          borderColor: item.severity === 'critical' ? theme.colors.danger : theme.colors.border,
         },
+        theme.elevation.level0,
       ]}
     >
       <View style={styles.alertHeader}>
-        <StatusBadge label={getSeverityLabel(severity)} tone={tone} />
-        {unread ? <Ionicons name="ellipse" size={10} color={theme.colors.primary} /> : null}
+        <StatusBadge label={getSeverityLabel(item.severity)} tone={tone} size="sm" />
+        {!item.isRead ? <Ionicons name="ellipse" size={10} color={theme.colors.primary} /> : null}
       </View>
-      <Text style={[styles.alertTitle, { color: theme.colors.text }]}>{title}</Text>
-      <Text style={[styles.alertBody, { color: theme.colors.textMuted }]}>{body}</Text>
-      <Text style={[styles.alertMeta, { color: theme.colors.textSoft }]}>{meta}</Text>
+
+      <Text style={[styles.alertTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+        {item.title}
+      </Text>
+
+      <Text
+        numberOfLines={2}
+        style={[
+          styles.alertBody,
+          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+        ]}
+      >
+        {item.body}
+      </Text>
+
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.alertMeta,
+          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+        ]}
+      >
+        {metaParts.join(' · ')}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -245,14 +283,16 @@ function AlertRow({
 const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
+    gap: 8,
   },
   filterChip: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 40,
+    justifyContent: 'center',
   },
   filterLabel: {
     fontSize: 13,
@@ -261,28 +301,31 @@ const styles = StyleSheet.create({
   feed: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   alertRow: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     padding: 14,
     gap: 8,
+    minHeight: 138,
   },
   alertHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 10,
   },
   alertTitle: {
     fontSize: 16,
-    fontWeight: '800',
+    lineHeight: 22,
   },
   alertBody: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   alertMeta: {
     fontSize: 12,
+    lineHeight: 16,
   },
 });

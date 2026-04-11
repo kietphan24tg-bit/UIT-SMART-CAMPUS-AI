@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
@@ -7,6 +8,29 @@ import { useAppTheme } from '@/theme';
 import { getRoleScopedTabTitle, isAdminRole } from '@/utils/app';
 
 const CORE_TAB_ROOTS = new Set(['home', 'schedule', 'services', 'alerts', 'profile']);
+const COMPACT_TAB_BAR_HEIGHT = 66;
+const REGULAR_TAB_BAR_HEIGHT = 72;
+const COMPACT_TAB_BAR_PADDING_BOTTOM = 8;
+const REGULAR_TAB_BAR_PADDING_BOTTOM = 10;
+
+export function getTabBarMetrics({
+  isCompact,
+  bottomInset,
+}: {
+  isCompact: boolean;
+  bottomInset: number;
+}) {
+  const safeInset = Math.max(bottomInset, 0);
+  const baseHeight = isCompact ? COMPACT_TAB_BAR_HEIGHT : REGULAR_TAB_BAR_HEIGHT;
+  const basePaddingBottom = isCompact
+    ? COMPACT_TAB_BAR_PADDING_BOTTOM
+    : REGULAR_TAB_BAR_PADDING_BOTTOM;
+
+  return {
+    height: baseHeight + safeInset,
+    paddingBottom: basePaddingBottom + safeInset,
+  };
+}
 
 function getRootRouteName(routeName: string) {
   return routeName.split('/')[0] ?? routeName;
@@ -15,8 +39,14 @@ function getRootRouteName(routeName: string) {
 export default function TabLayout() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const role = useAuthStore((state) => state.user?.role);
   const roleScopedTitle = getRoleScopedTabTitle(role);
+  const isCompactTabBar = layout.isCompact;
+  const tabBarMetrics = getTabBarMetrics({
+    isCompact: isCompactTabBar,
+    bottomInset: insets.bottom,
+  });
 
   return (
     <Tabs
@@ -25,24 +55,28 @@ export default function TabLayout() {
         const isVisibleTab = CORE_TAB_ROOTS.has(rootName);
 
         return {
+          sceneContainerStyle: {
+            backgroundColor: theme.colors.background,
+          },
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textSoft,
           tabBarStyle: {
             borderTopWidth: 1,
             borderTopColor: theme.colors.border,
             backgroundColor: theme.colors.tabBar,
-            height: layout.isCompact ? 64 : 70,
-            paddingBottom: 8,
+            height: tabBarMetrics.height,
+            paddingBottom: tabBarMetrics.paddingBottom,
             paddingTop: 8,
-            shadowColor: theme.colors.shadow,
-            shadowOpacity: 0.08,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: -4 },
-            elevation: 8,
+            ...theme.elevation.level2,
           },
           tabBarLabelStyle: {
-            fontSize: 12,
+            fontSize: isCompactTabBar ? 11 : 12,
             fontFamily: theme.fonts.semibold,
+            marginTop: 2,
+          },
+          tabBarItemStyle: {
+            paddingTop: 2,
+            paddingBottom: 2,
           },
           tabBarButton: isVisibleTab ? undefined : () => null,
           title:

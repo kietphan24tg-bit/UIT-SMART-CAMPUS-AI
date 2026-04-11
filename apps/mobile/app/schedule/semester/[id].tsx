@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ContentStack, EmptyState, Screen, SectionCard, TopHero } from '@/components/ui';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { scheduleApi } from '@/services/api/schedule';
 import { useAppTheme } from '@/theme';
 import type { ScheduleRecord } from '@/types/app-data';
@@ -35,6 +36,7 @@ function getPeriodText(item: ScheduleRecord) {
 
 export default function SemesterScheduleDetailScreen() {
   const theme = useAppTheme();
+  const layout = useResponsiveLayout();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const semesterId = typeof params.id === 'string' ? params.id : undefined;
@@ -131,7 +133,12 @@ export default function SemesterScheduleDetailScreen() {
             </Pressable>
 
             <View style={styles.headerCopy}>
-              <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+              <Text
+                style={[styles.headerTitle, layout.isCompact ? styles.headerTitleCompact : null, { color: theme.colors.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+              >
                 {semester?.name ?? 'Đang tải học kỳ'}
               </Text>
               <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]}>
@@ -343,6 +350,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '800',
+  },
+  headerTitleCompact: {
+    fontSize: 19,
+    lineHeight: 24,
   },
   headerSubtitle: {
     fontSize: 14,

@@ -92,10 +92,7 @@ function isAllowedTourUrl(rawUrl?: string) {
       return false;
     }
 
-    return (
-      url.pathname === TOUR_PATH_PREFIX ||
-      url.pathname.startsWith(`${TOUR_PATH_PREFIX}/`)
-    );
+    return url.pathname === TOUR_PATH_PREFIX || url.pathname.startsWith(`${TOUR_PATH_PREFIX}/`);
   } catch {
     return rawUrl.startsWith('#');
   }
@@ -115,14 +112,14 @@ export default function CampusMapViewScreen() {
     setReloadKey((value) => value + 1);
   };
 
-  const isCompact = layout.isCompact;
-  const isTablet = layout.isTablet;
-  const overlayHorizontalInset = isCompact ? 14 : isTablet ? 24 : 20;
-  const panelMaxWidth = isTablet ? 560 : 440;
+  const overlayHorizontalInset = layout.isCompact ? 14 : layout.isTablet ? 24 : 20;
+  const panelMaxWidth = layout.isTablet ? 560 : 440;
+  const statusBarStyle = theme.isDark ? 'light' : 'dark';
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style={statusBarStyle} translucent backgroundColor="transparent" />
+
       <WebView
         key={reloadKey}
         ref={webViewRef}
@@ -171,7 +168,9 @@ export default function CampusMapViewScreen() {
             ]}
           >
             <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+            <Text
+              style={[styles.loadingText, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}
+            >
               Đang tải tour 3D UIT...
             </Text>
           </View>
@@ -200,7 +199,7 @@ export default function CampusMapViewScreen() {
                 { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
               ]}
             >
-              Vui lòng kiểm tra mạng và thử lại. Trải nghiệm vẫn sẽ mở trong ứng dụng sau khi tải thành công.
+              Kiểm tra kết nối mạng rồi thử lại. Nội dung sẽ tiếp tục mở trong ứng dụng.
             </Text>
             <PrimaryButton label="Thử lại" onPress={handleRetry} />
           </View>
@@ -213,7 +212,6 @@ export default function CampusMapViewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#05070A',
   },
   webView: {
     flex: 1,

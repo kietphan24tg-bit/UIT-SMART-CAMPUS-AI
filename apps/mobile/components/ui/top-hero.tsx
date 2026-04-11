@@ -7,11 +7,12 @@ import { StatusBadge } from './status-badge';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAppTheme } from '@/theme';
 
+type TopHeroVariant = 'default' | 'accent' | 'glass' | 'immersive';
 
 interface TopHeroProps {
   eyebrow?: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   badge?: {
     label: string;
     tone?: 'primary' | 'neutral' | 'success' | 'warning' | 'danger' | 'info';
@@ -22,6 +23,9 @@ interface TopHeroProps {
   brandCompact?: boolean;
   brandCentered?: boolean;
   brandShowSubtitle?: boolean;
+  variant?: TopHeroVariant;
+  subtitleLines?: number;
+  showAccentLine?: boolean;
 }
 
 export function TopHero({
@@ -35,25 +39,84 @@ export function TopHero({
   brandCompact,
   brandCentered = false,
   brandShowSubtitle,
+  variant = 'default',
+  subtitleLines,
+  showAccentLine = false,
 }: TopHeroProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const useCompactBrand = brandCompact ?? layout.isCompact;
   const showBrandSubtitle = brandShowSubtitle ?? !useCompactBrand;
   const centerBrand = brandCentered && !headerRight;
+  const resolvedSubtitle = subtitle?.trim() ?? '';
+  const showSubtitle = resolvedSubtitle.length > 0;
+  const subtitleMaxLines =
+    subtitleLines ?? (variant === 'immersive' ? 1 : layout.isCompact ? 2 : 2);
+  const backgroundColor =
+    variant === 'accent'
+      ? theme.colors.surfaceTinted
+      : variant === 'glass'
+        ? theme.colors.surfaceGlass
+        : variant === 'immersive'
+          ? theme.colors.backgroundMuted
+          : theme.colors.hero;
+  const borderColor =
+    variant === 'accent'
+      ? theme.colors.primarySurface
+      : variant === 'glass'
+        ? theme.colors.border
+        : theme.colors.border;
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: theme.colors.hero,
-          borderBottomColor: theme.colors.border,
+          backgroundColor,
+          borderBottomColor: borderColor,
         },
+        variant === 'glass' ? theme.elevation.level1 : theme.elevation.level0,
       ]}
     >
-      <View style={[styles.accent, { backgroundColor: theme.colors.primary }]} />
-      <View style={[styles.accentFade, { backgroundColor: theme.colors.primaryMuted }]} />
+      {showAccentLine ? (
+        <>
+          <View
+            style={[
+              styles.accent,
+              {
+                backgroundColor:
+                  variant === 'glass' ? theme.colors.accentTelemetry : theme.colors.primary,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.accentFade,
+              {
+                backgroundColor:
+                  variant === 'accent' ? theme.colors.accentAcademic : theme.colors.primaryMuted,
+              },
+            ]}
+          />
+        </>
+      ) : null}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glowOrbLeft,
+          { backgroundColor: theme.colors.glow, opacity: variant === 'default' ? 0.7 : 0.9 },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glowOrbRight,
+          {
+            backgroundColor: theme.colors.primarySurface,
+            opacity: variant === 'glass' ? 0.7 : 0.5,
+          },
+        ]}
+      />
       <View
         style={[
           styles.inner,
@@ -99,18 +162,22 @@ export function TopHero({
         >
           {title}
         </Text>
-        <Text
-          style={[
-            styles.subtitle,
-            {
-              color: theme.colors.heroSubtext,
-              maxWidth: layout.isTablet ? 720 : undefined,
-              fontFamily: theme.fonts.regular,
-            },
-          ]}
-        >
-          {subtitle}
-        </Text>
+        {showSubtitle ? (
+          <Text
+            style={[
+              styles.subtitle,
+              variant === 'immersive' ? styles.subtitleImmersive : null,
+              {
+                color: theme.colors.heroSubtext,
+                maxWidth: layout.isTablet ? 720 : undefined,
+                fontFamily: theme.fonts.regular,
+              },
+            ]}
+            numberOfLines={subtitleMaxLines}
+          >
+            {resolvedSubtitle}
+          </Text>
+        ) : null}
         {badge ? (
           <View style={styles.badgeWrap}>
             <StatusBadge label={badge.label} tone={badge.tone} />
@@ -150,6 +217,22 @@ const styles = StyleSheet.create({
     width: 170,
     height: 4,
     opacity: 0.55,
+  },
+  glowOrbLeft: {
+    position: 'absolute',
+    top: 24,
+    left: -42,
+    width: 140,
+    height: 140,
+    borderRadius: 140,
+  },
+  glowOrbRight: {
+    position: 'absolute',
+    top: 12,
+    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 120,
   },
   topRow: {
     flexDirection: 'row',
@@ -191,6 +274,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: 6,
+  },
+  subtitleImmersive: {
+    maxWidth: 680,
   },
   badgeWrap: {
     marginTop: 16,

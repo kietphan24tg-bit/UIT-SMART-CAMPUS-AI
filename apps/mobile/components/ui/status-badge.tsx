@@ -1,61 +1,113 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme';
 
 type BadgeTone = 'primary' | 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+type BadgeVariant = 'soft' | 'solid' | 'outline' | 'glass';
+type BadgeSize = 'sm' | 'md';
 
 interface StatusBadgeProps {
   label: string;
   tone?: BadgeTone;
+  variant?: BadgeVariant;
+  size?: BadgeSize;
+  icon?: ReactNode;
 }
 
-export function StatusBadge({ label, tone = 'neutral' }: StatusBadgeProps) {
+export function StatusBadge({
+  label,
+  tone = 'neutral',
+  variant = 'soft',
+  size = 'md',
+  icon,
+}: StatusBadgeProps) {
   const theme = useAppTheme();
 
-  const palette = {
+  const tonePalette = {
     primary: {
-      backgroundColor: theme.colors.primarySurface,
       color: theme.colors.primary,
+      surface: theme.colors.primarySurface,
       borderColor: theme.colors.primary,
+      solidText: theme.colors.textInverse,
     },
     neutral: {
-      backgroundColor: theme.colors.surfaceSubtle,
       color: theme.colors.textMuted,
+      surface: theme.colors.surfaceSubtle,
       borderColor: theme.colors.border,
+      solidText: theme.colors.text,
     },
     success: {
-      backgroundColor: theme.colors.successSurface,
       color: theme.colors.success,
+      surface: theme.colors.successSurface,
       borderColor: theme.colors.success,
+      solidText: theme.colors.textInverse,
     },
     warning: {
-      backgroundColor: theme.colors.warningSurface,
       color: theme.colors.warning,
+      surface: theme.colors.warningSurface,
       borderColor: theme.colors.warning,
+      solidText: theme.colors.text,
     },
     danger: {
-      backgroundColor: theme.colors.dangerSurface,
       color: theme.colors.danger,
+      surface: theme.colors.dangerSurface,
       borderColor: theme.colors.danger,
+      solidText: theme.colors.textInverse,
     },
     info: {
-      backgroundColor: theme.colors.infoSurface,
       color: theme.colors.info,
+      surface: theme.colors.infoSurface,
       borderColor: theme.colors.info,
+      solidText: theme.colors.textInverse,
     },
   }[tone];
+
+  const backgroundColor =
+    variant === 'solid'
+      ? tonePalette.color
+      : variant === 'glass'
+        ? theme.colors.surfaceGlass
+        : variant === 'outline'
+          ? theme.colors.surface
+          : tonePalette.surface;
+  const borderColor =
+    variant === 'solid'
+      ? tonePalette.color
+      : variant === 'glass'
+        ? theme.colors.border
+        : tonePalette.borderColor;
+  const labelColor =
+    variant === 'solid'
+      ? tonePalette.solidText
+      : variant === 'glass'
+        ? tonePalette.color
+        : tonePalette.color;
 
   return (
     <View
       style={[
         styles.badge,
+        size === 'sm' ? styles.badgeSm : styles.badgeMd,
         {
-          backgroundColor: palette.backgroundColor,
-          borderColor: palette.borderColor,
+          backgroundColor,
+          borderColor,
         },
       ]}
     >
-      <Text style={[styles.label, { color: palette.color, fontFamily: theme.fonts.semibold }]}>{label}</Text>
+      <View style={styles.row}>
+        {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
+        <Text
+          style={[
+            styles.label,
+            size === 'sm' ? styles.labelSm : styles.labelMd,
+            { color: labelColor, fontFamily: theme.fonts.semibold },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -64,11 +116,32 @@ const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
     borderWidth: 1,
   },
+  badgeSm: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  badgeMd: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: {
+    letterSpacing: 0.1,
+  },
+  labelSm: {
+    fontSize: 11,
+  },
+  labelMd: {
     fontSize: 12,
   },
 });

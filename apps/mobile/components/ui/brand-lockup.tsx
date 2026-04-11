@@ -7,23 +7,40 @@ import { useAppTheme } from '@/theme';
 interface BrandLockupProps {
   compact?: boolean;
   showSubtitle?: boolean;
+  emphasis?: 'auto' | 'flat' | 'backplate';
 }
 
-export function BrandLockup({ compact = false, showSubtitle = true }: BrandLockupProps) {
+export function BrandLockup({
+  compact = false,
+  showSubtitle = true,
+  emphasis = 'auto',
+}: BrandLockupProps) {
   const theme = useAppTheme();
+  const useBackplate = emphasis === 'backplate' || (emphasis === 'auto' && theme.isDark);
+  const markBackplateColor = theme.isDark ? '#FFFFFF' : theme.colors.primarySurface;
 
   return (
     <View
-      style={[styles.root, compact ? styles.rootCompact : styles.rootFull]}
+      style={[
+        styles.root,
+        compact ? styles.rootCompact : styles.rootFull,
+        useBackplate ? styles.rootBackplate : styles.rootFlat,
+        {
+          backgroundColor: useBackplate ? theme.colors.surfaceGlassStrong : 'transparent',
+          borderColor: useBackplate ? theme.colors.border : 'transparent',
+          shadowColor: theme.colors.shadow,
+        },
+      ]}
       accessibilityRole="image"
+      accessibilityLabel="UIT Smart Campus"
     >
       <View
         style={[
           styles.mark,
           compact ? styles.markCompact : styles.markFull,
           {
-            backgroundColor: theme.colors.primarySurface,
-            borderColor: theme.colors.border,
+            backgroundColor: markBackplateColor,
+            borderColor: theme.isDark ? '#FFFFFF' : theme.colors.border,
           },
         ]}
       >
@@ -40,7 +57,10 @@ export function BrandLockup({ compact = false, showSubtitle = true }: BrandLocku
           style={[
             styles.wordmark,
             compact ? styles.wordmarkCompact : styles.wordmarkFull,
-            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+            {
+              color: theme.colors.text,
+              fontFamily: theme.fonts.semibold,
+            },
           ]}
         >
           UIT Smart Campus
@@ -49,8 +69,9 @@ export function BrandLockup({ compact = false, showSubtitle = true }: BrandLocku
           <Text
             style={[
               styles.subtitle,
-              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+              { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
             ]}
+            numberOfLines={2}
           >
             Trường Đại học Công nghệ Thông tin
           </Text>
@@ -71,6 +92,16 @@ const styles = StyleSheet.create({
   },
   rootFull: {
     gap: 12,
+  },
+  rootBackplate: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  rootFlat: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   mark: {
     borderWidth: 1,

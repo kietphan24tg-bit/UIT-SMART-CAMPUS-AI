@@ -2,12 +2,15 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AvatarStorageService } from '../storage/avatar-storage.service';
+import { MAX_AVATAR_UPLOAD_SIZE_BYTES } from '../storage/avatar-upload.constants';
 
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: jest.Mocked<PrismaService>;
+  let avatarStorageService: { uploadAvatar: jest.Mock };
 
   const mockUser = {
     id: 'user-1',
@@ -33,6 +36,12 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         {
+          provide: AvatarStorageService,
+          useValue: {
+            uploadAvatar: jest.fn(),
+          },
+        },
+        {
           provide: PrismaService,
           useValue: {
             user: {
@@ -47,6 +56,9 @@ describe('UsersService', () => {
 
     service = module.get(UsersService);
     prisma = module.get(PrismaService);
+    avatarStorageService = module.get(AvatarStorageService) as unknown as {
+      uploadAvatar: jest.Mock;
+    };
   });
 
   describe('create', () => {
@@ -136,6 +148,62 @@ describe('UsersService', () => {
       await expect(
         service.updateProfile('nonexistent', { firstName: 'X' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateAvatar', () => {
+    it('should upload avatar and persist avatarUrl', async () => {
+      const file = {
+        buffer: Buffer.from('avatar-bytes'),
+        mimetype: 'image/png',
+        size: 12,
+        originalname: 'avatar.png',
+      };
+
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (avatarStorageService.uploadAvatar as jest.Mock).mockResolvedValue({
+        key: 'avatars/user-1/avatar.png',
+        avatarUrl: 'https://cdn.uit.edu.vn/avatars/user-1/avatar.png',
+      });
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        avatarUrl: 'https://cdn.uit.edu.vn/avatars/user-1/avatar.png',
+      });
+
+      const result = await service.updateAvatar('user-1', file);
+
+      expect(avatarStorageService.uploadAvatar).toHaveBeenCalledWith('user-1', file);
+      expect(result.avatarUrl).toBe('https://cdn.uit.edu.vn/avatars/user-1/avatar.png');
+    });
+
+    it('should reject unsupported mime types', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+
+      await expect(
+        service.updateAvatar('user-1', {
+          buffer: Buffer.from('avatar-bytes'),
+          mimetype: 'application/pdf',
+          size: 12,
+          originalname: 'avatar.pdf',
+        } as never),
+      ).rejects.toThrow('Only JPEG, PNG, and WebP images are allowed');
+
+      expect(avatarStorageService.uploadAvatar).not.toHaveBeenCalled();
+    });
+
+    it('should reject oversized files', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+
+      await expect(
+        service.updateAvatar('user-1', {
+          buffer: Buffer.alloc(MAX_AVATAR_UPLOAD_SIZE_BYTES + 1),
+          mimetype: 'image/png',
+          size: MAX_AVATAR_UPLOAD_SIZE_BYTES + 1,
+          originalname: 'avatar.png',
+        } as never),
+      ).rejects.toThrow('Avatar image must be 5 MB or smaller');
+
+      expect(avatarStorageService.uploadAvatar).not.toHaveBeenCalled();
     });
   });
 });

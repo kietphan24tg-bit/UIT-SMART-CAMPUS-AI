@@ -8,6 +8,7 @@ import type {
   PasswordResetOtpVerifyResult,
   PasswordResetRequest,
   RegisterRequest,
+  UserProfile,
 } from '@smart-campus/shared';
 
 import { apiClient } from './client';
@@ -43,17 +44,10 @@ export const authApi = {
     return apiClient.post('/auth/password-reset/reset', data);
   },
 
-  getMe: async (token: string) => {
+  getMe: async (token: string): Promise<UserProfile> => {
     const response = await apiClient.get('/users/me', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return response as unknown as {
-      id: string;
-      email: string;
-      firstName: string;
-      lastName: string;
-      studentId?: string;
-      role: string;
-    };
+    return response as unknown as UserProfile;
   },
 };

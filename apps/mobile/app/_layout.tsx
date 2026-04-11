@@ -1,16 +1,16 @@
 import {
-  BeVietnamPro_400Regular,
-  BeVietnamPro_500Medium,
-  BeVietnamPro_600SemiBold,
-  BeVietnamPro_700Bold,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
   useFonts,
-} from '@expo-google-fonts/be-vietnam-pro';
+} from '@expo-google-fonts/inter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { useEffect } from 'react';
+
+import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,12 +24,10 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts({
-    BeVietnamPro_400Regular,
-    BeVietnamPro_500Medium,
-    BeVietnamPro_600SemiBold,
-    BeVietnamPro_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
   });
 
   useEffect(() => {
@@ -44,6 +42,18 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemePreferenceProvider>
+        <RootNavigator />
+      </ThemePreferenceProvider>
+    </QueryClientProvider>
+  );
+}
+
+function RootNavigator() {
+  const colorScheme = useResolvedThemeMode();
+
+  return (
+    <>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
@@ -61,6 +71,6 @@ export default function RootLayout() {
         <Stack.Screen name="account/delete" />
         <Stack.Screen name="+not-found" />
       </Stack>
-    </QueryClientProvider>
+    </>
   );
 }

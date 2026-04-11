@@ -1,5 +1,11 @@
 import { plainToInstance } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  validateSync,
+} from 'class-validator';
 
 class EnvironmentVariables {
   @IsNumber()
@@ -75,6 +81,30 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   MOMO_IPN_URL = 'http://localhost:3000/api/v1/payments/momo/webhook';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_BUCKET = '';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_ENDPOINT = '';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_ACCESS_KEY_ID = '';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_SECRET_ACCESS_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_REGION = 'us-east-1';
+
+  @IsString()
+  @IsOptional()
+  AVATAR_STORAGE_PUBLIC_BASE_URL = '';
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -1,17 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ThemePreferenceControl } from '@/components/preferences/theme-preference-control';
 import {
   ContentStack,
   EmptyState,
+  InfoRow,
   Screen,
   SectionCard,
   StatusBadge,
   TopHero,
 } from '@/components/ui';
+import { usersApi } from '@/services/api';
 import { useAuthStore } from '@/stores/auth-store';
-import { useAppTheme } from '@/theme';
+import {
+  type ThemePreference,
+  useAppTheme,
+  useSetThemePreference,
+  useThemePreference,
+} from '@/theme';
 import {
   getGreetingName,
   getRoleLabel,
@@ -20,66 +32,224 @@ import {
   isSuperAdminRole,
 } from '@/utils/app';
 
+function resolveMimeType(mimeType?: string | null) {
+  if (mimeType === 'image/png' || mimeType === 'image/webp') {
+    return mimeType;
+  }
+
+  return 'image/jpeg';
+}
+
+function resolveFileName(fileName?: string | null, mimeType?: string | null) {
+  if (fileName) {
+    return fileName;
+  }
+
+  const extension =
+    mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+
+  return `avatar.${extension}`;
+}
+
 export default function ProfileScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const setUser = useAuthStore((state) => state.setUser);
+  const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  const themePreference = useThemePreference();
+  const setThemePreference = useSetThemePreference();
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  const handleThemeChange = async (nextPreference: ThemePreference) => {
+    await setThemePreference(nextPreference);
+  };
+
+  const handleAvatarPick = async () => {
+    try {
+      setAvatarError(null);
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Cần quyền truy cập', 'Hãy cho phép ứng dụng truy cập thư viện ảnh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploadingAvatar(true);
+
+      const processedAsset = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1024, height: 1024 } }],
+        {
+          compress: 0.82,
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
+      );
+
+      const updatedUser = await usersApi.uploadAvatar(
+        processedAsset.uri,
+        resolveFileName(asset.fileName, 'image/jpeg'),
+        resolveMimeType('image/jpeg'),
+      );
+
+      if (user) {
+        setUser({
+          ...user,
+          avatarUrl: updatedUser.avatarUrl,
+          phone: updatedUser.phone,
+          address: updatedUser.address,
+        });
+      }
+
+      await refreshProfile();
+    } catch {
+      setAvatarError('Không thể cập nhật ảnh đại diện.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   return (
     <Screen>
       <TopHero
-        eyebrow="Hồ sơ"
+        eyebrow="Cá nhân"
         title={getGreetingName(user)}
-        subtitle="Tài khoản, quyền hiện tại và lối vào hỗ trợ."
+        subtitle="Tài khoản và giao diện."
         badge={{ label: getRoleLabel(user?.role), tone: 'info' }}
         showBrand
       />
 
       <ContentStack gap={16} overlapHero={false}>
-        <View
-          style={[
-            styles.profileCard,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              ...theme.elevation.level1,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: theme.colors.primarySurface,
-              },
-            ]}
-          >
-            <Text style={[styles.avatarText, { color: theme.colors.primary }]}>
-              {user?.lastName?.charAt(0) ?? 'U'}
+        <SectionCard title="Hồ sơ" subtitle="Thông tin chính" variant="elevated">
+          {user ? (
+            <View style={styles.sectionStack}>
+              <View
+                style={[
+                  styles.profileCard,
+                  {
+                    backgroundColor: theme.colors.surfaceSubtle,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Đổi ảnh đại diện"
+                  onPress={() => void handleAvatarPick()}
+                  style={[
+                    styles.avatarButton,
+                    {
+                      backgroundColor: theme.colors.primarySurface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  {user.avatarUrl ? (
+                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.avatarText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                      ]}
+                    >
+                      {user.lastName?.charAt(0)?.toUpperCase() ?? 'U'}
+                    </Text>
+                  )}
+
+                  <View
+                    style={[
+                      styles.avatarAction,
+                      {
+                        backgroundColor: theme.colors.glassStrong,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    {isUploadingAvatar ? (
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    ) : (
+                      <Ionicons name="camera-outline" size={16} color={theme.colors.primary} />
+                    )}
+                  </View>
+                </Pressable>
+
+                <View style={styles.profileMeta}>
+                  <Text style={[styles.name, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                    {getGreetingName(user)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.secondaryMeta,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                    ]}
+                  >
+                    {user.studentId || 'Chưa có mã định danh'}
+                  </Text>
+                  <StatusBadge label={getRoleLabel(user.role)} tone="info" />
+                </View>
+              </View>
+
+              <InfoRow label="Email" value={user.email || '--'} />
+              <InfoRow label="Mã định danh" value={user.studentId || '--'} />
+
+              <Text
+                style={[
+                  styles.inlineMessage,
+                  {
+                    color: avatarError ? theme.colors.danger : theme.colors.textSoft,
+                    fontFamily: avatarError ? theme.fonts.medium : theme.fonts.regular,
+                  },
+                ]}
+              >
+                {avatarError || 'Ảnh đại diện được lưu vào tài khoản.'}
+              </Text>
+            </View>
+          ) : (
+            <EmptyState
+              icon="person-outline"
+              title="Chưa có dữ liệu"
+              description="Vui lòng đăng nhập lại."
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Giao diện" subtitle="Lưu trên thiết bị này" variant="subtle">
+          <View style={styles.sectionStack}>
+            <ThemePreferenceControl value={themePreference} onChange={handleThemeChange} />
+            <Text
+              style={[
+                styles.inlineMessage,
+                { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+              ]}
+            >
+              Áp dụng ngay cho light mode và dark mode.
             </Text>
           </View>
-          <Text
-            style={[
-              styles.name,
-              { color: theme.colors.text, fontFamily: theme.fonts.bold },
-            ]}
-          >
-            {getGreetingName(user)}
-          </Text>
-          <Text style={[styles.meta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-            {user?.studentId || 'Chưa có mã định danh'} · {user?.email || 'Chưa có email'}
-          </Text>
-          {user ? <StatusBadge label={getRoleLabel(user.role)} tone="info" /> : null}
-        </View>
+        </SectionCard>
 
-        <SectionCard title="Lối vào theo vai trò" subtitle="Chỉ hiển thị đúng công cụ theo quyền hiện tại.">
+        <SectionCard title="Lối tắt" subtitle="Theo vai trò" variant="outlined">
           <View style={styles.linkGroup}>
             {isLecturerRole(user?.role) ? (
               <ProfileLink
                 icon="school-outline"
                 label="Lịch dạy"
-                description="Mở lịch và công cụ lớp học."
+                meta="Giảng dạy"
                 onPress={() => router.push('/schedule')}
               />
             ) : null}
@@ -87,64 +257,41 @@ export default function ProfileScreen() {
               <ProfileLink
                 icon="pulse-outline"
                 label="Vận hành campus"
-                description="Theo dõi parking, telemetry và cảnh báo."
+                meta="Giám sát"
                 onPress={() => router.push('/schedule')}
               />
             ) : null}
             {isSuperAdminRole(user?.role) ? (
               <ProfileLink
                 icon="settings-outline"
-                label="Thiết lập hệ thống"
-                description="Đi tới phạm vi thiết lập được cấp."
+                label="Hệ thống"
+                meta="Quản trị"
                 onPress={() => router.push('/settings/system-controls')}
               />
             ) : null}
-          </View>
-        </SectionCard>
-
-        <SectionCard title="Tài khoản và hỗ trợ" subtitle="Các lối vào chính cho mọi người dùng.">
-          <View style={styles.linkGroup}>
             <ProfileLink
               icon="settings-outline"
               label="Cài đặt"
-              description="Quản lý tài khoản và hỗ trợ."
+              meta="Tài khoản"
               onPress={() => router.push('/settings')}
             />
             <ProfileLink
               icon="shield-checkmark-outline"
               label="Quyền riêng tư"
-              description="Điều khoản, chính sách và quyền truy cập."
+              meta="Điều khoản"
               onPress={() => router.push('/legal')}
             />
             <ProfileLink
               icon="trash-outline"
               label="Xóa tài khoản"
-              description="Xem lưu ý trước khi gửi yêu cầu."
+              meta="Yêu cầu"
               onPress={() => router.push('/account/delete')}
             />
           </View>
         </SectionCard>
 
-        <SectionCard title="Thông tin ứng dụng" subtitle="Tóm tắt sản phẩm và phiên bản hiện tại.">
-          {user ? (
-            <View style={styles.linkGroup}>
-              <Text style={[styles.metaLeft, { color: theme.colors.textMuted }]}>
-                UIT Smart Campus tập trung vào xác thực, lịch học, thông báo và parking.
-              </Text>
-              <Text style={[styles.metaLeft, { color: theme.colors.textMuted }]}>
-                Phiên bản ứng dụng: 0.1.0
-              </Text>
-            </View>
-          ) : (
-            <EmptyState
-              icon="person-outline"
-              title="Chưa có dữ liệu hồ sơ"
-              description="Ứng dụng sẽ đưa bạn về màn đăng nhập nếu phiên làm việc hết hạn."
-            />
-          )}
-        </SectionCard>
-
         <Pressable
+          accessibilityRole="button"
           onPress={() => void logout()}
           style={[
             styles.logoutButton,
@@ -155,7 +302,9 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons name="log-out-outline" size={20} color={theme.colors.danger} />
-          <Text style={[styles.logoutText, { color: theme.colors.danger }]}>Đăng xuất</Text>
+          <Text style={[styles.logoutText, { color: theme.colors.danger, fontFamily: theme.fonts.bold }]}>
+            Đăng xuất
+          </Text>
         </Pressable>
       </ContentStack>
     </Screen>
@@ -165,12 +314,12 @@ export default function ProfileScreen() {
 function ProfileLink({
   icon,
   label,
-  description,
+  meta,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  description: string;
+  meta: string;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
@@ -186,19 +335,16 @@ function ProfileLink({
         },
       ]}
     >
-      <View
-        style={[
-          styles.iconWrap,
-          {
-            backgroundColor: theme.colors.primarySurface,
-          },
-        ]}
-      >
+      <View style={[styles.iconWrap, { backgroundColor: theme.colors.primarySurface }]}>
         <Ionicons name={icon} size={18} color={theme.colors.primary} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.linkLabel, { color: theme.colors.text }]}>{label}</Text>
-        <Text style={[styles.linkDescription, { color: theme.colors.textMuted }]}>{description}</Text>
+      <View style={styles.linkCopy}>
+        <Text style={[styles.linkLabel, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+          {label}
+        </Text>
+        <Text style={[styles.linkMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
+          {meta}
+        </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={theme.colors.textSoft} />
     </Pressable>
@@ -206,32 +352,55 @@ function ProfileLink({
 }
 
 const styles = StyleSheet.create({
+  sectionStack: {
+    gap: 12,
+  },
   profileCard: {
     borderRadius: 24,
     borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    gap: 10,
+    gap: 16,
+    padding: 16,
   },
-  avatar: {
-    width: 76,
-    height: 76,
+  avatarButton: {
+    width: 92,
+    height: 92,
     borderRadius: 28,
+    borderWidth: 1,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
   avatarText: {
-    fontSize: 30,
+    fontSize: 32,
+  },
+  avatarAction: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileMeta: {
+    flex: 1,
+    gap: 8,
   },
   name: {
     fontSize: 22,
   },
-  meta: {
+  secondaryMeta: {
     fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
   },
-  metaLeft: {
+  inlineMessage: {
     fontSize: 13,
     lineHeight: 18,
   },
@@ -241,34 +410,38 @@ const styles = StyleSheet.create({
   profileLink: {
     borderRadius: 18,
     borderWidth: 1,
-    padding: 14,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
   iconWrap: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  linkCopy: {
+    flex: 1,
+    gap: 2,
+  },
   linkLabel: {
     fontSize: 15,
   },
-  linkDescription: {
-    marginTop: 4,
+  linkMeta: {
     fontSize: 12,
-    lineHeight: 17,
   },
   logoutButton: {
-    borderRadius: 18,
+    minHeight: 56,
+    borderRadius: 20,
     borderWidth: 1,
-    minHeight: 52,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    flexDirection: 'row',
+    gap: 10,
   },
   logoutText: {
     fontSize: 15,

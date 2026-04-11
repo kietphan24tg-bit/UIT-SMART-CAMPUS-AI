@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
-import ServicesScreen from '../index';
+import ServicesScreen, { getServiceGridWidth } from '../index';
 
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
@@ -29,20 +29,50 @@ describe('ServicesScreen', () => {
       return selector(state);
     });
     mockUseResponsiveLayout.mockReturnValue({
+      isCompact: false,
       isTablet: false,
+      availableWidth: 320,
       getGridColumns: () => 1,
       getGridItemWidth: () => 320,
     });
   });
 
-  it('renders campus map service as interactive and navigates to detail', () => {
-    const { getByText } = render(<ServicesScreen />);
+  it('renders the featured campus map card and navigates to detail', () => {
+    const { getByText, getAllByText } = render(<ServicesScreen />);
 
     expect(getByText('Bản đồ khuôn viên')).toBeTruthy();
-    expect(getByText('Mở tour 3D UIT')).toBeTruthy();
+    expect(getAllByText('Mở ngay').length).toBeGreaterThan(0);
+    expect(getAllByText('Khả dụng').length).toBeGreaterThan(0);
 
     fireEvent.press(getByText('Bản đồ khuôn viên'));
 
     expect(mockRouter.push).toHaveBeenCalledWith('/services/campus-map');
+  });
+
+  it('renders live and upcoming service groups on tablet widths', () => {
+    mockUseResponsiveLayout.mockReturnValue({
+      isCompact: false,
+      isTablet: true,
+      availableWidth: 600,
+      getGridColumns: () => 2,
+      getGridItemWidth: () => 280,
+    });
+
+    const { getByText } = render(<ServicesScreen />);
+
+    expect(getByText('Nổi bật')).toBeTruthy();
+    expect(getByText('Đang hỗ trợ')).toBeTruthy();
+    expect(getByText('Sắp tới')).toBeTruthy();
+  });
+
+  it('keeps service cards inside the section content width', () => {
+    expect(
+      getServiceGridWidth({
+        isCompact: false,
+        isTablet: false,
+        availableWidth: 320,
+        getGridItemWidth: jest.fn(),
+      } as never),
+    ).toBe(284);
   });
 });

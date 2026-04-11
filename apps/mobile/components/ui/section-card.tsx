@@ -6,7 +6,26 @@ import { SecondaryButton } from './buttons';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAppTheme } from '@/theme';
 
-type SectionCardVariant = 'elevated' | 'outlined' | 'subtle';
+type SectionCardVariant =
+  | 'elevated'
+  | 'outlined'
+  | 'subtle'
+  | 'highlight'
+  | 'metric'
+  | 'list'
+  | 'glass'
+  | 'danger';
+
+type SectionCardTone =
+  | 'primary'
+  | 'campus'
+  | 'academic'
+  | 'telemetry'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'neutral';
 
 interface SectionCardProps {
   title: string;
@@ -15,6 +34,11 @@ interface SectionCardProps {
   onActionPress?: () => void;
   children: ReactNode;
   variant?: SectionCardVariant;
+  tone?: SectionCardTone;
+  icon?: ReactNode;
+  headerAccessory?: ReactNode;
+  footer?: ReactNode;
+  showAccentLine?: boolean;
 }
 
 export function SectionCard({
@@ -24,18 +48,87 @@ export function SectionCard({
   onActionPress,
   children,
   variant = 'elevated',
+  tone = 'primary',
+  icon,
+  headerAccessory,
+  footer,
+  showAccentLine = false,
 }: SectionCardProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
-  const elevationStyle =
-    variant === 'outlined' ? theme.elevation.level0 : theme.elevation.level2;
+  const accentColor =
+    tone === 'campus'
+      ? theme.colors.accentCampus
+      : tone === 'academic'
+        ? theme.colors.accentAcademic
+        : tone === 'telemetry'
+          ? theme.colors.accentTelemetry
+          : tone === 'success'
+            ? theme.colors.success
+            : tone === 'warning'
+              ? theme.colors.warning
+              : tone === 'danger'
+                ? theme.colors.danger
+                : tone === 'info'
+                  ? theme.colors.info
+                  : theme.colors.primary;
+  const accentSurface =
+    tone === 'campus'
+      ? theme.colors.accentCampusSurface
+      : tone === 'academic'
+        ? theme.colors.accentAcademicSurface
+        : tone === 'telemetry'
+          ? theme.colors.accentTelemetrySurface
+          : tone === 'success'
+            ? theme.colors.successSurface
+            : tone === 'warning'
+              ? theme.colors.warningSurface
+              : tone === 'danger'
+                ? theme.colors.dangerSurface
+                : tone === 'info'
+                  ? theme.colors.infoSurface
+                  : theme.colors.primarySurface;
   const backgroundColor =
     variant === 'outlined'
       ? theme.colors.surface
       : variant === 'subtle'
         ? theme.colors.surfaceSubtle
-        : theme.colors.surfaceElevated;
-
+        : variant === 'glass'
+          ? theme.colors.surfaceGlass
+          : variant === 'highlight'
+            ? theme.colors.surfaceTinted
+            : variant === 'metric'
+              ? theme.colors.surfaceElevated
+              : variant === 'danger'
+                ? theme.colors.dangerSurface
+                : variant === 'list'
+                  ? theme.colors.surface
+                  : theme.colors.surfaceElevated;
+  const elevationStyle =
+    variant === 'outlined' || variant === 'list'
+      ? theme.elevation.level0
+      : variant === 'glass' || variant === 'subtle'
+        ? theme.elevation.level1
+        : theme.elevation.level2;
+  const cardPadding = layout.isTablet
+    ? variant === 'metric'
+      ? 18
+      : 22
+    : layout.isCompact
+      ? variant === 'metric'
+        ? 14
+        : 16
+      : variant === 'metric'
+        ? 16
+        : 18;
+  const contentSpacing =
+    variant === 'metric' || variant === 'list'
+      ? layout.isCompact
+        ? 12
+        : 14
+      : layout.isCompact
+        ? 14
+        : 16;
   return (
     <View
       style={[
@@ -44,36 +137,77 @@ export function SectionCard({
           backgroundColor,
           borderColor: theme.colors.border,
           borderRadius: theme.radii.xl,
-          padding: layout.isTablet ? 22 : layout.isCompact ? 16 : 18,
+          padding: cardPadding,
         },
         elevationStyle as never,
       ]}
     >
+      {showAccentLine ? (
+        <View
+          style={[
+            styles.accentLine,
+            {
+              backgroundColor: variant === 'danger' ? theme.colors.danger : accentColor,
+            },
+          ]}
+        />
+      ) : null}
       <View style={[styles.header, layout.isCompact ? styles.headerStacked : null]}>
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text
-              style={[
-                styles.subtitle,
-                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-              ]}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
+          <View style={styles.titleRow}>
+            {icon ? (
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor: accentSurface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                {icon}
+              </View>
+            ) : null}
+            <View style={styles.titleTextWrap}>
+              <Text
+                style={[
+                  styles.title,
+                  variant === 'metric' ? styles.titleMetric : null,
+                  { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                ]}
+              >
+                {title}
+              </Text>
+              {subtitle ? (
+                <Text
+                  style={[
+                    styles.subtitle,
+                    variant === 'metric' ? styles.subtitleMetric : null,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                  ]}
+                  numberOfLines={variant === 'list' ? 1 : 2}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+          </View>
         </View>
-        {actionLabel && onActionPress ? (
-          <SecondaryButton
-            label={actionLabel}
-            onPress={onActionPress}
-            style={layout.isCompact ? styles.actionButton : undefined}
-          />
+        {actionLabel || headerAccessory ? (
+          <View style={styles.actions}>
+            {headerAccessory ? <View style={styles.headerAccessory}>{headerAccessory}</View> : null}
+            {actionLabel && onActionPress ? (
+              <SecondaryButton
+                label={actionLabel}
+                onPress={onActionPress}
+                style={layout.isCompact ? styles.actionButton : undefined}
+              />
+            ) : null}
+          </View>
         ) : null}
       </View>
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, { marginTop: contentSpacing }]}>{children}</View>
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </View>
   );
 }
@@ -81,6 +215,7 @@ export function SectionCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -94,18 +229,59 @@ const styles = StyleSheet.create({
   titleWrap: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  titleTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actions: {
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  headerAccessory: {
+    alignItems: 'flex-end',
+  },
   actionButton: {
     alignSelf: 'flex-start',
   },
   title: {
     fontSize: 18,
   },
+  titleMetric: {
+    fontSize: 19,
+  },
   subtitle: {
     fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
   },
+  subtitleMetric: {
+    marginTop: 3,
+  },
   content: {
-    marginTop: 16,
+    marginTop: 0,
+  },
+  footer: {
+    marginTop: 14,
+  },
+  accentLine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
   },
 });

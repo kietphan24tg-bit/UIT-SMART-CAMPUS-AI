@@ -1,7 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { UserRole } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AvatarStorageService, type AvatarUploadFile } from '../storage/avatar-storage.service';
+import { ALLOWED_AVATAR_MIME_TYPES, MAX_AVATAR_UPLOAD_SIZE_BYTES } from '../storage/avatar-upload.constants';
 
 interface CreateUserData {
   email: string;
@@ -13,7 +15,10 @@ interface CreateUserData {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatarStorageService: AvatarStorageService,
+  ) {}
 
   private readonly userSelect = {
     id: true,
@@ -81,13 +86,34 @@ export class UsersService {
       lastName: string;
       phone: string;
       address: string;
-      avatarUrl: string;
     }>,
   ) {
     await this.findById(id);
     return this.prisma.user.update({
       where: { id },
       data,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        address: true,
+        avatarUrl: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateAvatar(id: string, file: AvatarUploadFile) {
+    await this.findById(id);
+    this.assertValidAvatarFile(file);
+
+    const uploadedAsset = await this.avatarStorageService.uploadAvatar(id, file);
+
+    return this.prisma.user.update({
+      where: { id },
+      data: { avatarUrl: uploadedAsset.avatarUrl },
       select: {
         id: true,
         email: true,
@@ -123,5 +149,19 @@ export class UsersService {
 
     await this.prisma.refreshToken.deleteMany({ where: { userId: id } });
     return user;
+  }
+
+  private assertValidAvatarFile(file: AvatarUploadFile) {
+    if (!file?.buffer || !file.size) {
+      throw new BadRequestException('Avatar file is required');
+    }
+
+    if (file.size > MAX_AVATAR_UPLOAD_SIZE_BYTES) {
+      throw new BadRequestException('Avatar image must be 5 MB or smaller');
+    }
+
+    if (!ALLOWED_AVATAR_MIME_TYPES.has(file.mimetype)) {
+      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed');
+    }
   }
 }

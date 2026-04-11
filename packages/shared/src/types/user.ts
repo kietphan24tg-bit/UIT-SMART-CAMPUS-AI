@@ -7,7 +7,7 @@ export interface User {
   firstName: string;
   lastName: string;
   fullName: string;
-  avatarUrl?: string;
+  avatarUrl: string | null;
   role: UserRole;
   faculty?: string;
   major?: string;

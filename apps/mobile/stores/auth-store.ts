@@ -1,27 +1,35 @@
-import type { RegisterRequest } from '@smart-campus/shared';
+import type { RegisterRequest, UserProfile } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
+import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
 
-interface UserInfo {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  studentId?: string;
-  role: string;
-}
+type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> &
+  Partial<
+    Pick<
+      UserProfile,
+      | 'studentId'
+      | 'avatarUrl'
+      | 'phone'
+      | 'address'
+      | 'faculty'
+      | 'major'
+      | 'yearOfAdmission'
+    >
+  >;
 
 interface AuthState {
   isAuthenticated: boolean;
   user: UserInfo | null;
   accessToken: string | null;
 
+  setUser: (user: UserInfo | null) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
+  refreshProfile: () => Promise<UserInfo | null>;
 }
 
 const TOKEN_KEY = 'auth_access_token';
@@ -31,6 +39,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
   accessToken: null,
+
+  setUser: (user) => {
+    set((state) => ({
+      ...state,
+      user,
+      isAuthenticated: Boolean(state.accessToken && user),
+    }));
+  },
 
   login: async (email, password) => {
     const tokens = await authApi.login({ email, password });
@@ -67,5 +83,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       await SecureStore.deleteItemAsync(REFRESH_KEY);
     }
+  },
+
+  refreshProfile: async () => {
+    const token = await SecureStore.getItemAsync(TOKEN_KEY);
+    if (!token) {
+      set({ isAuthenticated: false, user: null, accessToken: null });
+      return null;
+    }
+
+    const user = await usersApi.getProfile();
+    set({ isAuthenticated: true, user, accessToken: token });
+    return user;
   },
 }));

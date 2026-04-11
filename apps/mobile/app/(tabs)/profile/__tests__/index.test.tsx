@@ -35,9 +35,9 @@ describe('ProfileScreen', () => {
   });
 
   it('should display account summary', () => {
-    const { getByText } = render(<ProfileScreen />);
+    const { getAllByText, getByText } = render(<ProfileScreen />);
 
-    expect(getByText(/22520001/)).toBeTruthy();
+    expect(getAllByText(/22520001/).length).toBeGreaterThan(0);
     expect(getByText(/test@uit.edu.vn/)).toBeTruthy();
   });
 

@@ -5,3 +5,4 @@ export { notificationsApi } from './notifications';
 export { parkingApi } from './parking';
 export { safetyApi } from './safety';
 export { scheduleApi } from './schedule';
+export { usersApi } from './users';

@@ -1,8 +1,8 @@
-import type { SemesterScheduleRecord } from '@/types/app-data';
 import {
   getStudentSemesterScheduleById,
   STUDENT_SEMESTER_SCHEDULES,
 } from '@/constants/student-academic-data';
+import type { SemesterScheduleRecord } from '@/types/app-data';
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
