@@ -233,7 +233,7 @@ Response `data`:
 {
   "action": "entry_allowed",
   "message": "Xe hợp lệ. Mở barrier cho xe vào.",
-  "availableSlots": 2,
+  "availableSlots": 1,
   "sessionId": "ps_01H..."
 }
 ```
@@ -255,12 +255,10 @@ Body:
 {
   "gateId": "uit-gate-a",
   "deviceIp": "192.168.1.55",
-  "slotBitmap": "0101",
+  "slotBitmap": "01",
   "slots": [
     { "slotNumber": "A1", "occupied": false },
-    { "slotNumber": "A2", "occupied": true },
-    { "slotNumber": "A3", "occupied": false },
-    { "slotNumber": "A4", "occupied": true }
+    { "slotNumber": "A2", "occupied": true }
   ],
   "temperature": 32.5,
   "humidity": 72.4,
@@ -301,7 +299,7 @@ Body:
   "telemetrySnapshot": {
     "gateId": "uit-gate-a",
     "deviceIp": "192.168.1.55",
-    "slotBitmap": "0101",
+    "slotBitmap": "01",
     "slots": [
       { "slotNumber": "A1", "occupied": false },
       { "slotNumber": "A2", "occupied": true }

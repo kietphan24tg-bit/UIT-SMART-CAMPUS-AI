@@ -49,7 +49,7 @@ export class TelemetryDto {
   @MaxLength(64)
   deviceIp?: string;
 
-  @ApiPropertyOptional({ example: '0101' })
+  @ApiPropertyOptional({ example: '01' })
   @IsOptional()
   @IsString()
   @MaxLength(64)

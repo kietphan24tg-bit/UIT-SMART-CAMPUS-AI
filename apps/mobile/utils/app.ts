@@ -313,7 +313,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'parking',
       primaryAction: 'Mở Parking',
       route: '/parking',
-      description: 'Hỗ trợ A1-A4, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
+      description: 'Hỗ trợ A1-A2, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
     },
     {
       id: 'events',

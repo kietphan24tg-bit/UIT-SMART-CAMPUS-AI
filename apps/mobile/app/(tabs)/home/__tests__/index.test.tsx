@@ -27,8 +27,8 @@ const baseDashboard = {
     gpa: { gpa: 3.71, totalCredits: 12, totalCourses: 4 },
     unreadCount: 5,
     parking: {
-      availableSlots: 3,
-      totalSlots: 4,
+      availableSlots: 1,
+      totalSlots: 2,
       activeSessions: 1,
       occupiedSlots: 1,
       lastUpdated: '2026-04-07T05:00:00.000Z',

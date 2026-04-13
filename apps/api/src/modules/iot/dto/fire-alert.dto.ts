@@ -50,7 +50,7 @@ export class FireAlertTelemetrySnapshotDto {
   @MaxLength(64)
   deviceIp?: string;
 
-  @ApiPropertyOptional({ example: '0101' })
+  @ApiPropertyOptional({ example: '01' })
   @IsOptional()
   @IsString()
   @MaxLength(64)
@@ -110,7 +110,7 @@ export class FireAlertDto {
     example: {
       gateId: 'uit-gate-a',
       deviceIp: '192.168.1.55',
-      slotBitmap: '0101',
+      slotBitmap: '01',
       slots: [{ slotNumber: 'A1', occupied: true }],
       temperature: 32.5,
       humidity: 72.4,

@@ -12,7 +12,7 @@ Nguồn dữ liệu thực tế từ repo IoT hiện tại:
 | --- | --- | --- | --- |
 | RFID scan | ESP32 -> gateway -> backend | Có thật | Hiển thị scan state, plate verification, entry/exit result |
 | Biển số nhận diện | Webcam + LPR service | Có thật | Hiển thị plate, evidence image, access decision |
-| Slot A1-A4 | 4 cảm biến slot | Có thật | Grid slot real-time, free/busy summary |
+| Slot A1-A2 | 2 cảm biến slot | Có thật | Grid slot real-time, free/busy summary |
 | Nhiệt độ | DHT11 | Có thật | Sensor card trong parking/ops |
 | Độ ẩm | DHT11 | Có thật | Sensor card trong parking/ops |
 | Mưa | Rain sensor | Có thật | Weather safety badge |

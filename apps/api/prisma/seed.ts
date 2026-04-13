@@ -4,6 +4,10 @@ import { resolve } from 'node:path';
 import { PrismaClient, Role, ScheduleSessionType, SubscriptionStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
+import {
+  DEFAULT_PARKING_GATE_ID,
+  getActiveParkingSlotNumbers,
+} from '../src/modules/parking/parking-slot-layout';
 
 dotenv.config({
   path: existsSync(resolve(process.cwd(), '.env.local')) ? '.env.local' : '.env',
@@ -1246,17 +1250,28 @@ async function main() {
     },
   });
 
-  for (const slotNumber of ['A1', 'A2', 'A3', 'A4']) {
+  const activeParkingSlots = getActiveParkingSlotNumbers(DEFAULT_PARKING_GATE_ID);
+
+  await prisma.parkingSlot.deleteMany({
+    where: {
+      gateId: DEFAULT_PARKING_GATE_ID,
+      slotNumber: {
+        notIn: activeParkingSlots,
+      },
+    },
+  });
+
+  for (const slotNumber of activeParkingSlots) {
     await prisma.parkingSlot.upsert({
       where: {
         gateId_slotNumber: {
-          gateId: 'uit-gate-a',
+          gateId: DEFAULT_PARKING_GATE_ID,
           slotNumber,
         },
       },
       update: {},
       create: {
-        gateId: 'uit-gate-a',
+        gateId: DEFAULT_PARKING_GATE_ID,
         zone: 'Main',
         slotNumber,
         isOccupied: false,

@@ -1,6 +1,13 @@
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+
+const ACCESS_TOKEN_KEY = 'auth_access_token';
+const REFRESH_TOKEN_KEY = 'auth_refresh_token';
+
+type RetryableRequestConfig = AxiosRequestConfig & {
+  _retry?: boolean;
+};
 
 function getMetroHost() {
   type ConstantsLike = {
@@ -33,18 +40,77 @@ function getMetroHost() {
 const configuredBaseUrl =
   Constants.expoConfig?.extra?.apiUrl ?? process.env.EXPO_PUBLIC_API_URL;
 const metroHost = getMetroHost();
-const BASE_URL =
+export const API_BASE_URL =
   configuredBaseUrl ??
   (metroHost ? `http://${metroHost}:3000/api/v1` : 'http://127.0.0.1:3000/api/v1');
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
+let refreshTokenRequest: Promise<string | null> | null = null;
+
+async function clearStoredTokens() {
+  await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+}
+
+async function refreshAccessToken() {
+  if (refreshTokenRequest) {
+    return refreshTokenRequest;
+  }
+
+  refreshTokenRequest = (async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      return null;
+    }
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/refresh`,
+        { refreshToken },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000,
+        },
+      );
+      const tokens = response.data?.data ?? response.data;
+      const accessToken = tokens?.accessToken;
+      const nextRefreshToken = tokens?.refreshToken;
+
+      if (!accessToken || !nextRefreshToken) {
+        return null;
+      }
+
+      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, nextRefreshToken);
+      return accessToken as string;
+    } catch {
+      await clearStoredTokens();
+      return null;
+    }
+  })();
+
+  try {
+    return await refreshTokenRequest;
+  } finally {
+    refreshTokenRequest = null;
+  }
+}
+
+function shouldAttemptRefresh(config: RetryableRequestConfig) {
+  const requestUrl = String(config.url ?? '');
+  return !requestUrl.includes('/auth/login') &&
+    !requestUrl.includes('/auth/register') &&
+    !requestUrl.includes('/auth/refresh');
+}
+
 apiClient.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('auth_access_token');
+  const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -53,10 +119,27 @@ apiClient.interceptors.request.use(async (config) => {
 
 apiClient.interceptors.response.use(
   (response) => response.data?.data ?? response.data,
-  async (error) => {
-    if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('auth_access_token');
-      await SecureStore.deleteItemAsync('auth_refresh_token');
+  async (error: AxiosError) => {
+    const originalRequest = error.config as RetryableRequestConfig | undefined;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      shouldAttemptRefresh(originalRequest)
+    ) {
+      originalRequest._retry = true;
+      const accessToken = await refreshAccessToken();
+
+      if (accessToken) {
+        originalRequest.headers = {
+          ...(originalRequest.headers ?? {}),
+          Authorization: `Bearer ${accessToken}`,
+        };
+        return apiClient.request(originalRequest);
+      }
+
+      await clearStoredTokens();
     }
     return Promise.reject(error.response?.data ?? error);
   },

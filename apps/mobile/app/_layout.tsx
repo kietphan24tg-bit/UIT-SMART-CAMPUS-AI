@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -43,7 +44,9 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemePreferenceProvider>
-        <RootNavigator />
+        <ParkingRealtimeProvider>
+          <RootNavigator />
+        </ParkingRealtimeProvider>
       </ThemePreferenceProvider>
     </QueryClientProvider>
   );

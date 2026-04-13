@@ -144,7 +144,7 @@ export default function HomeScreen() {
                         value: snapshot.parking
                           ? `${snapshot.parking.availableSlots}/${snapshot.parking.totalSlots}`
                           : '--',
-                        helper: 'Parking A1-A4',
+                        helper: 'Parking A1-A2',
                         tone: 'success',
                       },
                       {

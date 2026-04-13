@@ -5,9 +5,11 @@ import { notificationsApi } from '@/services/api/notifications';
 import { parkingApi } from '@/services/api/parking';
 import { safetyApi } from '@/services/api/safety';
 import { scheduleApi } from '@/services/api/schedule';
+import { useParkingRealtimeStore } from '@/stores/parking-realtime-store';
 import type {
   FireAlertsPayload,
   GPASummary,
+  OperationsSummaryState,
   ParkingStatus,
   ScheduleRecord,
   SemesterScheduleRecord,
@@ -56,9 +58,13 @@ export function useScheduleScreenData(selectedSemesterId?: string) {
 }
 
 export function useOperationsScreenData() {
+  const connectionState = useParkingRealtimeStore(
+    (state) => state.connectionState,
+  );
+
   return useQuery({
     queryKey: ['operations-summary'],
-    queryFn: async () => {
+    queryFn: async (): Promise<OperationsSummaryState> => {
       const [parking, telemetry, fireAlerts, unreadCount, gpa] = await Promise.all([
         parkingApi.getStatus().catch(() => null as ParkingStatus | null),
         safetyApi.getLatestTelemetry().catch(() => null as TelemetrySnapshotRecord | null),
@@ -81,5 +87,6 @@ export function useOperationsScreenData() {
         gpa,
       };
     },
+    refetchInterval: connectionState === 'live' ? false : 10_000,
   });
 }

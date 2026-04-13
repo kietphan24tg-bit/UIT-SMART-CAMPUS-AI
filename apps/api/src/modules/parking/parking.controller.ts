@@ -14,8 +14,6 @@ import { ParkingService } from './parking.service';
 
 @ApiTags('Parking')
 @Controller('parking')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class ParkingController {
   constructor(private readonly parkingService: ParkingService) {}
 
@@ -27,12 +25,16 @@ export class ParkingController {
   }
 
   @Get('vehicles')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vehicles registered by current user' })
   getVehicles(@CurrentUser('id') userId: string) {
     return this.parkingService.listVehicles(userId);
   }
 
   @Post('vehicles')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Register a vehicle for parking access' })
   createVehicle(
     @CurrentUser('id') userId: string,

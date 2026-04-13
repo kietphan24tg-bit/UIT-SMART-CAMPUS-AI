@@ -75,10 +75,10 @@ describe('ScheduleScreen', () => {
     mockUseOperationsScreenData.mockReturnValue({
       data: {
         parking: {
-          availableSlots: 2,
-          totalSlots: 4,
+          availableSlots: 1,
+          totalSlots: 2,
           activeSessions: 1,
-          occupiedSlots: 2,
+          occupiedSlots: 1,
           gateId: 'uit-gate-a',
           lastUpdated: '2026-04-07T05:00:00.000Z',
           sensors: {

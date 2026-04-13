@@ -242,7 +242,7 @@ export default function ScheduleScreen() {
       {
         label: 'Chỗ trống',
         value: parking ? `${parking.availableSlots}/${parking.totalSlots}` : '--',
-        helper: 'Bãi A1-A4',
+        helper: 'Bãi A1-A2',
         tone: 'success' as const,
       },
       {

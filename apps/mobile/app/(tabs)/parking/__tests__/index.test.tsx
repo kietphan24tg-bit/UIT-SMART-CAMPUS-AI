@@ -16,8 +16,8 @@ describe('ParkingScreen', () => {
         telemetryHealth: 'online',
         status: {
           gateId: 'uit-gate-a',
-          availableSlots: 3,
-          totalSlots: 4,
+          availableSlots: 1,
+          totalSlots: 2,
           occupiedSlots: 1,
           activeSessions: 1,
           lastUpdated: '2026-04-07T05:00:00.000Z',
@@ -29,7 +29,10 @@ describe('ParkingScreen', () => {
             deviceIp: '192.168.1.10',
             reportedAt: '2026-04-07T05:00:00.000Z',
           },
-          slots: [{ slotNumber: 'A1', isOccupied: false, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' }],
+          slots: [
+            { slotNumber: 'A1', isOccupied: false, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' },
+            { slotNumber: 'A2', isOccupied: true, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' },
+          ],
         },
         vehicles: [
           {
@@ -63,8 +66,8 @@ describe('ParkingScreen', () => {
     expect(getByText('Bãi xe UIT')).toBeTruthy();
     expect(getAllByText('uit-gate-a').length).toBeGreaterThan(0);
     expect(getByText('Chỗ trống')).toBeTruthy();
-    expect(getByText('3/4')).toBeTruthy();
-    expect(getByText('IR A1-A4')).toBeTruthy();
+    expect(getByText('1/2')).toBeTruthy();
+    expect(getByText('IR A1-A2')).toBeTruthy();
     expect(getByText('Mưa')).toBeTruthy();
     expect(getByText('Không mưa')).toBeTruthy();
     expect(getByText('Nhiệt ẩm')).toBeTruthy();
@@ -96,5 +99,45 @@ describe('ParkingScreen', () => {
 
     expect(getByText('Chưa có telemetry')).toBeTruthy();
     expect(getByText('Chưa có xe đăng ký')).toBeTruthy();
+  });
+
+  it('shows rain particles when the rain sensor is active', () => {
+    mockUseParkingOverview.mockReturnValue({
+      data: {
+        telemetryHealth: 'online',
+        status: {
+          gateId: 'uit-gate-a',
+          availableSlots: 0,
+          totalSlots: 2,
+          occupiedSlots: 2,
+          activeSessions: 2,
+          lastUpdated: '2026-04-07T05:00:00.000Z',
+          sensors: {
+            temperature: 25,
+            humidity: 88,
+            rainDetected: true,
+            fireDetected: false,
+            deviceIp: '192.168.1.10',
+            reportedAt: '2026-04-07T05:00:00.000Z',
+          },
+          slots: [
+            { slotNumber: 'A1', isOccupied: true, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' },
+            { slotNumber: 'A2', isOccupied: true, zone: 'A', lastUpdated: '2026-04-07T05:00:00.000Z' },
+          ],
+        },
+        vehicles: [],
+      },
+      isRefetching: false,
+      isSubmittingVehicle: false,
+      isSubmittingPayment: false,
+      refetch: jest.fn(),
+      createVehicle: jest.fn(),
+      createPayment: jest.fn(),
+    });
+
+    const { getByText, getByTestId } = render(<ParkingScreen />);
+
+    expect(getByText('Có mưa')).toBeTruthy();
+    expect(getByTestId('rain-particles')).toBeTruthy();
   });
 });

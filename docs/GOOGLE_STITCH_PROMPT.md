@@ -30,7 +30,7 @@ Phải bám đúng các thành phần phần cứng thật đang có:
 
 - `ESP32`
 - `RFID RC522`
-- `4 cảm biến slot` cho `A1`, `A2`, `A3`, `A4`
+- `2 cảm biến slot` cho `A1`, `A2`
 - `DHT11` cho `nhiệt độ` và `độ ẩm`
 - `cảm biến mưa`
 - `cảm biến lửa`
@@ -45,7 +45,7 @@ Prompt phải bám đúng dữ liệu thật và backend thật:
 
 - RFID scan result
 - recognized license plate
-- parking slot occupancy A1-A4
+- parking slot occupancy A1-A2
 - available / occupied / total slots
 - temperature
 - humidity
@@ -277,7 +277,7 @@ Không được:
 Phải có:
 
 - available / occupied / total hero summary
-- slot grid cho `A1-A4`
+- slot grid cho `A1-A2`
 - sensor cards cho:
   - nhiệt độ
   - độ ẩm
@@ -555,7 +555,7 @@ Use shared layouts with role-based variants. Do not design 4 separate apps.
 Real hardware that exists:
 - ESP32
 - RFID RC522
-- 4 parking slot sensors for A1, A2, A3, A4
+- 2 parking slot sensors for A1, A2
 - DHT11 sensor for temperature and humidity
 - rain sensor
 - fire sensor
@@ -567,7 +567,7 @@ Real hardware that exists:
 Real data and backend-supported capabilities already available:
 - RFID scan result
 - recognized license plate
-- parking slot occupancy for A1-A4
+- parking slot occupancy for A1-A2
 - available / occupied / total slots
 - temperature
 - humidity
@@ -718,7 +718,7 @@ NOW DESIGN THE REQUIRED CORE SCREENS ONLY:
 9. Parking + IoT Overview
 - this is the flagship live-status screen
 - available / occupied / total hero summary
-- slot grid for A1-A4
+- slot grid for A1-A2
 - temperature, humidity, rain, fire cards
 - last updated
 - gateway/device status

@@ -12,8 +12,10 @@ import type {
 import { PrismaService } from '../../database/prisma.service';
 
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
-
-const DEFAULT_GATE_ID = 'uit-gate-a';
+import {
+  DEFAULT_PARKING_GATE_ID,
+  getActiveParkingSlotNumbers,
+} from './parking-slot-layout';
 const DEFAULT_MONTHLY_FEE = 40000;
 
 function normalizePlate(value: string) {
@@ -29,19 +31,22 @@ function normalizeRfid(value: string) {
 
 function resolveGateId(value?: string) {
   const gateId = String(value || '').trim();
-  return gateId || DEFAULT_GATE_ID;
+  return gateId || DEFAULT_PARKING_GATE_ID;
 }
 
 @Injectable()
 export class ParkingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStatus(gateId = DEFAULT_GATE_ID): Promise<ParkingStatus> {
+  async getStatus(gateId = DEFAULT_PARKING_GATE_ID): Promise<ParkingStatus> {
     const resolvedGateId = resolveGateId(gateId);
+    const activeSlotNumbers = getActiveParkingSlotNumbers(resolvedGateId);
     const [slots, latestTelemetry, activeSessions] = await Promise.all([
       this.prisma.parkingSlot.findMany({
-        where: { gateId: resolvedGateId },
-        orderBy: { slotNumber: 'asc' },
+        where: {
+          gateId: resolvedGateId,
+          slotNumber: { in: activeSlotNumbers },
+        },
       }),
       this.prisma.telemetrySnapshot.findFirst({
         where: { gateId: resolvedGateId },
@@ -55,13 +60,23 @@ export class ParkingService {
       }),
     ]);
 
-    const mappedSlots = slots.map((slot) => ({
-      slotNumber: slot.slotNumber,
-      zone: slot.zone,
-      isOccupied: slot.isOccupied,
-      vehiclePlate: slot.vehiclePlate,
-      lastUpdated: slot.lastUpdated.toISOString(),
-    }));
+    const slotByNumber = new Map(slots.map((slot) => [slot.slotNumber, slot]));
+    const mappedSlots = activeSlotNumbers.flatMap((slotNumber) => {
+      const slot = slotByNumber.get(slotNumber);
+      if (!slot) {
+        return [];
+      }
+
+      return [
+        {
+          slotNumber: slot.slotNumber,
+          zone: slot.zone,
+          isOccupied: slot.isOccupied,
+          vehiclePlate: slot.vehiclePlate,
+          lastUpdated: slot.lastUpdated.toISOString(),
+        },
+      ];
+    });
 
     const availableSlots = mappedSlots.filter((slot) => !slot.isOccupied).length;
 

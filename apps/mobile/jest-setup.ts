@@ -113,3 +113,18 @@ jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(),
   hideAsync: jest.fn(),
 }));
+
+jest.mock('socket.io-client', () => {
+  const socket = {
+    connected: false,
+    on: jest.fn(),
+    emit: jest.fn(),
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    removeAllListeners: jest.fn(),
+  };
+
+  return {
+    io: jest.fn(() => socket),
+  };
+});

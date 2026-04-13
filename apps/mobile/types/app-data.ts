@@ -198,6 +198,14 @@ export interface ParkingOverviewState {
   telemetryHealth: TelemetryHealthState;
 }
 
+export interface OperationsSummaryState {
+  parking: ParkingStatus | null;
+  telemetry: TelemetrySnapshotRecord | null;
+  fireAlerts: FireAlertsPayload;
+  unreadCount: number;
+  gpa: GPASummary | null;
+}
+
 export type StatusTone = 'primary' | 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface MetricItem {

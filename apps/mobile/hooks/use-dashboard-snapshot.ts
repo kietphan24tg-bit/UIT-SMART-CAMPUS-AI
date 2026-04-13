@@ -5,8 +5,10 @@ import { gradesApi } from '@/services/api/grades';
 import { notificationsApi } from '@/services/api/notifications';
 import { parkingApi } from '@/services/api/parking';
 import { scheduleApi } from '@/services/api/schedule';
+import { useParkingRealtimeStore } from '@/stores/parking-realtime-store';
 import type { DashboardSnapshot, GPASummary, ParkingStatus, ScheduleRecord } from '@/types/app-data';
 import { getNextClass, getTelemetryHealthState, getTodaySchedule } from '@/utils/app';
+import { useNowTick } from './use-now-tick';
 
 function createEmptySnapshot(role: string): DashboardSnapshot {
   return {
@@ -22,8 +24,11 @@ function createEmptySnapshot(role: string): DashboardSnapshot {
 
 export function useDashboardSnapshot(role?: string | null) {
   const resolvedRole = role ?? USER_ROLES.STUDENT;
+  const connectionState = useParkingRealtimeStore(
+    (state) => state.connectionState,
+  );
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['dashboard', resolvedRole],
     queryFn: async (): Promise<DashboardSnapshot> => {
       const isAcademicRole =
@@ -62,5 +67,21 @@ export function useDashboardSnapshot(role?: string | null) {
       };
     },
     placeholderData: createEmptySnapshot(resolvedRole),
+    refetchInterval: connectionState === 'live' ? false : 10_000,
   });
+  useNowTick(10_000);
+
+  const snapshot = query.data ?? createEmptySnapshot(resolvedRole);
+
+  return {
+    ...query,
+    data: {
+      ...snapshot,
+      telemetryHealth: getTelemetryHealthState(
+        snapshot.parking?.lastUpdated ?? snapshot.parking?.sensors.reportedAt ?? null,
+        snapshot.parking?.sensors.fireDetected,
+        connectionState === 'degraded' && !snapshot.parking,
+      ),
+    },
+  };
 }
