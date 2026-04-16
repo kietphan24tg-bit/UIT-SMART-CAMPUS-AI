@@ -36,6 +36,14 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  REDIS_URL = 'redis://localhost:6379';
+
+  @IsNumber()
+  @IsOptional()
+  ATTENDANCE_TOKEN_TTL_SECONDS = 90;
+
+  @IsString()
+  @IsOptional()
   IOT_SHARED_SECRET = 'change-me';
 
   @IsString()

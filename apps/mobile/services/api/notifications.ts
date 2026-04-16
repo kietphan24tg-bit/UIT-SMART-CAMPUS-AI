@@ -2,6 +2,15 @@ import { apiClient } from './client';
 
 import type { NotificationRecord, NotificationsPayload } from '@/types/app-data';
 
+export interface RegisterPushTokenRequest {
+  expoPushToken: string;
+  platform: 'ios' | 'android';
+  deviceId?: string;
+}
+
+export interface RemovePushTokenRequest {
+  expoPushToken: string;
+}
 
 export const notificationsApi = {
   getNotifications: async (page = 1, limit = 20): Promise<NotificationsPayload> => {
@@ -20,5 +29,13 @@ export const notificationsApi = {
 
   markAllAsRead: async (): Promise<{ count: number }> => {
     return apiClient.patch('/notifications/read-all') as Promise<{ count: number }>;
+  },
+
+  registerPushToken: async (payload: RegisterPushTokenRequest) => {
+    return apiClient.post('/notifications/push-token', payload);
+  },
+
+  removePushToken: async (payload: RemovePushTokenRequest) => {
+    return apiClient.delete('/notifications/push-token', { data: payload });
   },
 };

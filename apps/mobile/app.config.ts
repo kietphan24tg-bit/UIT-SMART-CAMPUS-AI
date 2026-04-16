@@ -26,18 +26,34 @@ const config: ExpoConfig = {
     package: 'vn.edu.uit.smartcampus',
     softwareKeyboardLayoutMode: 'resize',
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-font'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-font',
+    'expo-notifications',
+    [
+      'expo-camera',
+      {
+        cameraPermission:
+          'Ứng dụng cần quyền camera để quét mã QR điểm danh trên màn hình lớp học.',
+        barcodeScannerEnabled: true,
+        recordAudioAndroid: false,
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },
 };
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
 export default (): ExpoConfig => ({
   ...config,
   extra: {
     ...config.extra,
     ...(apiUrl ? { apiUrl } : {}),
+    ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
   },
 });

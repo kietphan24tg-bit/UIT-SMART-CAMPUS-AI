@@ -1,6 +1,6 @@
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { API_PREFIX, APP_NAME, APP_VERSION } from '@smart-campus/shared';
 
@@ -12,7 +12,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  app.setGlobalPrefix(API_PREFIX);
+  app.setGlobalPrefix(API_PREFIX, {
+    exclude: [{ path: 'live/(.*)', method: RequestMethod.ALL }],
+  });
   app.enableCors({
     origin: configService.get<string>('CORS_ORIGIN', '*'),
     credentials: true,
@@ -27,7 +29,7 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle(APP_NAME)

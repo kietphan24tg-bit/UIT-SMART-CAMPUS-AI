@@ -2,7 +2,8 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 
-const ACCESS_TOKEN_KEY = 'auth_access_token';
+export const AUTH_ACCESS_TOKEN_KEY = 'auth_access_token';
+const ACCESS_TOKEN_KEY = AUTH_ACCESS_TOKEN_KEY;
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 
 type RetryableRequestConfig = AxiosRequestConfig & {

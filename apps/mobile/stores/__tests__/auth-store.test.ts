@@ -13,6 +13,11 @@ jest.mock('@/services/api/auth', () => ({
   },
 }));
 
+jest.mock('@/services/notifications/push', () => ({
+  syncPushToken: jest.fn().mockResolvedValue(undefined),
+  unregisterPushTokenFromBackend: jest.fn().mockResolvedValue(undefined),
+}));
+
 const mockUser = {
   id: 'user-1',
   email: 'test@uit.edu.vn',

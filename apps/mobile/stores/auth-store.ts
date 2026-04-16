@@ -4,6 +4,7 @@ import { create } from 'zustand';
 
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
+import { syncPushToken, unregisterPushTokenFromBackend } from '@/services/notifications/push';
 
 type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> &
   Partial<
@@ -35,6 +36,14 @@ interface AuthState {
 const TOKEN_KEY = 'auth_access_token';
 const REFRESH_KEY = 'auth_refresh_token';
 
+async function syncPushTokenSafely() {
+  try {
+    await syncPushToken();
+  } catch {
+    // Best-effort sync: auth flow should continue even if push registration fails.
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
@@ -55,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isAuthenticated: true, user, accessToken: tokens.accessToken });
+    await syncPushTokenSafely();
   },
 
   register: async (data) => {
@@ -64,9 +74,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isAuthenticated: true, user, accessToken: tokens.accessToken });
+    await syncPushTokenSafely();
   },
 
   logout: async () => {
+    await unregisterPushTokenFromBackend();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
     set({ isAuthenticated: false, user: null, accessToken: null });
@@ -78,6 +90,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (token) {
         const user = await authApi.getMe(token);
         set({ isAuthenticated: true, user, accessToken: token });
+        await syncPushTokenSafely();
       }
     } catch {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -94,6 +107,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const user = await usersApi.getProfile();
     set({ isAuthenticated: true, user, accessToken: token });
+    await syncPushTokenSafely();
     return user;
   },
 }));

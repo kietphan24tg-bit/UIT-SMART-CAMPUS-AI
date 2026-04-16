@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -54,6 +54,7 @@ export default function ServiceDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ service?: string }>();
   const serviceId = params.service ?? '';
+
   const service = getServiceEntries(role).find((item) => item.id === serviceId);
   const isGradesViewer = serviceId === 'grades' && !isLecturerRole(role) && !isAdminRole(role);
 
@@ -69,6 +70,10 @@ export default function ServiceDetailScreen() {
     },
     enabled: isGradesViewer,
   });
+
+  if (serviceId === 'attendance') {
+    return <Redirect href="/services/attendance" />;
+  }
 
   if (!service) {
     return (

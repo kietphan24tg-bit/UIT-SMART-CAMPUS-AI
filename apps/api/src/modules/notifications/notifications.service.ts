@@ -4,6 +4,8 @@ import type { UserRole } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 
+import { RegisterPushTokenDto } from './dto/register-push-token.dto';
+
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -57,6 +59,38 @@ export class NotificationsService {
       where: { userId, isRead: false },
       data: { isRead: true },
     });
+  }
+
+  async registerPushToken(userId: string, dto: RegisterPushTokenDto) {
+    return this.prisma.userDevicePushToken.upsert({
+      where: {
+        userId_expoPushToken: {
+          userId,
+          expoPushToken: dto.expoPushToken,
+        },
+      },
+      create: {
+        userId,
+        expoPushToken: dto.expoPushToken,
+        platform: dto.platform,
+        deviceId: dto.deviceId,
+        isActive: true,
+        lastSeenAt: new Date(),
+      },
+      update: {
+        platform: dto.platform,
+        deviceId: dto.deviceId,
+        isActive: true,
+        lastSeenAt: new Date(),
+      },
+    });
+  }
+
+  async removePushToken(userId: string, expoPushToken: string) {
+    const result = await this.prisma.userDevicePushToken.deleteMany({
+      where: { userId, expoPushToken },
+    });
+    return { count: result.count };
   }
 
   async createSystemNotifications(

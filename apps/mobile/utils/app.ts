@@ -346,16 +346,17 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'attendance',
       title: 'Điểm danh QR',
-      summary: 'Sắp triển khai điểm danh QR theo buổi học.',
+      summary: 'Quét mã QR trên màn hình lớp để điểm danh (sinh viên).',
       category: isLecturerRole(role) ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
-      supportState: 'unsupported',
-      isInteractive: false,
-      disabledReason: 'Sắp triển khai điểm danh QR.',
+      supportState: isLecturerRole(role) ? 'partial' : 'live',
+      isInteractive: true,
       lastVerifiedSource: 'manual',
-      primaryAction: 'Theo dõi cập nhật',
+      primaryAction: isLecturerRole(role) ? 'Mở lịch giảng dạy' : 'Mở điểm danh QR',
       route: '/services/attendance',
-      description: 'Sắp triển khai điểm danh QR cho giảng viên và sinh viên.',
+      description: isLecturerRole(role)
+        ? 'Sinh viên quét QR; giảng viên quản lý phiên từ lịch giảng dạy.'
+        : 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.',
     },
     {
       id: 'room-booking',

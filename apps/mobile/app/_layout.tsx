@@ -11,6 +11,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
+import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
+import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -36,6 +38,15 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeExpoPushTokenChanges();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    void useAuthStore.getState().hydrate();
+  }, []);
 
   if (!fontsLoaded) {
     return null;
@@ -66,6 +77,10 @@ function RootNavigator() {
         <Stack.Screen name="operations/[task]" />
         <Stack.Screen name="parking/[task]" />
         <Stack.Screen name="services/[service]" />
+        <Stack.Screen name="services/attendance/index" />
+        <Stack.Screen name="services/attendance/scan" />
+        <Stack.Screen name="services/attendance/result" />
+        <Stack.Screen name="services/attendance/history" />
         <Stack.Screen name="services/campus-map/view" />
         <Stack.Screen name="alerts/[id]" />
         <Stack.Screen name="settings/index" />

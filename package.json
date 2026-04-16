@@ -22,6 +22,7 @@
     "db:generate": "turbo db:generate --filter=api",
     "db:migrate": "turbo db:migrate --filter=api",
     "db:seed": "turbo db:seed --filter=api",
+    "iot-mock": "pnpm --filter api run iot-mock",
     "prepare": "husky"
   },
   "devDependencies": {

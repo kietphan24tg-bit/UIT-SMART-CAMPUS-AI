@@ -1,4 +1,5 @@
 export { apiClient } from './client';
+export { attendanceApi } from './attendance';
 export { authApi } from './auth';
 export { gradesApi } from './grades';
 export { notificationsApi } from './notifications';

@@ -4,6 +4,8 @@ export interface ApiResponse<T = unknown> {
   message: string;
   statusCode: number;
   timestamp: string;
+  /** Machine-readable error code when success is false (e.g. attendance check-in). */
+  code?: string;
 }
 
 export interface PaginatedResponse<T = unknown> extends ApiResponse<T[]> {

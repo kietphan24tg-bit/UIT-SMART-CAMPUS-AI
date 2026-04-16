@@ -12,13 +12,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
 
+    let code: string | undefined;
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      message =
-        typeof exceptionResponse === 'string'
-          ? exceptionResponse
-          : (exceptionResponse as { message: string }).message || message;
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else {
+        const body = exceptionResponse as {
+          message?: string | string[];
+          code?: string;
+        };
+        const rawMessage = body.message;
+        message = Array.isArray(rawMessage) ? rawMessage.join(', ') : rawMessage || message;
+        code = typeof body.code === 'string' ? body.code : undefined;
+      }
     }
 
     const errorResponse: ApiResponse<null> = {
@@ -27,6 +36,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: Array.isArray(message) ? message.join(', ') : message,
       statusCode: status,
       timestamp: new Date().toISOString(),
+      ...(code ? { code } : {}),
     };
 
     response.status(status).json(errorResponse);
