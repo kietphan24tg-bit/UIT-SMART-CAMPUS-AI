@@ -113,6 +113,18 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   AVATAR_STORAGE_PUBLIC_BASE_URL = '';
+
+  @IsNumber()
+  @IsOptional()
+  UIT_EVENTS_MAX_PAGES = 10;
+
+  @IsNumber()
+  @IsOptional()
+  UIT_EVENTS_CACHE_TTL_MS = 900_000;
+
+  @IsNumber()
+  @IsOptional()
+  UIT_EVENTS_REQUEST_TIMEOUT_MS = 20_000;
 }
 
 export function validate(config: Record<string, unknown>) {

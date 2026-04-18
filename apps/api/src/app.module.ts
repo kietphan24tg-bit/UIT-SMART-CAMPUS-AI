@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { EventsModule } from './modules/events/events.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GradesModule } from './modules/grades/grades.module';
 import { HealthModule } from './modules/health/health.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './modules/users/users.module';
     ScheduleModule,
     GradesModule,
     HealthModule,
+    EventsModule,
     NotificationsModule,
     ParkingModule,
     IotModule,
