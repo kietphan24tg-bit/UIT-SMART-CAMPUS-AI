@@ -9,7 +9,6 @@ import { ConfigService } from '@nestjs/config';
 import type { EventDetailResponseDto } from './dto/event-detail-response.dto';
 import type { EventListItemDto } from './dto/event-list-item.dto';
 import type { ListEventsResponseDto } from './dto/list-events-response.dto';
-import { decodeEventsCursor, encodeEventsCursor } from './events-cursor';
 import { UitEventsScraper } from './uit-events.scraper';
 
 const SLUG_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -28,17 +27,22 @@ export class EventsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async listEvents(cursor: string | undefined, limitInput: number | undefined): Promise<ListEventsResponseDto> {
+  async listEvents(pageInput: number | undefined, limitInput: number | undefined): Promise<ListEventsResponseDto> {
     const limit = limitInput ?? 20;
-    const offset = cursor ? decodeEventsCursor(cursor) : 0;
+    const pageRaw = pageInput ?? 1;
     await this.ensureListCache();
     const all = this.listCache!.items;
+    const total = all.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(1, pageRaw), totalPages);
+    const offset = (page - 1) * limit;
     const items = all.slice(offset, offset + limit);
-    const hasMore = offset + limit < all.length;
     return {
       items,
-      nextCursor: hasMore ? encodeEventsCursor(offset + limit) : null,
-      hasMore,
+      total,
+      page,
+      limit,
+      totalPages,
     };
   }
 

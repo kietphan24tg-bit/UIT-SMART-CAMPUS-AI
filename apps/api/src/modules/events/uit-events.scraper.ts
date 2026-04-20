@@ -98,7 +98,7 @@ export class UitEventsScraper {
    */
   async fetchAggregatedList(): Promise<UitListEventItem[]> {
     const maxPages = this.getMaxPages();
-    const listPath = '/hoat-dong-sinh-vien';
+    const listPath = '/search-page';
     const urls: string[] = [`${UIT_ORIGIN}${listPath}`];
     for (let p = 2; p <= maxPages; p += 1) {
       urls.push(`${UIT_ORIGIN}${listPath}?page=${p}`);

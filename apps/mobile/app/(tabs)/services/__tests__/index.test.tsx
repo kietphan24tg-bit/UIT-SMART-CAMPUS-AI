@@ -49,6 +49,14 @@ describe('ServicesScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/services/campus-map');
   });
 
+  it('opens the live events service from the services grid', () => {
+    const { getByText } = render(<ServicesScreen />);
+
+    fireEvent.press(getByText('Sự kiện & cộng đồng'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/events');
+  });
+
   it('renders live and upcoming service groups on tablet widths', () => {
     mockUseResponsiveLayout.mockReturnValue({
       isCompact: false,

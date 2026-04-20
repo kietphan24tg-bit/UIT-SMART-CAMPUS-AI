@@ -6,9 +6,15 @@ export class ListEventsResponseDto {
   @ApiProperty({ type: [EventListItemDto] })
   items!: EventListItemDto[];
 
-  @ApiProperty({ nullable: true, description: 'Pass as `cursor` on the next request.' })
-  nextCursor!: string | null;
+  @ApiProperty({ description: 'Total number of articles in the cached list.' })
+  total!: number;
+
+  @ApiProperty({ description: 'Active page after clamping to valid range (1-based).' })
+  page!: number;
 
   @ApiProperty()
-  hasMore!: boolean;
+  limit!: number;
+
+  @ApiProperty({ description: 'Total number of pages for the given limit.' })
+  totalPages!: number;
 }

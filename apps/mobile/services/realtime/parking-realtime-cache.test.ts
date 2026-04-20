@@ -7,26 +7,31 @@ import {
   applyTelemetryToOperationsSummary,
 } from './parking-realtime-cache';
 
-const parkingStatus: ParkingStatus = {
-  gateId: 'uit-gate-a',
-  totalSlots: 2,
-  occupiedSlots: 1,
-  availableSlots: 1,
-  activeSessions: 1,
-  lastUpdated: '2026-04-14T10:00:00.000Z',
-  sensors: {
-    temperature: 28,
-    humidity: 61,
-    rainDetected: true,
-    fireDetected: false,
-    deviceIp: '10.0.0.8',
-    reportedAt: '2026-04-14T10:00:00.000Z',
-  },
-  slots: [],
-};
+function makeParkingStatus(): ParkingStatus {
+  const liveTimestamp = new Date().toISOString();
+
+  return {
+    gateId: 'uit-gate-a',
+    totalSlots: 2,
+    occupiedSlots: 1,
+    availableSlots: 1,
+    activeSessions: 1,
+    lastUpdated: liveTimestamp,
+    sensors: {
+      temperature: 28,
+      humidity: 61,
+      rainDetected: true,
+      fireDetected: false,
+      deviceIp: '10.0.0.8',
+      reportedAt: liveTimestamp,
+    },
+    slots: [],
+  };
+}
 
 describe('parking realtime cache helpers', () => {
   it('updates the parking overview cache with live status', () => {
+    const parkingStatus = makeParkingStatus();
     const updated = applyParkingStatusToParkingOverview(
       {
         status: null,
@@ -45,6 +50,8 @@ describe('parking realtime cache helpers', () => {
   });
 
   it('updates dashboard and operations caches', () => {
+    const parkingStatus = makeParkingStatus();
+    const liveTimestamp = parkingStatus.lastUpdated ?? new Date().toISOString();
     const dashboard = applyParkingStatusToDashboard(
       {
         role: 'student',
@@ -81,7 +88,7 @@ describe('parking realtime cache helpers', () => {
         humidity: 61,
         rainDetected: true,
         fireDetected: false,
-        reportedAt: '2026-04-14T10:00:00.000Z',
+        reportedAt: liveTimestamp,
       },
     );
 

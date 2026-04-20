@@ -77,10 +77,35 @@ jest.mock('react-native-webview', () => {
   };
 });
 
+jest.mock('react-native-render-html', () => {
+  const React = jest.requireActual('react');
+  const { Text } = jest.requireActual('react-native');
+
+  const stripTags = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  return {
+    __esModule: true,
+    default: ({ source }: { source: { html: string } }) =>
+      React.createElement(Text, null, stripTags(source.html)),
+    defaultSystemFonts: [],
+  };
+});
+
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn().mockResolvedValue(undefined),
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: {
+    HIGH: 'high',
+  },
+  addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
+  getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[test]' }),
+  getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('expo-router', () => ({

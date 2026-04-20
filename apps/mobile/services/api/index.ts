@@ -1,6 +1,7 @@
 export { apiClient } from './client';
 export { attendanceApi } from './attendance';
 export { authApi } from './auth';
+export { eventsApi } from './events';
 export { gradesApi } from './grades';
 export { notificationsApi } from './notifications';
 export { parkingApi } from './parking';

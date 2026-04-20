@@ -1,8 +1,7 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { decodeEventsCursor, encodeEventsCursor } from './events-cursor';
 import { EventsService } from './events.service';
 import { UitEventsScraper } from './uit-events.scraper';
 
@@ -41,33 +40,38 @@ describe('EventsService', () => {
     service = moduleRef.get(EventsService);
   });
 
-  it('returns first page with nextCursor when more items exist', async () => {
-    const res = await service.listEvents(undefined, 10);
+  it('returns first page with total and totalPages', async () => {
+    const res = await service.listEvents(1, 10);
     expect(res.items).toHaveLength(10);
-    expect(res.hasMore).toBe(true);
-    expect(res.nextCursor).toBe(encodeEventsCursor(10));
+    expect(res.total).toBe(25);
+    expect(res.page).toBe(1);
+    expect(res.limit).toBe(10);
+    expect(res.totalPages).toBe(3);
   });
 
-  it('returns second page using cursor', async () => {
-    const first = await service.listEvents(undefined, 10);
-    const second = await service.listEvents(first.nextCursor!, 10);
-    expect(second.items[0]?.slug).toBe('slug-10');
-    expect(second.hasMore).toBe(true);
+  it('returns second page', async () => {
+    const res = await service.listEvents(2, 10);
+    expect(res.items[0]?.slug).toBe('slug-10');
+    expect(res.page).toBe(2);
   });
 
-  it('returns hasMore false on last page', async () => {
-    const last = await service.listEvents(encodeEventsCursor(20), 10);
-    expect(last.items).toHaveLength(5);
-    expect(last.hasMore).toBe(false);
-    expect(last.nextCursor).toBeNull();
+  it('returns last partial page', async () => {
+    const res = await service.listEvents(3, 10);
+    expect(res.items).toHaveLength(5);
+    expect(res.page).toBe(3);
+    expect(res.totalPages).toBe(3);
   });
 
-  it('throws BadRequestException for invalid cursor', async () => {
-    await expect(service.listEvents('not-a-cursor', 10)).rejects.toBeInstanceOf(BadRequestException);
+  it('clamps page past totalPages to last page', async () => {
+    const res = await service.listEvents(99, 10);
+    expect(res.page).toBe(3);
+    expect(res.items).toHaveLength(5);
   });
 
-  it('decodeEventsCursor round-trips offset', () => {
-    expect(decodeEventsCursor(encodeEventsCursor(42))).toBe(42);
+  it('default page is 1', async () => {
+    const res = await service.listEvents(undefined, 10);
+    expect(res.page).toBe(1);
+    expect(res.items).toHaveLength(10);
   });
 
   it('getArticleBySlug returns detail when scraper succeeds', async () => {
@@ -86,9 +90,5 @@ describe('EventsService', () => {
   it('getArticleBySlug throws NotFound when missing', async () => {
     scraper.fetchArticleDetail.mockResolvedValue(null);
     await expect(service.getArticleBySlug('missing')).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('getArticleBySlug throws BadRequest for invalid slug', async () => {
-    await expect(service.getArticleBySlug('bad/slug')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

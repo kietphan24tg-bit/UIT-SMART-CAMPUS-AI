@@ -82,6 +82,8 @@ function RootNavigator() {
         <Stack.Screen name="services/attendance/result" />
         <Stack.Screen name="services/attendance/history" />
         <Stack.Screen name="services/campus-map/view" />
+        <Stack.Screen name="services/events/index" />
+        <Stack.Screen name="services/events/[slug]" />
         <Stack.Screen name="alerts/[id]" />
         <Stack.Screen name="settings/index" />
         <Stack.Screen name="settings/[task]" />

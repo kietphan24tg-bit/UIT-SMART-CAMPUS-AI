@@ -164,6 +164,7 @@ export type VerificationSource =
   | 'users'
   | 'schedule'
   | 'grades'
+  | 'events'
   | 'notifications'
   | 'parking'
   | 'iot'

@@ -21,11 +21,11 @@ export class EventsController {
   @ApiOperation({
     summary: 'List UIT student activity articles',
     description:
-      'Returns articles scraped from uit.edu.vn/hoat-dong-sinh-vien (cached). Uses cursor pagination.',
+      'Returns articles scraped from uit.edu.vn/hoat-dong-sinh-vien (cached). Uses page-based pagination.',
   })
   @ApiOkResponse({ type: ListEventsResponseDto })
   list(@Query() query: ListEventsQueryDto): Promise<ListEventsResponseDto> {
-    return this.eventsService.listEvents(query.cursor, query.limit);
+    return this.eventsService.listEvents(query.page, query.limit);
   }
 
   @Get(':slug')

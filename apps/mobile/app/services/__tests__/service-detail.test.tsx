@@ -34,6 +34,7 @@ describe('ServiceDetailScreen - campus map', () => {
       defaultOptions: {
         queries: {
           retry: false,
+          gcTime: Infinity,
         },
       },
     });

@@ -1,12 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class ListEventsQueryDto {
-  @ApiPropertyOptional({ description: 'Opaque cursor returned as `nextCursor` from a previous call.' })
+  @ApiPropertyOptional({ default: 1, minimum: 1, description: '1-based page index.' })
   @IsOptional()
-  @IsString()
-  cursor?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
 
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 50 })
   @IsOptional()
