@@ -1,7 +1,16 @@
 ﻿import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 
-import { PrismaClient, Role, ScheduleSessionType, SubscriptionStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  RoomBookingStatus,
+  RoomStatus,
+  RoomType,
+  ScheduleSessionType,
+  SubscriptionStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 import {
@@ -125,6 +134,599 @@ const courseSeeds = [
   { code: 'LAW200', name: 'Pháp luật đại cương - VN', credits: 2, faculty: 'Khoa Lý luận chính trị' },
   { code: 'DS302', name: 'Trực quan hóa dữ liệu - VN', credits: 3, faculty: 'Khoa Hệ thống thông tin' },
 ] as const;
+
+interface RoomSeed {
+  roomCode: string;
+  displayName: string | null;
+  buildingCode: string;
+  floorNumber: number;
+  capacity: number;
+  type: RoomType;
+}
+
+interface RoomSnapshotFile {
+  rooms: Array<{
+    roomCode: string;
+    displayName: string | null;
+    buildingCode: string;
+    floorNumber: number;
+    capacity: number;
+    type: keyof typeof RoomType;
+  }>;
+  bookings: RoomBookingSeed[];
+}
+
+function loadRoomSnapshot(): RoomSnapshotFile | null {
+  const snapshotPath = resolve(process.cwd(), 'prisma', 'fixtures', 'uit-room-schedule.snapshot.json');
+
+  if (!existsSync(snapshotPath)) {
+    return null;
+  }
+
+  return JSON.parse(readFileSync(snapshotPath, 'utf8')) as RoomSnapshotFile;
+}
+
+const buildingSeeds = [
+  { id: 'building-a', code: 'A', name: 'Tòa A' },
+  { id: 'building-b', code: 'B', name: 'Tòa B' },
+  { id: 'building-c', code: 'C', name: 'Tòa C' },
+  { id: 'building-e', code: 'E', name: 'Tòa E' },
+  { id: 'building-venue', code: 'VENUE', name: 'Hội trường và không gian chung' },
+  { id: 'building-sport', code: 'SPORT', name: 'Sân tập và thể thao' },
+] as const;
+
+const timeSlotSeeds = [
+  { slotNumber: 1, label: 'Tiết 1', startTime: '07:30', endTime: '08:15' },
+  { slotNumber: 2, label: 'Tiết 2', startTime: '08:15', endTime: '09:00' },
+  { slotNumber: 3, label: 'Tiết 3', startTime: '09:00', endTime: '09:45' },
+  { slotNumber: 4, label: 'Tiết 4', startTime: '10:00', endTime: '10:45' },
+  { slotNumber: 5, label: 'Tiết 5', startTime: '10:45', endTime: '11:30' },
+  { slotNumber: 6, label: 'Tiết 6', startTime: '13:00', endTime: '13:45' },
+  { slotNumber: 7, label: 'Tiết 7', startTime: '13:45', endTime: '14:30' },
+  { slotNumber: 8, label: 'Tiết 8', startTime: '14:30', endTime: '15:15' },
+  { slotNumber: 9, label: 'Tiết 9', startTime: '15:30', endTime: '16:15' },
+  { slotNumber: 10, label: 'Tiết 10', startTime: '16:15', endTime: '17:00' },
+  { slotNumber: 11, label: '11h-13h', startTime: '11:00', endTime: '13:00' },
+  { slotNumber: 12, label: 'Sau 17h', startTime: '17:00', endTime: '21:00' },
+] as const;
+
+const fallbackRoomSeeds: RoomSeed[] = [
+  { roomCode: 'A112', displayName: 'Phòng Họp', buildingCode: 'A', floorNumber: 1, capacity: 15, type: RoomType.meeting },
+  { roomCode: 'A114', displayName: 'Phòng Họp', buildingCode: 'A', floorNumber: 1, capacity: 15, type: RoomType.meeting },
+  { roomCode: 'A116', displayName: 'Phòng Họp', buildingCode: 'A', floorNumber: 1, capacity: 30, type: RoomType.meeting },
+  { roomCode: 'A215', displayName: null, buildingCode: 'A', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'A301', displayName: 'TTNN', buildingCode: 'A', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'A305', displayName: 'TTNN', buildingCode: 'A', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'A307', displayName: 'TTNN', buildingCode: 'A', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'A309', displayName: 'TTNN', buildingCode: 'A', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'A315', displayName: null, buildingCode: 'A', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'A323', displayName: 'TTNN', buildingCode: 'A', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'A325', displayName: null, buildingCode: 'A', floorNumber: 3, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'B1.02', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 60, type: RoomType.classroom },
+  { roomCode: 'B1.04', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 60, type: RoomType.classroom },
+  { roomCode: 'B1.06', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 60, type: RoomType.classroom },
+  { roomCode: 'B1.08', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 60, type: RoomType.classroom },
+  { roomCode: 'B1.10', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 70, type: RoomType.classroom },
+  { roomCode: 'B1.12', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 70, type: RoomType.classroom },
+  { roomCode: 'B1.14', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 160, type: RoomType.classroom },
+  { roomCode: 'B1.16', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B1.18', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B1.20', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B1.22', displayName: null, buildingCode: 'B', floorNumber: 1, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B2.02', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B2.06', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B2.08', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B2.10', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B2.12', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B2.14', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 120, type: RoomType.lab },
+  { roomCode: 'B2.16', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 50, type: RoomType.lab },
+  { roomCode: 'B2.18', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 50, type: RoomType.lab },
+  { roomCode: 'B2.20', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 60, type: RoomType.lab },
+  { roomCode: 'B2.22', displayName: 'PM', buildingCode: 'B', floorNumber: 2, capacity: 60, type: RoomType.lab },
+  { roomCode: 'B3.02', displayName: 'PM', buildingCode: 'B', floorNumber: 3, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B3.04', displayName: 'PM', buildingCode: 'B', floorNumber: 3, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B3.06', displayName: 'PM', buildingCode: 'B', floorNumber: 3, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B3.08', displayName: 'PM', buildingCode: 'B', floorNumber: 3, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B3.10', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'B3.12', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'B3.14', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 140, type: RoomType.classroom },
+  { roomCode: 'B3.16', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B3.18', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B3.20', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B3.22', displayName: null, buildingCode: 'B', floorNumber: 3, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B4.02', displayName: 'PM', buildingCode: 'B', floorNumber: 4, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B4.04', displayName: 'PM', buildingCode: 'B', floorNumber: 4, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B4.06', displayName: 'PM', buildingCode: 'B', floorNumber: 4, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B4.08', displayName: 'PM', buildingCode: 'B', floorNumber: 4, capacity: 40, type: RoomType.lab },
+  { roomCode: 'B4.10', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 72, type: RoomType.classroom },
+  { roomCode: 'B4.12', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 72, type: RoomType.classroom },
+  { roomCode: 'B4.14', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 160, type: RoomType.classroom },
+  { roomCode: 'B4.16', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B4.18', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B4.20', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B4.22', displayName: null, buildingCode: 'B', floorNumber: 4, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'B5.02', displayName: 'PM', buildingCode: 'B', floorNumber: 5, capacity: 64, type: RoomType.lab },
+  { roomCode: 'B5.04', displayName: 'PM', buildingCode: 'B', floorNumber: 5, capacity: 50, type: RoomType.lab },
+  { roomCode: 'B5.06', displayName: 'PM', buildingCode: 'B', floorNumber: 5, capacity: 50, type: RoomType.lab },
+  { roomCode: 'B5.08', displayName: 'Phòng Thực hành Thiết kế vi mạch số', buildingCode: 'B', floorNumber: 5, capacity: 60, type: RoomType.lab },
+  { roomCode: 'B5.10', displayName: null, buildingCode: 'B', floorNumber: 5, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B5.12', displayName: null, buildingCode: 'B', floorNumber: 5, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B5.14', displayName: null, buildingCode: 'B', floorNumber: 5, capacity: 180, type: RoomType.classroom },
+  { roomCode: 'B6.02', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'B6.04', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'B6.06', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 160, type: RoomType.classroom },
+  { roomCode: 'B6.08', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B6.10', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B6.12', displayName: null, buildingCode: 'B', floorNumber: 6, capacity: 180, type: RoomType.classroom },
+  { roomCode: 'B7.02', displayName: null, buildingCode: 'B', floorNumber: 7, capacity: 160, type: RoomType.classroom },
+  { roomCode: 'B7.04', displayName: null, buildingCode: 'B', floorNumber: 7, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B7.06', displayName: null, buildingCode: 'B', floorNumber: 7, capacity: 90, type: RoomType.classroom },
+  { roomCode: 'B7.08', displayName: null, buildingCode: 'B', floorNumber: 7, capacity: 220, type: RoomType.classroom },
+  { roomCode: 'B9.02', displayName: null, buildingCode: 'B', floorNumber: 9, capacity: 120, type: RoomType.classroom },
+  { roomCode: 'C101', displayName: null, buildingCode: 'C', floorNumber: 1, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C102', displayName: null, buildingCode: 'C', floorNumber: 1, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'C104', displayName: null, buildingCode: 'C', floorNumber: 1, capacity: 170, type: RoomType.classroom },
+  { roomCode: 'C109', displayName: 'PM', buildingCode: 'C', floorNumber: 1, capacity: 50, type: RoomType.lab },
+  { roomCode: 'C110', displayName: 'Phòng Họp', buildingCode: 'C', floorNumber: 1, capacity: 48, type: RoomType.meeting },
+  { roomCode: 'C111', displayName: 'PM', buildingCode: 'C', floorNumber: 1, capacity: 50, type: RoomType.lab },
+  { roomCode: 'C201', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C202', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 72, type: RoomType.classroom },
+  { roomCode: 'C206', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C208', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C210', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C212', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C213', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 120, type: RoomType.classroom },
+  { roomCode: 'C214', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 100, type: RoomType.classroom },
+  { roomCode: 'C216', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C218', displayName: null, buildingCode: 'C', floorNumber: 2, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C301', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C302', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 72, type: RoomType.classroom },
+  { roomCode: 'C305', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C306', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C307', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C308', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C309', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'C310', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C311', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'C312', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C313', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C314', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 80, type: RoomType.classroom },
+  { roomCode: 'C315', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C316', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'C318', displayName: null, buildingCode: 'C', floorNumber: 3, capacity: 50, type: RoomType.classroom },
+  { roomCode: 'E02.3', displayName: null, buildingCode: 'E', floorNumber: 2, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'E02.4', displayName: null, buildingCode: 'E', floorNumber: 2, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'E03.2', displayName: null, buildingCode: 'E', floorNumber: 3, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'E03.3', displayName: null, buildingCode: 'E', floorNumber: 3, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'E03.4', displayName: null, buildingCode: 'E', floorNumber: 3, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'E04.1', displayName: null, buildingCode: 'E', floorNumber: 4, capacity: 66, type: RoomType.classroom },
+  { roomCode: 'E04.2', displayName: null, buildingCode: 'E', floorNumber: 4, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'E04.3', displayName: null, buildingCode: 'E', floorNumber: 4, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'E04.4', displayName: null, buildingCode: 'E', floorNumber: 4, capacity: 48, type: RoomType.classroom },
+  { roomCode: 'E11.2', displayName: null, buildingCode: 'E', floorNumber: 11, capacity: 32, type: RoomType.classroom },
+  { roomCode: 'E11.4', displayName: null, buildingCode: 'E', floorNumber: 11, capacity: 32, type: RoomType.classroom },
+  { roomCode: 'E11.6', displayName: null, buildingCode: 'E', floorNumber: 11, capacity: 32, type: RoomType.classroom },
+  { roomCode: 'E11.8', displayName: null, buildingCode: 'E', floorNumber: 11, capacity: 30, type: RoomType.classroom },
+  { roomCode: 'Hội Trường A', displayName: null, buildingCode: 'VENUE', floorNumber: 0, capacity: 600, type: RoomType.meeting },
+  { roomCode: 'HTE', displayName: 'Hội trường E12', buildingCode: 'VENUE', floorNumber: 0, capacity: 200, type: RoomType.meeting },
+  { roomCode: 'Sảnh C', displayName: null, buildingCode: 'VENUE', floorNumber: 0, capacity: 100, type: RoomType.meeting },
+  { roomCode: 'Phòng Bóng Bàn', displayName: null, buildingCode: 'SPORT', floorNumber: 0, capacity: 50, type: RoomType.meeting },
+  { roomCode: 'Sân Bóng Chuyền', displayName: null, buildingCode: 'SPORT', floorNumber: 0, capacity: 60, type: RoomType.meeting },
+  { roomCode: 'Sân Bóng Rổ', displayName: null, buildingCode: 'SPORT', floorNumber: 0, capacity: 60, type: RoomType.meeting },
+  { roomCode: 'Sân Bóng Đá', displayName: null, buildingCode: 'SPORT', floorNumber: 0, capacity: 60, type: RoomType.meeting },
+  { roomCode: 'Sân Cầu Lông', displayName: 'USSH', buildingCode: 'SPORT', floorNumber: 0, capacity: 70, type: RoomType.meeting },
+  { roomCode: 'Sân Pickleball 01', displayName: 'sân cũ', buildingCode: 'SPORT', floorNumber: 0, capacity: 10, type: RoomType.meeting },
+  { roomCode: 'Sân Pickleball 02', displayName: 'sân mới', buildingCode: 'SPORT', floorNumber: 0, capacity: 10, type: RoomType.meeting },
+  { roomCode: 'Sân Pickleball 03', displayName: 'sân mới', buildingCode: 'SPORT', floorNumber: 0, capacity: 10, type: RoomType.meeting },
+  { roomCode: 'Sân Võ Thuật', displayName: null, buildingCode: 'SPORT', floorNumber: 0, capacity: 60, type: RoomType.meeting },
+] as const;
+
+interface RoomBookingSeed {
+  roomCode: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  purpose: string;
+  attendeeCount?: number;
+  contactName?: string;
+  departmentName?: string;
+  notes?: string;
+  createdBy: 'admin' | 'lecturer';
+}
+
+const fallbackRoomBookingSeeds: RoomBookingSeed[] = [
+  {
+    roomCode: 'A112',
+    bookingDate: '2026-04-21',
+    startTime: '09:00',
+    endTime: '11:30',
+    title: 'QTTB',
+    purpose: 'Họp báo cáo tiến độ công việc',
+    attendeeCount: 10,
+    departmentName: 'QTTB',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A112',
+    bookingDate: '2026-04-23',
+    startTime: '13:00',
+    endTime: '17:00',
+    title: 'Phòng KHCN, ĐN&SĐH',
+    purpose: 'Phỏng vấn chương trình 1+1 Jaist Kim Cương 1****2',
+    departmentName: 'Phòng KHCN, ĐN&SĐH',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A114',
+    bookingDate: '2026-04-20',
+    startTime: '08:15',
+    endTime: '11:30',
+    title: 'KTTT',
+    purpose: 'Họp nhóm nghiên cứu',
+    attendeeCount: 15,
+    departmentName: 'KTTT',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A114',
+    bookingDate: '2026-04-21',
+    startTime: '13:45',
+    endTime: '16:15',
+    title: 'Phòng KHCN, ĐN&SĐH',
+    purpose: 'Họp triển khai xây dựng CTĐT trình độ tiến sĩ',
+    attendeeCount: 8,
+    departmentName: 'Phòng KHCN, ĐN&SĐH',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A114',
+    bookingDate: '2026-04-22',
+    startTime: '07:30',
+    endTime: '11:30',
+    title: 'Trung tâm CITD',
+    purpose: 'Họp chia sẻ kiểm định CTĐT. Vũ Khánh.',
+    departmentName: 'Trung tâm CITD',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A114',
+    bookingDate: '2026-04-23',
+    startTime: '07:30',
+    endTime: '17:00',
+    title: 'Họp Nhóm B2DL',
+    purpose: 'Họp Nhóm B2DL',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A116',
+    bookingDate: '2026-04-20',
+    startTime: '13:00',
+    endTime: '16:15',
+    title: 'BGH',
+    purpose: 'Họp Chiến Lược Khối Phòng - Ban',
+    departmentName: 'BGH',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A116',
+    bookingDate: '2026-04-21',
+    startTime: '10:45',
+    endTime: '11:30',
+    title: 'VPĐU',
+    purpose: 'Hội nghị BCH Đảng bộ',
+    attendeeCount: 20,
+    departmentName: 'VPĐU',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A116',
+    bookingDate: '2026-04-23',
+    startTime: '13:00',
+    endTime: '17:00',
+    title: 'Phòng Khoa học Công nghệ, Đối ngoại & Sau Đại Học',
+    purpose: 'Phổ biến chỉ tiêu (KPIs) khoa học và công nghệ tại Chiến lược phát triển ĐHQG-HCM giai đoạn 2021-2030, tầm nhìn 2045.',
+    departmentName: 'Phòng Khoa học Công nghệ, Đối ngoại & Sau Đại Học',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A215',
+    bookingDate: '2026-04-20',
+    startTime: '08:15',
+    endTime: '11:30',
+    title: 'SĐH',
+    purpose: 'NCS học Biểu diễn tri thức và suy luận',
+    attendeeCount: 18,
+    departmentName: 'SĐH',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'A301',
+    bookingDate: '2026-04-21',
+    startTime: '10:00',
+    endTime: '11:30',
+    title: 'ENG02.Q215',
+    purpose: 'Giảng dạy',
+    attendeeCount: 25,
+    contactName: 'Tất Dương Khánh Linh',
+    departmentName: 'TTNN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'A301',
+    bookingDate: '2026-04-22',
+    startTime: '15:30',
+    endTime: '17:00',
+    title: 'ENG02.Q211',
+    purpose: 'Giảng dạy',
+    attendeeCount: 28,
+    contactName: 'Nguyễn Nữ Huyền Trang',
+    departmentName: 'TTNN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'A301',
+    bookingDate: '2026-04-23',
+    startTime: '13:00',
+    endTime: '15:15',
+    title: 'ENG02.Q215',
+    purpose: 'Giảng dạy',
+    attendeeCount: 25,
+    contactName: 'Tất Dương Khánh Linh',
+    departmentName: 'TTNN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'A301',
+    bookingDate: '2026-04-24',
+    startTime: '13:00',
+    endTime: '15:15',
+    title: 'ENG02.Q211',
+    purpose: 'Giảng dạy',
+    attendeeCount: 28,
+    contactName: 'Nguyễn Nữ Huyền Trang',
+    departmentName: 'TTNN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-20',
+    startTime: '07:30',
+    endTime: '09:45',
+    title: 'NT132.Q23',
+    purpose: 'Giảng dạy',
+    attendeeCount: 60,
+    contactName: 'Văn Thiên Luân',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-21',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'MATH3013.Q21.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 54,
+    contactName: 'Nguyễn Ngọc Ái Vân',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-21',
+    startTime: '13:00',
+    endTime: '17:00',
+    title: 'Khoa HTTT',
+    purpose: 'Báo cáo đồ án',
+    attendeeCount: 50,
+    departmentName: 'Khoa HTTT',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-22',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'IS336.Q21',
+    purpose: 'Giảng dạy',
+    attendeeCount: 42,
+    contactName: 'Văn Đức Sơn Hà',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-23',
+    startTime: '07:30',
+    endTime: '08:15',
+    title: 'IS336.Q22.1(HT2)',
+    purpose: 'Giảng dạy',
+    attendeeCount: 48,
+    contactName: 'Huỳnh Đức Huy',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-23',
+    startTime: '08:15',
+    endTime: '11:30',
+    title: 'IS336.Q22',
+    purpose: 'Giảng dạy',
+    attendeeCount: 48,
+    contactName: 'Huỳnh Đức Huy',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'B1.02',
+    bookingDate: '2026-04-24',
+    startTime: '07:30',
+    endTime: '09:45',
+    title: 'NT132.Q22',
+    purpose: 'Giảng dạy',
+    attendeeCount: 50,
+    contactName: 'Bùi Thanh Bình',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'C104',
+    bookingDate: '2026-04-21',
+    startTime: '07:30',
+    endTime: '17:00',
+    title: 'CLB Sách và Hành động',
+    purpose: 'Tổ chức không gian đọc sách thuộc chương trình Hội sách 2026, chủ đề "Lặng"',
+    attendeeCount: 50,
+    departmentName: 'CLB Sách và Hành động',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'C318',
+    bookingDate: '2026-04-21',
+    startTime: '07:30',
+    endTime: '11:30',
+    title: 'HTTT',
+    purpose: 'Báo cáo đồ án',
+    attendeeCount: 30,
+    departmentName: 'Khoa HTTT',
+    createdBy: 'admin',
+  },
+  {
+    roomCode: 'C318',
+    bookingDate: '2026-04-22',
+    startTime: '13:00',
+    endTime: '16:15',
+    title: 'EC304.Q21',
+    purpose: 'Giảng dạy',
+    attendeeCount: 36,
+    contactName: 'Văn Đức Sơn Hà',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E02.3',
+    bookingDate: '2026-04-20',
+    startTime: '13:00',
+    endTime: '16:15',
+    title: 'ENG05.Q21.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 6,
+    contactName: 'Tất Dương Khánh Linh',
+    departmentName: 'CTTT',
+    notes: 'Co-lecturer: Oronde Nkomo',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E02.3',
+    bookingDate: '2026-04-21',
+    startTime: '08:15',
+    endTime: '11:30',
+    title: 'CNBU108.Q21.KHBC',
+    purpose: 'Giảng dạy',
+    attendeeCount: 5,
+    contactName: 'Trần Thị Dung',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E02.3',
+    bookingDate: '2026-04-22',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'ENG05.Q21.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 6,
+    contactName: 'Tất Dương Khánh Linh',
+    departmentName: 'CTTT',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E02.3',
+    bookingDate: '2026-04-22',
+    startTime: '13:00',
+    endTime: '16:15',
+    title: 'JAN06.Q25.CNVN.1',
+    purpose: 'Giảng dạy',
+    attendeeCount: 15,
+    contactName: 'Dương Thị Thương',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E02.3',
+    bookingDate: '2026-04-25',
+    startTime: '13:00',
+    endTime: '16:15',
+    title: 'CNBU105.Q21.KHBC',
+    purpose: 'Giảng dạy',
+    attendeeCount: 6,
+    contactName: 'Nguyễn Duy',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E03.2',
+    bookingDate: '2026-04-20',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'STAT3013.Q21.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 34,
+    contactName: 'Trần Văn Hải Triều',
+    departmentName: 'CTTT',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E03.2',
+    bookingDate: '2026-04-21',
+    startTime: '08:15',
+    endTime: '11:30',
+    title: 'PH002.Q21.VMTN',
+    purpose: 'Giảng dạy',
+    attendeeCount: 39,
+    contactName: 'Vũ Đức Lung',
+    departmentName: 'VMTN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E03.2',
+    bookingDate: '2026-04-22',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'MSIS4013.Q22.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 40,
+    contactName: 'Cao Thị Nhạn',
+    departmentName: 'CTTT',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E03.2',
+    bookingDate: '2026-04-23',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'CE124.Q21.VMTN',
+    purpose: 'Giảng dạy',
+    attendeeCount: 30,
+    contactName: 'Trịnh Lê Huy',
+    departmentName: 'VMTN',
+    createdBy: 'lecturer',
+  },
+  {
+    roomCode: 'E03.2',
+    bookingDate: '2026-04-24',
+    startTime: '07:30',
+    endTime: '10:45',
+    title: 'MSIS3033.Q22.CTTT',
+    purpose: 'Giảng dạy',
+    attendeeCount: 35,
+    contactName: 'Trần Hưng Nghiệp',
+    departmentName: 'CTTT',
+    createdBy: 'lecturer',
+  },
+] as const;
+
+const roomSnapshot = loadRoomSnapshot();
+
+const roomSeeds: RoomSeed[] =
+  roomSnapshot?.rooms.map((room) => ({
+    ...room,
+    type: RoomType[room.type],
+  })) ?? fallbackRoomSeeds;
+
+const roomBookingSeeds: RoomBookingSeed[] = roomSnapshot?.bookings ?? fallbackRoomBookingSeeds;
 
 interface ScheduleSeed {
   classCode: string;
@@ -1059,6 +1661,135 @@ async function main() {
     data: { isCurrent: false },
   });
 
+  const seededBuildings = new Map<string, Awaited<ReturnType<typeof prisma.building.upsert>>>();
+
+  for (const buildingSeed of buildingSeeds) {
+    const building = await prisma.building.upsert({
+      where: { code: buildingSeed.code },
+      update: {
+        name: buildingSeed.name,
+      },
+      create: buildingSeed,
+    });
+
+    seededBuildings.set(building.code, building);
+  }
+
+  const seededFloors = new Map<string, Awaited<ReturnType<typeof prisma.floor.upsert>>>();
+
+  for (const roomSeed of roomSeeds) {
+    const building = seededBuildings.get(roomSeed.buildingCode);
+
+    if (!building) {
+      throw new Error(`Building ${roomSeed.buildingCode} was not seeded`);
+    }
+
+    const floorKey = `${roomSeed.buildingCode}-${roomSeed.floorNumber}`;
+
+    if (!seededFloors.has(floorKey)) {
+      const floor = await prisma.floor.upsert({
+        where: {
+          buildingId_floorNumber: {
+            buildingId: building.id,
+            floorNumber: roomSeed.floorNumber,
+          },
+        },
+        update: {
+          name: `Tầng ${roomSeed.floorNumber}`,
+        },
+        create: {
+          buildingId: building.id,
+          floorNumber: roomSeed.floorNumber,
+          name: `Tầng ${roomSeed.floorNumber}`,
+        },
+      });
+
+      seededFloors.set(floorKey, floor);
+    }
+  }
+
+  for (const timeSlotSeed of timeSlotSeeds) {
+    await prisma.timeSlot.upsert({
+      where: { slotNumber: timeSlotSeed.slotNumber },
+      update: {
+        label: timeSlotSeed.label,
+        startTime: timeSlotSeed.startTime,
+        endTime: timeSlotSeed.endTime,
+      },
+      create: timeSlotSeed,
+    });
+  }
+
+  const seededRooms = new Map<string, Awaited<ReturnType<typeof prisma.room.upsert>>>();
+
+  for (const roomSeed of roomSeeds) {
+    const floor = seededFloors.get(`${roomSeed.buildingCode}-${roomSeed.floorNumber}`);
+
+    if (!floor) {
+      throw new Error(`Floor ${roomSeed.buildingCode}-${roomSeed.floorNumber} was not seeded`);
+    }
+
+    const room = await prisma.room.upsert({
+      where: { roomCode: roomSeed.roomCode },
+      update: {
+        floorId: floor.id,
+        name: roomSeed.displayName,
+        capacity: roomSeed.capacity,
+        type: roomSeed.type,
+        status: RoomStatus.active,
+      },
+      create: {
+        floorId: floor.id,
+        roomCode: roomSeed.roomCode,
+        name: roomSeed.displayName,
+        capacity: roomSeed.capacity,
+        type: roomSeed.type,
+        status: RoomStatus.active,
+      },
+    });
+
+    seededRooms.set(room.roomCode, room);
+  }
+
+  await prisma.roomBooking.deleteMany();
+
+  const bookingUsers = {
+    admin,
+    lecturer,
+  } as const;
+
+  for (const bookingSeed of roomBookingSeeds) {
+    const room = seededRooms.get(bookingSeed.roomCode);
+
+    if (!room) {
+      throw new Error(`Room ${bookingSeed.roomCode} was not seeded`);
+    }
+
+    const createdBy = bookingUsers[bookingSeed.createdBy];
+
+    await prisma.roomBooking.create({
+      data: {
+        roomId: room.id,
+        userId: createdBy.id,
+        bookingDate: new Date(`${bookingSeed.bookingDate}T00:00:00.000Z`),
+        startTime: bookingSeed.startTime,
+        endTime: bookingSeed.endTime,
+        title: bookingSeed.title,
+        purpose: bookingSeed.purpose,
+        attendeeCount: bookingSeed.attendeeCount ?? null,
+        contactName: bookingSeed.contactName ?? null,
+        contactPhone: null,
+        departmentName: bookingSeed.departmentName ?? null,
+        status: RoomBookingStatus.booked,
+        approvedById: admin.id,
+        approvedAt: new Date(`${bookingSeed.bookingDate}T00:00:00.000Z`),
+        notes:
+          bookingSeed.notes ??
+          'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
+      },
+    });
+  }
+
   const semesters = new Map<string, Awaited<ReturnType<typeof prisma.semester.upsert>>>();
 
   for (const semesterSeed of semesterSeeds) {
@@ -1284,6 +2015,10 @@ async function main() {
     admin: admin.email,
     lecturer: lecturer.email,
     student: student.email,
+    buildings: buildingSeeds.length,
+    rooms: roomSeeds.length,
+    roomBookings: roomBookingSeeds.length,
+    timeSlots: timeSlotSeeds.length,
     semesters: semesterSeeds.length,
     currentSemester: semesterSeeds.find((item) => item.isCurrent)?.name ?? null,
     sections: classSections.size,

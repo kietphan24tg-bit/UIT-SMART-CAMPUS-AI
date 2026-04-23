@@ -12,6 +12,7 @@ import { IotModule } from './modules/iot/iot.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ParkingModule } from './modules/parking/parking.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { RoomBookingsModule } from './modules/room-bookings/room-bookings.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -32,6 +33,7 @@ import { UsersModule } from './modules/users/users.module';
     EventsModule,
     NotificationsModule,
     ParkingModule,
+    RoomBookingsModule,
     IotModule,
     PaymentsModule,
   ],

@@ -1,0 +1,49 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class RoomScheduleSlotDto {
+  @ApiProperty({ example: 'slot-1' })
+  timeSlotId!: string;
+
+  @ApiProperty({ example: 1 })
+  slotNumber!: number;
+
+  @ApiProperty({ example: 'Tiết 1' })
+  label!: string;
+
+  @ApiProperty({ example: '07:30' })
+  startTime!: string;
+
+  @ApiProperty({ example: '08:15' })
+  endTime!: string;
+
+  @ApiPropertyOptional({ example: 'SE346.Q22', nullable: true })
+  bookingTitle!: string | null;
+
+  @ApiProperty({ example: 'SE346.Q22' })
+  displayText!: string;
+}
+
+export class RoomScheduleDayDto {
+  @ApiProperty({ example: 2, description: '2 = Monday, 7 = Saturday' })
+  dayOfWeek!: number;
+
+  @ApiProperty({ example: 'Thứ 2' })
+  label!: string;
+
+  @ApiProperty({ type: () => RoomScheduleSlotDto, isArray: true })
+  slots!: RoomScheduleSlotDto[];
+}
+
+export class RoomScheduleResponseDto {
+  @ApiProperty({ example: 'B1.02' })
+  roomCode!: string;
+
+  @ApiProperty({ example: 60 })
+  capacity!: number;
+
+  @ApiPropertyOptional({ example: 'Phòng học 1', nullable: true })
+  name!: string | null;
+
+  @ApiProperty({ type: () => RoomScheduleDayDto, isArray: true })
+  days!: RoomScheduleDayDto[];
+}

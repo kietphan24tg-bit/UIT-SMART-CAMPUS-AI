@@ -57,6 +57,14 @@ describe('ServicesScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/services/events');
   });
 
+  it('opens the room booking service from the services grid', () => {
+    const { getByText } = render(<ServicesScreen />);
+
+    fireEvent.press(getByText('Đặt phòng'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/room-booking');
+  });
+
   it('renders live and upcoming service groups on tablet widths', () => {
     mockUseResponsiveLayout.mockReturnValue({
       isCompact: false,

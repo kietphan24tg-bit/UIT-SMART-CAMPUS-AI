@@ -45,6 +45,24 @@ enum AttendanceSessionStatus {
   expired
 }
 
+enum RoomType {
+  classroom
+  lab
+  meeting
+}
+
+enum RoomStatus {
+  active
+  maintenance
+}
+
+enum RoomBookingStatus {
+  pending
+  approved
+  booked
+  maintenance
+}
+
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
@@ -64,17 +82,111 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  refreshTokens      RefreshToken[]
-  passwordResetOtps   PasswordResetOtp[]
-  scheduleItems       ScheduleItem[]
-  grades              Grade[]
-  notifications       Notification[]
-  pushTokens          UserDevicePushToken[]
-  attendanceSessions  AttendanceSession[]
-  attendanceRecords   AttendanceRecord[]
-  vehicles            Vehicle[]
+  refreshTokens        RefreshToken[]
+  passwordResetOtps    PasswordResetOtp[]
+  scheduleItems        ScheduleItem[]
+  grades               Grade[]
+  notifications        Notification[]
+  pushTokens           UserDevicePushToken[]
+  attendanceSessions   AttendanceSession[]
+  attendanceRecords    AttendanceRecord[]
+  vehicles             Vehicle[]
+  roomBookings         RoomBooking[]         @relation("RoomBookingsCreatedBy")
+  approvedRoomBookings RoomBooking[]         @relation("RoomBookingsApprovedBy")
 
   @@map("users")
+}
+
+model Building {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  floors Floor[]
+
+  @@map("buildings")
+}
+
+model Floor {
+  id          String   @id @default(uuid())
+  buildingId  String   @map("building_id")
+  floorNumber Int      @map("floor_number")
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms    Room[]
+
+  @@unique([buildingId, floorNumber])
+  @@map("floors")
+}
+
+model Room {
+  id        String     @id @default(uuid())
+  floorId   String     @map("floor_id")
+  roomCode  String     @unique @map("room_code")
+  name      String?
+  capacity  Int
+  type      RoomType
+  status    RoomStatus @default(active)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  floor        Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  roomBookings RoomBooking[]
+
+  @@index([floorId, status])
+  @@map("rooms")
+}
+
+model TimeSlot {
+  id         String   @id @default(uuid())
+  slotNumber Int      @unique @map("slot_number")
+  label      String
+  startTime  String   @map("start_time")
+  endTime    String   @map("end_time")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  roomBookings RoomBooking[]
+
+  @@map("time_slots")
+}
+
+model RoomBooking {
+  id             String            @id @default(uuid())
+  roomId         String            @map("room_id")
+  userId         String            @map("user_id")
+  bookingDate    DateTime          @map("booking_date") @db.Date
+  timeSlotId     String?           @map("time_slot_id")
+  startTime      String?           @map("start_time")
+  endTime        String?           @map("end_time")
+  title          String?
+  purpose        String
+  attendeeCount  Int?              @map("attendee_count")
+  contactName    String?           @map("contact_name")
+  contactPhone   String?           @map("contact_phone")
+  departmentName String?           @map("department_name")
+  status         RoomBookingStatus @default(pending)
+  approvedById   String?           @map("approved_by_id")
+  approvedAt     DateTime?         @map("approved_at")
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  room       Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User      @relation("RoomBookingsCreatedBy", fields: [userId], references: [id], onDelete: Cascade)
+  timeSlot   TimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
+  approvedBy User?     @relation("RoomBookingsApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([roomId, bookingDate, timeSlotId])
+  @@index([roomId, bookingDate, status])
+  @@index([userId, bookingDate])
+  @@index([timeSlotId])
+  @@map("room_bookings")
 }
 
 model PasswordResetOtp {
@@ -104,14 +216,14 @@ model RefreshToken {
 }
 
 model Semester {
-  id        String   @id @default(uuid())
-  name      String
-  academicYear String @map("academic_year")
-  term      Int      @map("term")
-  startDate DateTime @map("start_date")
-  endDate   DateTime @map("end_date")
-  isCurrent Boolean  @default(false) @map("is_current")
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  name         String
+  academicYear String   @map("academic_year")
+  term         Int      @map("term")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  isCurrent    Boolean  @default(false) @map("is_current")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   classSections ClassSection[]
   grades        Grade[]
@@ -143,9 +255,9 @@ model ClassSection {
   note        String?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  semester      Semester       @relation(fields: [semesterId], references: [id], onDelete: Cascade)
-  course        Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  scheduleItems ScheduleItem[]
+  semester           Semester            @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  scheduleItems      ScheduleItem[]
   attendanceSessions AttendanceSession[]
 
   @@unique([semesterId, courseId, sectionCode])
@@ -163,8 +275,8 @@ model AttendanceSession {
   createdAt      DateTime                @default(now()) @map("created_at")
   updatedAt      DateTime                @updatedAt @map("updated_at")
 
-  classSection ClassSection        @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
-  lecturer     User                @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  classSection ClassSection       @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  lecturer     User               @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
   records      AttendanceRecord[]
 
   @@index([classSectionId, startedAt])
@@ -210,20 +322,20 @@ model ScheduleItem {
 }
 
 model Grade {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  courseId    String   @map("course_id")
-  semesterId  String   @map("semester_id")
-  midterm     Float?
-  finalExam   Float?   @map("final_exam")
-  assignment  Float?
-  totalScore  Float?   @map("total_score")
-  letterGrade String?  @map("letter_grade")
-  gradePoint  Float?   @map("grade_point")
-  isExempt    Boolean  @default(false) @map("is_exempt")
-  earnedCredits Int    @default(0) @map("earned_credits")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  courseId      String   @map("course_id")
+  semesterId    String   @map("semester_id")
+  midterm       Float?
+  finalExam     Float?   @map("final_exam")
+  assignment    Float?
+  totalScore    Float?   @map("total_score")
+  letterGrade   String?  @map("letter_grade")
+  gradePoint    Float?   @map("grade_point")
+  isExempt      Boolean  @default(false) @map("is_exempt")
+  earnedCredits Int      @default(0) @map("earned_credits")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   course   Course   @relation(fields: [courseId], references: [id])
@@ -262,8 +374,8 @@ model UserDevicePushToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@unique([userId, expoPushToken])
+  @@index([userId])
   @@map("user_device_push_tokens")
 }
 
@@ -277,7 +389,7 @@ model Vehicle {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscription        ParkingSubscription?
   parkingSessions     ParkingSession[]
   paymentTransactions PaymentTransaction[]
@@ -288,14 +400,14 @@ model Vehicle {
 
 model ParkingSubscription {
   id            String             @id @default(uuid())
-  vehicleId      String             @unique @map("vehicle_id")
-  monthlyFee     Int                @default(40000) @map("monthly_fee")
-  status         SubscriptionStatus @default(inactive)
-  startDate      DateTime?          @map("start_date")
-  endDate        DateTime?          @map("end_date")
-  lastPaymentAt  DateTime?          @map("last_payment_at")
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
+  vehicleId     String             @unique @map("vehicle_id")
+  monthlyFee    Int                @default(40000) @map("monthly_fee")
+  status        SubscriptionStatus @default(inactive)
+  startDate     DateTime?          @map("start_date")
+  endDate       DateTime?          @map("end_date")
+  lastPaymentAt DateTime?          @map("last_payment_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
   vehicle  Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   payments PaymentTransaction[]
@@ -305,19 +417,19 @@ model ParkingSubscription {
 
 model PaymentTransaction {
   id              String        @id @default(uuid())
-  vehicleId        String        @map("vehicle_id")
-  subscriptionId   String?       @map("subscription_id")
-  provider         String
-  providerOrderId  String        @unique @map("provider_order_id")
-  requestId        String?       @unique @map("request_id")
-  amount           Int
-  status           PaymentStatus @default(pending)
-  checkoutUrl      String?       @map("checkout_url")
-  requestPayload   Json?         @map("request_payload")
-  responsePayload  Json?         @map("response_payload")
-  paidAt           DateTime?     @map("paid_at")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  vehicleId       String        @map("vehicle_id")
+  subscriptionId  String?       @map("subscription_id")
+  provider        String
+  providerOrderId String        @unique @map("provider_order_id")
+  requestId       String?       @unique @map("request_id")
+  amount          Int
+  status          PaymentStatus @default(pending)
+  checkoutUrl     String?       @map("checkout_url")
+  requestPayload  Json?         @map("request_payload")
+  responsePayload Json?         @map("response_payload")
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
   vehicle      Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   subscription ParkingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
@@ -346,13 +458,13 @@ model ParkingSession {
 }
 
 model ParkingSlot {
-  id          String   @id @default(uuid())
-  gateId      String   @map("gate_id")
-  zone        String   @default("Main")
-  slotNumber  String   @map("slot_number")
-  isOccupied  Boolean  @default(false) @map("is_occupied")
-  vehiclePlate String? @map("vehicle_plate")
-  lastUpdated DateTime @default(now()) @map("last_updated")
+  id           String   @id @default(uuid())
+  gateId       String   @map("gate_id")
+  zone         String   @default("Main")
+  slotNumber   String   @map("slot_number")
+  isOccupied   Boolean  @default(false) @map("is_occupied")
+  vehiclePlate String?  @map("vehicle_plate")
+  lastUpdated  DateTime @default(now()) @map("last_updated")
 
   @@unique([gateId, slotNumber])
   @@index([gateId, isOccupied])
@@ -379,14 +491,14 @@ model TelemetrySnapshot {
 }
 
 model FireAlert {
-  id                String   @id @default(uuid())
-  gateId            String   @map("gate_id")
-  telemetrySnapshotId String? @map("telemetry_snapshot_id")
-  message           String
-  isResolved        Boolean  @default(false) @map("is_resolved")
-  reportedAt        DateTime @map("reported_at")
-  resolvedAt        DateTime? @map("resolved_at")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                  String    @id @default(uuid())
+  gateId              String    @map("gate_id")
+  telemetrySnapshotId String?   @map("telemetry_snapshot_id")
+  message             String
+  isResolved          Boolean   @default(false) @map("is_resolved")
+  reportedAt          DateTime  @map("reported_at")
+  resolvedAt          DateTime? @map("resolved_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   telemetrySnapshot TelemetrySnapshot? @relation(fields: [telemetrySnapshotId], references: [id], onDelete: SetNull)
 
