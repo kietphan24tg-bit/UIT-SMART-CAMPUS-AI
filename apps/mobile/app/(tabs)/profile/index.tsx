@@ -63,6 +63,11 @@ export default function ProfileScreen() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/login');
+  };
+
   const handleThemeChange = async (nextPreference: ThemePreference) => {
     await setThemePreference(nextPreference);
   };
@@ -292,7 +297,7 @@ export default function ProfileScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => void logout()}
+          onPress={() => void handleLogout()}
           style={[
             styles.logoutButton,
             {

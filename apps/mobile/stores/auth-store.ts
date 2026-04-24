@@ -21,6 +21,7 @@ type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'r
   >;
 
 interface AuthState {
+  isHydrated: boolean;
   isAuthenticated: boolean;
   user: UserInfo | null;
   accessToken: string | null;
@@ -45,6 +46,7 @@ async function syncPushTokenSafely() {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
+  isHydrated: false,
   isAuthenticated: false,
   user: null,
   accessToken: null,
@@ -63,7 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
 
     const user = await authApi.getMe(tokens.accessToken);
-    set({ isAuthenticated: true, user, accessToken: tokens.accessToken });
+    set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
     await syncPushTokenSafely();
   },
 
@@ -73,7 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
 
     const user = await authApi.getMe(tokens.accessToken);
-    set({ isAuthenticated: true, user, accessToken: tokens.accessToken });
+    set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
     await syncPushTokenSafely();
   },
 
@@ -81,7 +83,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await unregisterPushTokenFromBackend();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
-    set({ isAuthenticated: false, user: null, accessToken: null });
+    set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
   },
 
   hydrate: async () => {
@@ -89,24 +91,28 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
         const user = await authApi.getMe(token);
-        set({ isAuthenticated: true, user, accessToken: token });
+        set({ isHydrated: true, isAuthenticated: true, user, accessToken: token });
         await syncPushTokenSafely();
+        return;
       }
+
+      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
     } catch {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       await SecureStore.deleteItemAsync(REFRESH_KEY);
+      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
     }
   },
 
   refreshProfile: async () => {
     const token = await SecureStore.getItemAsync(TOKEN_KEY);
     if (!token) {
-      set({ isAuthenticated: false, user: null, accessToken: null });
+      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
       return null;
     }
 
     const user = await usersApi.getProfile();
-    set({ isAuthenticated: true, user, accessToken: token });
+    set({ isHydrated: true, isAuthenticated: true, user, accessToken: token });
     await syncPushTokenSafely();
     return user;
   },

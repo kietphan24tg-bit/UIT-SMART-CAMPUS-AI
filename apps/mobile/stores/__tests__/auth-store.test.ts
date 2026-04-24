@@ -41,6 +41,7 @@ const mockedAuthApi = authApi as unknown as {
 describe('useAuthStore', () => {
   beforeEach(() => {
     useAuthStore.setState({
+      isHydrated: false,
       isAuthenticated: false,
       user: null,
       accessToken: null,
@@ -48,12 +49,13 @@ describe('useAuthStore', () => {
     jest.clearAllMocks();
   });
 
-  it('should have correct initial state', () => {
-    const state = useAuthStore.getState();
+    it('should have correct initial state', () => {
+      const state = useAuthStore.getState();
 
-    expect(state.isAuthenticated).toBe(false);
-    expect(state.user).toBeNull();
-    expect(state.accessToken).toBeNull();
+      expect(state.isHydrated).toBe(false);
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
+      expect(state.accessToken).toBeNull();
   });
 
   describe('login', () => {
@@ -101,6 +103,7 @@ describe('useAuthStore', () => {
   describe('logout', () => {
     it('should clear auth state and delete tokens', async () => {
       useAuthStore.setState({
+        isHydrated: true,
         isAuthenticated: true,
         user: mockUser,
         accessToken: 'token',
@@ -109,6 +112,7 @@ describe('useAuthStore', () => {
       await useAuthStore.getState().logout();
 
       const state = useAuthStore.getState();
+      expect(state.isHydrated).toBe(true);
       expect(state.isAuthenticated).toBe(false);
       expect(state.user).toBeNull();
       expect(state.accessToken).toBeNull();
@@ -126,6 +130,7 @@ describe('useAuthStore', () => {
       await useAuthStore.getState().hydrate();
 
       const state = useAuthStore.getState();
+      expect(state.isHydrated).toBe(true);
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).toEqual(mockUser);
       expect(state.accessToken).toBe('stored-token');
@@ -136,6 +141,7 @@ describe('useAuthStore', () => {
 
       await useAuthStore.getState().hydrate();
 
+      expect(useAuthStore.getState().isHydrated).toBe(true);
       expect(useAuthStore.getState().isAuthenticated).toBe(false);
     });
 
@@ -145,6 +151,7 @@ describe('useAuthStore', () => {
 
       await useAuthStore.getState().hydrate();
 
+      expect(useAuthStore.getState().isHydrated).toBe(true);
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
     });

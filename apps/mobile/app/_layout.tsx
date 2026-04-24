@@ -5,7 +5,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -32,12 +32,13 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
   });
+  const isHydrated = useAuthStore((state) => state.isHydrated);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontsLoaded && isHydrated) {
+      void SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, isHydrated]);
 
   useEffect(() => {
     const unsubscribe = subscribeExpoPushTokenChanges();
@@ -48,7 +49,7 @@ export default function RootLayout() {
     void useAuthStore.getState().hydrate();
   }, []);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || !isHydrated) {
     return null;
   }
 
@@ -68,6 +69,7 @@ function RootNavigator() {
 
   return (
     <>
+      <AuthNavigationGate />
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
@@ -96,4 +98,31 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+function AuthNavigationGate() {
+  const router = useRouter();
+  const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+
+  useEffect(() => {
+    if (!navigationState?.key || !isHydrated) {
+      return;
+    }
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/login');
+      return;
+    }
+
+    if (isAuthenticated && inAuthGroup) {
+      router.replace('/home');
+    }
+  }, [isAuthenticated, isHydrated, navigationState?.key, router, segments]);
+
+  return null;
 }

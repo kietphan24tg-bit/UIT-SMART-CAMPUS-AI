@@ -22,6 +22,11 @@ export default function SettingsScreen() {
   const preference = useThemePreference();
   const setPreference = useSetThemePreference();
 
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/login');
+  };
+
   return (
     <Screen>
       <TopHero
@@ -87,7 +92,7 @@ export default function SettingsScreen() {
           </Text>
         </SectionCard>
 
-        <PrimaryButton label="Đăng xuất" onPress={() => void logout()} />
+        <PrimaryButton label="Đăng xuất" onPress={() => void handleLogout()} />
       </ContentStack>
     </Screen>
   );
