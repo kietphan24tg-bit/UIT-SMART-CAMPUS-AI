@@ -162,4 +162,90 @@ describe('EventsService', () => {
     expect(result).toEqual({ success: true });
     expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
   });
+
+  it('rejects partial update when startAt moves after existing endAt', async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      id: 'event-1',
+      ownerId: 'lecturer-1',
+      startAt: new Date('2026-04-20T01:00:00.000Z'),
+      endAt: new Date('2026-04-20T03:00:00.000Z'),
+    });
+
+    await expect(
+      service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
+        startAt: '2026-04-20T04:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects partial update when endAt moves before existing startAt', async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      id: 'event-1',
+      ownerId: 'lecturer-1',
+      startAt: new Date('2026-04-20T01:00:00.000Z'),
+      endAt: new Date('2026-04-20T03:00:00.000Z'),
+    });
+
+    await expect(
+      service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
+        endAt: '2026-04-20T00:30:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it('allows event owner to update when effective date range stays valid', async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      id: 'event-1',
+      ownerId: 'lecturer-1',
+      startAt: new Date('2026-04-20T01:00:00.000Z'),
+      endAt: new Date('2026-04-20T03:00:00.000Z'),
+    });
+    prisma.event.update.mockResolvedValue({
+      id: 'event-1',
+      title: 'Updated event',
+    });
+
+    await service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
+      title: 'Updated event',
+      endAt: '2026-04-20T04:00:00.000Z',
+    });
+
+    expect(prisma.event.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'event-1' },
+        data: expect.objectContaining({
+          title: 'Updated event',
+          endAt: new Date('2026-04-20T04:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('allows admin to update another owner event', async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      id: 'event-1',
+      ownerId: 'lecturer-1',
+      startAt: new Date('2026-04-20T01:00:00.000Z'),
+      endAt: new Date('2026-04-20T03:00:00.000Z'),
+    });
+    prisma.event.update.mockResolvedValue({
+      id: 'event-1',
+      status: EventStatus.closed,
+    });
+
+    await service.updateEvent('event-1', 'admin-1', 'admin', {
+      status: EventStatus.closed,
+    });
+
+    expect(prisma.event.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'event-1' },
+        data: expect.objectContaining({
+          status: EventStatus.closed,
+        }),
+      }),
+    );
+  });
 });

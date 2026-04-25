@@ -1671,12 +1671,27 @@ function parseClassCode(classCode: string) {
 }
 
 function splitVietnameseName(fullName: string) {
-  const parts = String(fullName || '')
+  const normalizedFullName = String(fullName || '')
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-  const firstName = parts.pop() ?? fullName;
-  const lastName = parts.join(' ') || firstName;
+
+  if (normalizedFullName.length === 0) {
+    return {
+      firstName: '',
+      lastName: '',
+    };
+  }
+
+  if (normalizedFullName.length === 1) {
+    return {
+      firstName: normalizedFullName[0] ?? '',
+      lastName: '',
+    };
+  }
+
+  const firstName = normalizedFullName.pop() ?? '';
+  const lastName = normalizedFullName.join(' ');
 
   return {
     firstName,

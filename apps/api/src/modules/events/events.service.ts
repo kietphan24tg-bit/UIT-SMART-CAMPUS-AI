@@ -209,6 +209,8 @@ export class EventsService {
       select: {
         id: true,
         ownerId: true,
+        startAt: true,
+        endAt: true,
       },
     });
 
@@ -220,9 +222,9 @@ export class EventsService {
       throw new ForbiddenException('You do not have permission to update this event');
     }
 
-    const startAt = dto.startAt ? new Date(dto.startAt) : null;
-    const endAt = dto.endAt ? new Date(dto.endAt) : null;
-    if (startAt && endAt && endAt <= startAt) {
+    const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
+    const endAt = dto.endAt ? new Date(dto.endAt) : existing.endAt;
+    if (endAt <= startAt) {
       throw new BadRequestException('endAt must be after startAt');
     }
 
@@ -237,8 +239,8 @@ export class EventsService {
         ...(dto.coverImageUrl !== undefined ? { coverImageUrl: dto.coverImageUrl?.trim() || null } : {}),
         ...(dto.status ? { status: dto.status } : {}),
         ...(dto.category ? { category: dto.category } : {}),
-        ...(startAt ? { startAt } : {}),
-        ...(endAt ? { endAt } : {}),
+        ...(dto.startAt ? { startAt } : {}),
+        ...(dto.endAt ? { endAt } : {}),
         ...(dto.maxAttendees !== undefined ? { maxAttendees: dto.maxAttendees ?? null } : {}),
       },
     });

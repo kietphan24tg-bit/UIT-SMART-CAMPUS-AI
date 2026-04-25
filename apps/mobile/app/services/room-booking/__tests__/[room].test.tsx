@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { TextInput } from 'react-native';
@@ -11,9 +10,104 @@ const mockRouter = {
   back: jest.fn(),
 };
 
+const mockInvalidateQueries = jest.fn().mockResolvedValue(undefined);
+const mockCreateRoomBooking = jest.fn().mockResolvedValue({
+  id: 'booking-1',
+  roomCode: 'C101',
+  roomName: null,
+  buildingCode: 'C',
+  buildingName: 'Tòa C',
+  bookingDate: '2026-04-20',
+  timeSlotId: 'mon-1',
+  startTime: '07:30',
+  endTime: '08:15',
+  timeSlot: null,
+  title: 'Học nhóm',
+  purpose: 'Học nhóm',
+  attendeeCount: 5,
+  contactName: 'Nguyen Van A',
+  contactPhone: '0901234567',
+  departmentName: null,
+  notes: null,
+  status: 'pending',
+  approvedAt: null,
+  createdAt: '2026-04-23T00:00:00.000Z',
+});
+
+const roomScheduleData = [
+  {
+    dayKey: 'mon',
+    dateKey: '2026-04-20',
+    label: 'Th2',
+    slots: [
+      {
+        id: 'mon-1',
+        startTime: '07:30',
+        endTime: '08:15',
+        status: 'free',
+        label: 'Tiết 1',
+      },
+      {
+        id: 'mon-2',
+        startTime: '08:15',
+        endTime: '09:00',
+        status: 'occupied',
+        label: 'Tiết 2',
+        courseCode: 'CE124.Q21',
+      },
+      {
+        id: 'mon-3',
+        startTime: '09:00',
+        endTime: '09:45',
+        status: 'occupied',
+        label: 'Tiết 3',
+        courseCode: 'CE124.Q21',
+      },
+    ],
+  },
+  {
+    dayKey: 'sat',
+    dateKey: '2026-04-25',
+    label: 'Th7',
+    slots: [
+      {
+        id: 'sat-1',
+        startTime: '07:30',
+        endTime: '09:00',
+        status: 'available_later',
+        label: 'Trống lúc 09:00',
+      },
+    ],
+  },
+];
+
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => ({ building: 'C', room: 'C101' }),
+}));
+
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: jest.fn(() => ({
+    data: roomScheduleData,
+    isError: false,
+    refetch: jest.fn(),
+  })),
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
+  }),
+  useMutation: jest.fn(
+    ({ mutationFn, onSuccess, onError }: { mutationFn: (payload: unknown) => Promise<unknown>; onSuccess?: () => void; onError?: (error: unknown) => void }) => ({
+      isPending: false,
+      mutate: async (payload: unknown) => {
+        try {
+          await mutationFn(payload);
+          await onSuccess?.();
+        } catch (error) {
+          onError?.(error);
+        }
+      },
+    }),
+  ),
 }));
 
 jest.mock('@/stores/auth-store', () => ({
@@ -32,82 +126,10 @@ jest.mock('@/stores/auth-store', () => ({
 
 jest.mock('@/services/api/room-bookings', () => ({
   roomBookingsApi: {
-    getRoomSchedule: jest.fn().mockResolvedValue([
-      {
-        dayKey: 'mon',
-        dateKey: '2026-04-20',
-        label: 'Th2',
-        slots: [
-          {
-            id: 'mon-1',
-            startTime: '07:30',
-            endTime: '08:15',
-            status: 'free',
-            label: 'Tiết 1',
-          },
-          {
-            id: 'mon-2',
-            startTime: '08:15',
-            endTime: '09:00',
-            status: 'occupied',
-            label: 'Tiết 2',
-            courseCode: 'CE124.Q21',
-          },
-          {
-            id: 'mon-3',
-            startTime: '09:00',
-            endTime: '09:45',
-            status: 'occupied',
-            label: 'Tiết 3',
-            courseCode: 'CE124.Q21',
-          },
-        ],
-      },
-      {
-        dayKey: 'sat',
-        dateKey: '2026-04-25',
-        label: 'Th7',
-        slots: [
-          {
-            id: 'sat-1',
-            startTime: '07:30',
-            endTime: '09:00',
-            status: 'available_later',
-            label: 'Trống lúc 09:00',
-          },
-        ],
-      },
-    ]),
-    createRoomBooking: jest.fn().mockResolvedValue({
-      id: 'booking-1',
-      roomCode: 'C101',
-      roomName: null,
-      buildingCode: 'C',
-      buildingName: 'Tòa C',
-      bookingDate: '2026-04-20',
-      timeSlotId: 'mon-1',
-      startTime: '07:30',
-      endTime: '08:15',
-      timeSlot: null,
-      title: 'Học nhóm',
-      purpose: 'Học nhóm',
-      attendeeCount: 5,
-      contactName: 'Nguyen Van A',
-      contactPhone: '0901234567',
-      departmentName: null,
-      notes: null,
-      status: 'pending',
-      approvedAt: null,
-      createdAt: '2026-04-23T00:00:00.000Z',
-    }),
+    getRoomSchedule: jest.fn().mockResolvedValue(roomScheduleData),
+    createRoomBooking: (...args: unknown[]) => mockCreateRoomBooking(...args),
   },
 }));
-
-const { roomBookingsApi } = jest.requireMock('@/services/api/room-bookings') as {
-  roomBookingsApi: {
-    createRoomBooking: jest.Mock;
-  };
-};
 
 describe('RoomDetailScreen', () => {
   beforeEach(() => {
@@ -115,21 +137,11 @@ describe('RoomDetailScreen', () => {
   });
 
   it('renders room schedule and submits booking form to API', async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
-    });
-
     const { getByText, getAllByText, getByDisplayValue, UNSAFE_getAllByType } = render(
-      <QueryClientProvider client={queryClient}>
-        <RoomDetailScreen />
-      </QueryClientProvider>,
+      <RoomDetailScreen />,
     );
 
-    await waitFor(() => expect(getByText('Th2')).toBeTruthy());
+    expect(getByText('Th2')).toBeTruthy();
     expect(getByText('C101')).toBeTruthy();
     expect(getByText('Th7')).toBeTruthy();
     expect(getByText('Thứ 2:')).toBeTruthy();
@@ -138,8 +150,9 @@ describe('RoomDetailScreen', () => {
 
     fireEvent.press(getByText('Đặt phòng'));
 
-    expect(getByText('Đặt phòng')).toBeTruthy();
-    expect(getByText('Phòng:')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('Phòng:')).toBeTruthy();
+    });
     expect(getByText('Ngày:')).toBeTruthy();
     expect(getByText('Giờ:')).toBeTruthy();
     expect(getByDisplayValue('5')).toBeTruthy();
@@ -154,19 +167,19 @@ describe('RoomDetailScreen', () => {
     fireEvent.press(getByText('Submit'));
 
     await waitFor(() => {
-      expect(roomBookingsApi.createRoomBooking).toHaveBeenCalledWith(
-        {
-          roomCode: 'C101',
-          bookingDate: '2026-04-20',
-          timeSlotId: 'mon-1',
-          purpose: 'Học nhóm - Thiết bị cần: Máy chiếu',
-          contactName: 'Nguyen Van A',
-          contactPhone: '0912345678',
-          attendeeCount: 5,
-          title: 'SE346 Team Meeting',
-        },
-        expect.any(Object),
-      );
+      expect(mockCreateRoomBooking).toHaveBeenCalledWith({
+        roomCode: 'C101',
+        bookingDate: '2026-04-20',
+        timeSlotId: 'mon-1',
+        purpose: 'Học nhóm - Thiết bị cần: Máy chiếu',
+        contactName: 'Nguyen Van A',
+        contactPhone: '0912345678',
+        attendeeCount: 5,
+        title: 'SE346 Team Meeting',
+      });
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['room-bookings', 'room-schedule', 'C101'],
     });
     expect(getByText('Yêu cầu đặt phòng đã được gửi.')).toBeTruthy();
   });

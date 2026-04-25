@@ -59,8 +59,7 @@ export class ScheduleService {
 
   async getCurrentSemesterSchedule(userId: string) {
     const role = await this.getUserRole(userId);
-    const semesters = await this.getSemestersByRole(role, userId);
-    const current = semesters.find((item) => item.isCurrent);
+    const current = await this.getCurrentSemesterByRole(role, userId);
 
     if (!current) {
       throw new NotFoundException('Current semester not found');
@@ -71,8 +70,7 @@ export class ScheduleService {
 
   async getSemesterScheduleById(userId: string, semesterId: string) {
     const role = await this.getUserRole(userId);
-    const semesters = await this.getSemestersByRole(role, userId);
-    const semester = semesters.find((entry) => entry.id === semesterId);
+    const semester = await this.getSemesterByIdForRole(role, userId, semesterId);
 
     if (!semester) {
       throw new NotFoundException('Semester not found');
@@ -117,7 +115,74 @@ export class ScheduleService {
       orderBy: { startDate: 'desc' },
     });
 
-    return semesters.map((semester) => ({
+    return semesters.map((semester) => this.mapAdminSemesterSchedule(semester));
+  }
+
+  private async getCurrentSemesterByRole(role: Role, userId: string) {
+    if (role === Role.student) {
+      const semester = await this.prisma.semester.findFirst({
+        where: { isCurrent: true },
+        include: buildStudentSemesterInclude(userId),
+        orderBy: { startDate: 'desc' },
+      });
+
+      return semester ? this.mapStudentSemesterSchedule(semester) : null;
+    }
+
+    if (role === Role.lecturer) {
+      const semester = await this.prisma.semester.findFirst({
+        where: { isCurrent: true },
+        include: buildLecturerSemesterInclude(userId),
+        orderBy: { startDate: 'desc' },
+      });
+
+      return semester ? this.mapLecturerSemesterSchedule(semester) : null;
+    }
+
+    const semester = await this.prisma.semester.findFirst({
+      where: { isCurrent: true },
+      orderBy: { startDate: 'desc' },
+    });
+
+    return semester ? this.mapAdminSemesterSchedule(semester) : null;
+  }
+
+  private async getSemesterByIdForRole(role: Role, userId: string, semesterId: string) {
+    if (role === Role.student) {
+      const semester = await this.prisma.semester.findUnique({
+        where: { id: semesterId },
+        include: buildStudentSemesterInclude(userId),
+      });
+
+      return semester ? this.mapStudentSemesterSchedule(semester) : null;
+    }
+
+    if (role === Role.lecturer) {
+      const semester = await this.prisma.semester.findUnique({
+        where: { id: semesterId },
+        include: buildLecturerSemesterInclude(userId),
+      });
+
+      return semester ? this.mapLecturerSemesterSchedule(semester) : null;
+    }
+
+    const semester = await this.prisma.semester.findUnique({
+      where: { id: semesterId },
+    });
+
+    return semester ? this.mapAdminSemesterSchedule(semester) : null;
+  }
+
+  private mapAdminSemesterSchedule(semester: {
+    id: string;
+    name: string;
+    academicYear: string;
+    term: number;
+    startDate: Date;
+    endDate: Date;
+    isCurrent: boolean;
+  }) {
+    return {
       id: semester.id,
       name: semester.name,
       academicYear: semester.academicYear,
@@ -126,7 +191,7 @@ export class ScheduleService {
       endDate: semester.endDate,
       isCurrent: semester.isCurrent,
       sessions: [],
-    }));
+    };
   }
 
   private mapStudentSemesterSchedule(semester: StudentSemesterWithSchedules) {

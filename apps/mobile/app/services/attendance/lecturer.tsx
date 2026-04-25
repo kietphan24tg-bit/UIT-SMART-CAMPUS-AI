@@ -6,16 +6,20 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 
 import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SkeletonBlock } from '@/components/ui';
 import { attendanceApi, type AttendanceSessionStartResponse } from '@/services/api/attendance';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { formatDateTime, getDayLabel } from '@/utils/app';
+import { formatDateTime, getDayLabel, isLecturerRole } from '@/utils/app';
 
 export default function LecturerAttendanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const canManageAttendance = isLecturerRole(role);
   const classSectionsQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'class-sections'],
     queryFn: attendanceApi.getLecturerClassSections,
+    enabled: canManageAttendance,
   });
 
   const [selectedSectionId, setSelectedSectionId] = React.useState<string>('');
@@ -66,8 +70,24 @@ export default function LecturerAttendanceScreen() {
   const historyQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'history', selectedSection?.id],
     queryFn: () => attendanceApi.getLecturerHistory(selectedSection?.id as string, 1, 10),
-    enabled: Boolean(selectedSection?.id),
+    enabled: canManageAttendance && Boolean(selectedSection?.id),
   });
+
+  if (!canManageAttendance) {
+    return (
+      <Screen>
+        <ContentStack narrow overlapHero={false}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Bạn không có quyền truy cập"
+            description="Màn hình này chỉ dành cho tài khoản giảng viên."
+            actionLabel="Quay lại"
+            onActionPress={() => router.back()}
+          />
+        </ContentStack>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

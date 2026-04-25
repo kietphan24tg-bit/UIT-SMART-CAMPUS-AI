@@ -54,6 +54,7 @@ describe('RoomBookingHomeScreen', () => {
       defaultOptions: {
         queries: {
           retry: false,
+          gcTime: Infinity,
         },
       },
     });

@@ -44,6 +44,7 @@ export function MetricGrid({
 
   return (
     <View
+      testID="metric-grid"
       style={styles.grid}
       onLayout={(event) => {
         const nextWidth = Math.round(event.nativeEvent.layout.width);
@@ -52,9 +53,10 @@ export function MetricGrid({
         }
       }}
     >
-      {items.map((item) => (
+      {items.map((item, index) => (
         <View
           key={item.label}
+          testID={`metric-grid-card-${index}`}
           style={[
             styles.card,
             { minHeight: cardMinHeight ?? 116, width },

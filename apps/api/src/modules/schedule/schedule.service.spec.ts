@@ -18,7 +18,7 @@ describe('ScheduleService', () => {
           provide: PrismaService,
           useValue: {
             user: { findUnique: jest.fn() },
-            semester: { findMany: jest.fn() },
+            semester: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn() },
           },
         },
       ],
@@ -99,51 +99,57 @@ describe('ScheduleService', () => {
 
   it('returns current semester schedule', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: Role.student });
-    (prisma.semester.findMany as jest.Mock).mockResolvedValue([
-      {
-        id: 'sem-old',
-        name: 'HK1 2025-2026',
-        academicYear: '2025-2026',
-        term: 1,
-        startDate: new Date('2025-08-15'),
-        endDate: new Date('2025-12-20'),
-        isCurrent: false,
-        classSections: [],
-      },
-      {
-        id: 'sem-current',
-        name: 'HK2 2025-2026',
-        academicYear: '2025-2026',
-        term: 2,
-        startDate: new Date('2026-01-05'),
-        endDate: new Date('2026-05-30'),
-        isCurrent: true,
-        classSections: [],
-      },
-    ]);
+    (prisma.semester.findFirst as jest.Mock).mockResolvedValue({
+      id: 'sem-current',
+      name: 'HK2 2025-2026',
+      academicYear: '2025-2026',
+      term: 2,
+      startDate: new Date('2026-01-05'),
+      endDate: new Date('2026-05-30'),
+      isCurrent: true,
+      classSections: [],
+    });
 
     const result = await service.getCurrentSemesterSchedule('student-1');
+
     expect(result.id).toBe('sem-current');
+    expect(prisma.semester.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { isCurrent: true },
+      }),
+    );
+    expect(prisma.semester.findMany).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException when current semester is missing', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: Role.student });
-    (prisma.semester.findMany as jest.Mock).mockResolvedValue([
-      {
-        id: 'sem-old',
-        name: 'HK1 2025-2026',
-        academicYear: '2025-2026',
-        term: 1,
-        startDate: new Date('2025-08-15'),
-        endDate: new Date('2025-12-20'),
-        isCurrent: false,
-        classSections: [],
-      },
-    ]);
+    (prisma.semester.findFirst as jest.Mock).mockResolvedValue(null);
 
     await expect(service.getCurrentSemesterSchedule('student-1')).rejects.toThrow(
       NotFoundException,
     );
+    expect(prisma.semester.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns current semester schedule for admin without fetching all semesters', async () => {
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: Role.admin });
+    (prisma.semester.findFirst as jest.Mock).mockResolvedValue({
+      id: 'sem-current',
+      name: 'HK2 2025-2026',
+      academicYear: '2025-2026',
+      term: 2,
+      startDate: new Date('2026-01-05'),
+      endDate: new Date('2026-05-30'),
+      isCurrent: true,
+    });
+
+    const result = await service.getCurrentSemesterSchedule('admin-1');
+
+    expect(result).toMatchObject({
+      id: 'sem-current',
+      sessions: [],
+    });
+    expect(prisma.semester.findMany).not.toHaveBeenCalled();
   });
 
   it('returns lecturer schedules from class meetings', async () => {
@@ -223,20 +229,33 @@ describe('ScheduleService', () => {
 
   it('returns semester by id', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: Role.student });
-    (prisma.semester.findMany as jest.Mock).mockResolvedValue([
-      {
-        id: 'sem-1',
-        name: 'HK2 2025-2026',
-        academicYear: '2025-2026',
-        term: 2,
-        startDate: new Date('2026-01-05'),
-        endDate: new Date('2026-05-30'),
-        isCurrent: true,
-        classSections: [],
-      },
-    ]);
+    (prisma.semester.findUnique as jest.Mock).mockResolvedValue({
+      id: 'sem-1',
+      name: 'HK2 2025-2026',
+      academicYear: '2025-2026',
+      term: 2,
+      startDate: new Date('2026-01-05'),
+      endDate: new Date('2026-05-30'),
+      isCurrent: true,
+      classSections: [],
+    });
 
     const result = await service.getSemesterScheduleById('student-1', 'sem-1');
     expect(result.id).toBe('sem-1');
+    expect(prisma.semester.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'sem-1' },
+      }),
+    );
+    expect(prisma.semester.findMany).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when semester id is missing', async () => {
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: Role.student });
+    (prisma.semester.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(service.getSemesterScheduleById('student-1', 'missing')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

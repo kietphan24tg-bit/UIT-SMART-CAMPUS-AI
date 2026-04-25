@@ -64,6 +64,7 @@ describe('RoomsInBuildingScreen', () => {
       defaultOptions: {
         queries: {
           retry: false,
+          gcTime: Infinity,
         },
       },
     });

@@ -213,4 +213,77 @@ describe('RegistrationsService', () => {
       ],
     });
   });
+
+  it('drops enrollment and removes schedule items for the class section', async () => {
+    prisma.classEnrollment.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+      studentId: 'student-1',
+      classSectionId: 'section-1',
+      status: EnrollmentStatus.active,
+    });
+    prisma.classEnrollment.findUnique.mockResolvedValue({
+      id: 'enrollment-1',
+      status: EnrollmentStatus.dropped,
+      registeredAt: new Date('2026-04-25T01:00:00.000Z'),
+      droppedAt: new Date('2026-04-25T02:00:00.000Z'),
+      classSection: {
+        id: 'section-1',
+        classCode: 'SE346.Q11',
+        sectionCode: 'Q11',
+        note: null,
+        registrationOpen: true,
+        capacity: 40,
+        course: {
+          code: 'SE346',
+          name: 'Internet of Things',
+          credits: 4,
+        },
+        semester: {
+          id: 'sem-1',
+          name: 'HK2 2025-2026',
+          isCurrent: true,
+        },
+        lecturer: null,
+        meetings: [],
+        _count: {
+          enrollments: 1,
+        },
+      },
+    });
+
+    const tx = {
+      classEnrollment: {
+        update: jest.fn().mockResolvedValue({ id: 'enrollment-1' }),
+      },
+      scheduleItem: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+    prisma.$transaction.mockImplementation(async (cb: (client: typeof tx) => Promise<void>) =>
+      cb(tx),
+    );
+
+    const result = await service.drop('student-1', 'enrollment-1');
+
+    expect(tx.classEnrollment.update).toHaveBeenCalledWith({
+      where: { id: 'enrollment-1' },
+      data: {
+        status: EnrollmentStatus.dropped,
+        droppedAt: expect.any(Date),
+      },
+    });
+    expect(tx.scheduleItem.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'student-1',
+        classSectionId: 'section-1',
+      },
+    });
+    expect(result).toMatchObject({
+      id: 'enrollment-1',
+      status: EnrollmentStatus.dropped,
+      classSection: {
+        id: 'section-1',
+      },
+    });
+  });
 });
