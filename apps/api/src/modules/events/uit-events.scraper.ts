@@ -4,11 +4,12 @@ import axios, { type AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 
 export const UIT_ORIGIN = 'https://www.uit.edu.vn';
+const UIT_STUDENT_ACTIVITIES_PATH = '/hoat-dong-sinh-vien';
 
 export interface UitListEventItem {
   slug: string;
   title: string;
-  url: string;
+  sourceUrl: string;
   dateLabel: string;
   excerpt: string;
   thumbnailUrl: string;
@@ -18,10 +19,13 @@ export interface UitArticleDetail {
   slug: string;
   title: string;
   publishedAtLabel: string;
+  excerpt: string;
+  thumbnailUrl: string;
   contentHtml: string;
+  sourceUrl: string;
 }
 
-function resolveUrl(origin: string, href: string): string {
+function resolveUrl(origin: string, href: string) {
   try {
     return new URL(href, origin).toString();
   } catch {
@@ -29,46 +33,51 @@ function resolveUrl(origin: string, href: string): string {
   }
 }
 
+function normalizeText(value: string) {
+  return value.replace(/\s+/g, ' ').replace(/&nbsp;/g, ' ').trim();
+}
+
 function parseListPage(html: string, origin: string): UitListEventItem[] {
   const $ = cheerio.load(html);
-  const grid = $('div.grid.justify-center.grid-cols-1.gap-6.sm\\:grid-cols-2.lg\\:grid-cols-3').first();
-  if (!grid.length) {
-    return [];
-  }
-  const out: UitListEventItem[] = [];
-  grid.children().each((_, cardEl) => {
-    const card = $(cardEl);
-    const articleA = card.find('a[href^="/bai-viet/"]').first();
-    const href = articleA.attr('href');
+  const results: UitListEventItem[] = [];
+  const seen = new Set<string>();
+
+  $('h3 a[href^="/bai-viet/"]').each((_, element) => {
+    const link = $(element);
+    const href = link.attr('href');
     if (!href) {
       return;
     }
-    const m = href.match(/^\/bai-viet\/([^/?#]+)/);
-    const slug = m?.[1];
-    if (!slug) {
+
+    const slug = href.match(/^\/bai-viet\/([^/?#]+)/)?.[1];
+    if (!slug || seen.has(slug)) {
       return;
     }
-    const url = resolveUrl(origin, href);
-    const img = articleA.find('img').first();
-    const thumbSrc = img.attr('src') ?? '';
-    const thumbnailUrl = thumbSrc ? resolveUrl(origin, thumbSrc) : '';
-    const title =
-      card.find('h3 a').first().text().trim() ||
-      card.find('h3').first().text().trim() ||
-      img.attr('alt')?.trim() ||
-      slug;
-    const dateLabel = card.find('div.flex.justify-between span.text-xs').first().text().trim();
-    const excerpt = card.find('div.line-clamp-5').first().text().trim();
-    out.push({
+
+    const cardBody = link.closest('div.p-6');
+    const card = cardBody.parent();
+    const excerpt = normalizeText(cardBody.find('div.line-clamp-5').first().text());
+    const dateLabel = normalizeText(
+      cardBody.find('div.flex.justify-between span.text-xs').first().text(),
+    );
+
+    if (!excerpt || !dateLabel) {
+      return;
+    }
+
+    const thumbnailSrc = card.find('img').first().attr('src') ?? '';
+    seen.add(slug);
+    results.push({
       slug,
-      title,
-      url,
+      title: normalizeText(link.text()) || slug,
+      sourceUrl: resolveUrl(origin, href),
       dateLabel,
       excerpt,
-      thumbnailUrl,
+      thumbnailUrl: thumbnailSrc ? resolveUrl(origin, thumbnailSrc) : '',
     });
   });
-  return out;
+
+  return results;
 }
 
 @Injectable()
@@ -84,68 +93,84 @@ export class UitEventsScraper {
         Accept: 'text/html,application/xhtml+xml',
         'User-Agent': 'SmartCampus/1.0 (educational; contact: campus-api)',
       },
-      validateStatus: (s) => s >= 200 && s < 400,
+      validateStatus: (status) => status >= 200 && status < 400,
     });
   }
 
-  getMaxPages(): number {
+  getMaxPages() {
     return this.configService.get<number>('UIT_EVENTS_MAX_PAGES', 10);
   }
 
-  /**
-   * UIT serves the same first page for `/hoat-dong-sinh-vien` and `?page=1`.
-   * We fetch `/hoat-dong-sinh-vien` then `?page=2` … `?page=N` for N = maxPages.
-   */
   async fetchAggregatedList(): Promise<UitListEventItem[]> {
     const maxPages = this.getMaxPages();
-    const listPath = '/search-page';
-    const urls: string[] = [`${UIT_ORIGIN}${listPath}`];
-    for (let p = 2; p <= maxPages; p += 1) {
-      urls.push(`${UIT_ORIGIN}${listPath}?page=${p}`);
-    }
-    const seen = new Set<string>();
     const merged: UitListEventItem[] = [];
-    for (const url of urls) {
-      const res = await this.client.get<string>(url, { responseType: 'text' });
-      if (res.status !== 200 || typeof res.data !== 'string') {
+    const seen = new Set<string>();
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const path =
+        page === 1
+          ? UIT_STUDENT_ACTIVITIES_PATH
+          : `${UIT_STUDENT_ACTIVITIES_PATH}?page=${page}`;
+      const response = await this.client.get<string>(path, { responseType: 'text' });
+      if (response.status !== 200 || typeof response.data !== 'string') {
         break;
       }
-      const pageItems = parseListPage(res.data, UIT_ORIGIN);
+
+      const pageItems = parseListPage(response.data, UIT_ORIGIN);
       if (pageItems.length === 0) {
         break;
       }
+
+      let appendedCount = 0;
       for (const item of pageItems) {
         if (!seen.has(item.slug)) {
           seen.add(item.slug);
           merged.push(item);
+          appendedCount += 1;
         }
       }
+
+      if (appendedCount === 0) {
+        break;
+      }
     }
+
     return merged;
   }
 
   async fetchArticleDetail(slug: string): Promise<UitArticleDetail | null> {
-    const path = `/bai-viet/${encodeURIComponent(slug)}`;
-    const res = await this.client.get<string>(path, { responseType: 'text' });
-    if (res.status !== 200 || typeof res.data !== 'string') {
+    const response = await this.client.get<string>(`/bai-viet/${encodeURIComponent(slug)}`, {
+      responseType: 'text',
+    });
+    if (response.status !== 200 || typeof response.data !== 'string') {
       return null;
     }
-    const $ = cheerio.load(res.data);
+
+    const $ = cheerio.load(response.data);
     const content = $('div.rich-text-content').first();
     if (!content.length) {
       return null;
     }
-    const contentHtml = content.html() ?? '';
-    const title = $('title').first().text().trim() || slug;
+
+    const title = normalizeText($('h1').first().text()) || slug;
     const publishedAtLabel =
-      $('article p.text-sm.text-gray-500.dark\\:text-gray-400.italic').first().text().trim() ||
-      $('article p.italic').first().text().trim() ||
-      $('p.text-sm.text-gray-500').first().text().trim();
+      normalizeText($('p.text-sm').first().text()) || normalizeText($('time').first().text());
+    const excerpt =
+      normalizeText(content.find('p').first().text()) ||
+      normalizeText($('meta[name="description"]').attr('content') ?? '');
+    const thumbnailUrl = resolveUrl(
+      UIT_ORIGIN,
+      $('meta[property="og:image"]').attr('content') ?? '',
+    );
+
     return {
       slug,
       title,
       publishedAtLabel,
-      contentHtml,
+      excerpt,
+      thumbnailUrl: thumbnailUrl === UIT_ORIGIN ? '' : thumbnailUrl,
+      contentHtml: content.html() ?? '',
+      sourceUrl: resolveUrl(UIT_ORIGIN, `/bai-viet/${slug}`),
     };
   }
 }

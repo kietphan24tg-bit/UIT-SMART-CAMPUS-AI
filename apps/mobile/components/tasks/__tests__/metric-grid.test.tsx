@@ -76,4 +76,28 @@ describe('MetricGrid', () => {
       }
     });
   });
+
+  it('forces a 2x2 mobile layout for four metric cards when using the preset', async () => {
+    mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(280));
+
+    const { getByTestId } = render(<MetricGrid items={items} layoutPreset="mobileTwoByTwo" />);
+    const grid = getByTestId('metric-grid');
+
+    fireEvent(grid, 'layout', {
+      nativeEvent: {
+        layout: {
+          x: 0,
+          y: 0,
+          width: 280,
+          height: 300,
+        },
+      },
+    });
+
+    await waitFor(() => {
+      const firstCard = getByTestId('metric-grid-card-0');
+      const flattened = StyleSheet.flatten(firstCard.props.style);
+      expect(flattened.width).toBe(134);
+    });
+  });
 });

@@ -61,7 +61,7 @@ export interface CreateVehicleRequest {
 export interface PaymentCheckout {
   transactionId: string;
   provider: string;
-  mode: 'mock' | 'sandbox';
+  mode: 'sandbox';
   amount: number;
   orderId: string;
   checkoutUrl: string;

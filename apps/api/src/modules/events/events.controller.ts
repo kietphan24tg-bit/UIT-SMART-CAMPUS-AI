@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -17,17 +7,12 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { USER_ROLES } from '@smart-campus/shared';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { CreateEventDto } from './dto/create-event.dto';
 import { EventDetailResponseDto } from './dto/event-detail-response.dto';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { ListEventsResponseDto } from './dto/list-events-response.dto';
-import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
 
 @ApiTags('Events')
@@ -39,7 +24,7 @@ export class EventsController {
 
   @Get()
   @ApiOperation({
-    summary: 'List events and community activities',
+    summary: 'List student activities from the UIT website',
   })
   @ApiOkResponse({ type: ListEventsResponseDto })
   list(
@@ -51,69 +36,15 @@ export class EventsController {
 
   @Get(':slug')
   @ApiOperation({
-    summary: 'Get event detail by slug',
+    summary: 'Get a UIT student activity article by slug',
   })
-  @ApiParam({ name: 'slug', example: 'hoi-thao-iot-cho-do-an-se346' })
+  @ApiParam({ name: 'slug', example: 'ngon-duoc-xanh-2026-san-choi-cho-em' })
   @ApiOkResponse({ type: EventDetailResponseDto })
-  @ApiNotFoundResponse({ description: 'Event not found.' })
+  @ApiNotFoundResponse({ description: 'Không tìm thấy bài viết.' })
   detail(
     @CurrentUser('id') userId: string,
     @Param('slug') slug: string,
   ): Promise<EventDetailResponseDto> {
     return this.eventsService.getArticleBySlug(userId, slug);
   }
-
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Create event' })
-  createEvent(@CurrentUser('id') userId: string, @Body() dto: CreateEventDto) {
-    return this.eventsService.createEvent(userId, dto);
-  }
-
-  @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
-  @ApiParam({ name: 'id', description: 'Event id' })
-  @ApiOperation({ summary: 'Update event' })
-  updateEvent(
-    @Param('id') eventId: string,
-    @CurrentUser('id') userId: string,
-    @CurrentUser('role') role: string,
-    @Body() dto: UpdateEventDto,
-  ) {
-    return this.eventsService.updateEvent(eventId, userId, role, dto);
-  }
-
-  @Post(':id/register')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.STUDENT)
-  @ApiParam({ name: 'id', description: 'Event id' })
-  @ApiOperation({ summary: 'Register event for current student' })
-  register(@Param('id') eventId: string, @CurrentUser('id') userId: string) {
-    return this.eventsService.register(eventId, userId);
-  }
-
-  @Delete(':id/register')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.STUDENT)
-  @ApiParam({ name: 'id', description: 'Event id' })
-  @ApiOperation({ summary: 'Cancel registration of current student' })
-  unregister(@Param('id') eventId: string, @CurrentUser('id') userId: string) {
-    return this.eventsService.unregister(eventId, userId);
-  }
-
-  @Get(':id/registrations')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
-  @ApiParam({ name: 'id', description: 'Event id' })
-  @ApiOperation({ summary: 'Get registrations of an event for owner/admin' })
-  getRegistrations(
-    @Param('id') eventId: string,
-    @CurrentUser('id') userId: string,
-    @CurrentUser('role') role: string,
-  ) {
-    return this.eventsService.listRegistrations(eventId, userId, role);
-  }
 }
-

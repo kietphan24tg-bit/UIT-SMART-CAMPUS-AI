@@ -284,7 +284,12 @@ export default function ScheduleScreen() {
         />
 
         <ContentStack>
-          <MetricGrid items={metrics} compactColumns={2} cardMinHeight={112} />
+          <MetricGrid
+            items={metrics}
+            compactColumns={2}
+            cardMinHeight={112}
+            layoutPreset="mobileTwoByTwo"
+          />
 
           <SectionCard title="Lối vào vận hành" subtitle="Tác vụ chính." variant="highlight" tone="academic">
             <View style={styles.column}>
@@ -523,7 +528,12 @@ export default function ScheduleScreen() {
       />
 
       <ContentStack>
-        <MetricGrid items={overviewMetrics} compactColumns={2} cardMinHeight={112} />
+        <MetricGrid
+          items={overviewMetrics}
+          compactColumns={2}
+          cardMinHeight={112}
+          layoutPreset="mobileTwoByTwo"
+        />
 
         <SectionCard title="Học kỳ" subtitle="Chọn kỳ cần xem." variant="highlight" tone="academic">
           <View style={styles.semesterGrid}>

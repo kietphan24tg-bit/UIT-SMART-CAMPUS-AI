@@ -46,10 +46,9 @@ function renderWithClient(ui: React.ReactElement) {
 const listResponse = (overrides: Partial<ListEventsResponse>) => ({
   items: [
     {
-      id: 'event-1',
       slug: 'hoi-nghi-ra-soat',
       title: 'Hội nghị rà soát, đánh giá 5 năm công tác khảo sát',
-      url: 'https://www.uit.edu.vn/bai-viet/hoi-nghi-ra-soat',
+      sourceUrl: 'https://www.uit.edu.vn/bai-viet/hoi-nghi-ra-soat',
       dateLabel: '17-04-2026',
       excerpt: 'Sáng ngày 17/4/2026 tại Trường Đại học Công nghệ Thông tin.',
       thumbnailUrl: 'https://www.uit.edu.vn/example.jpg',
@@ -101,10 +100,9 @@ describe('EventsScreen', () => {
           page: 2,
           items: [
             {
-              id: 'event-2',
               slug: 'uitseminar-worldquant',
               title: page2Title,
-              url: 'https://www.uit.edu.vn/bai-viet/uitseminar-worldquant',
+              sourceUrl: 'https://www.uit.edu.vn/bai-viet/uitseminar-worldquant',
               dateLabel: '17-04-2026',
               excerpt: 'Seminar.',
               thumbnailUrl: 'https://www.uit.edu.vn/example.jpg',

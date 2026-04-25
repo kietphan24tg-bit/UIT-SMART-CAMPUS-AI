@@ -148,7 +148,11 @@ function PaymentStatusTask({ onDone }: { onDone: () => void }) {
       await Linking.openURL(checkout.checkoutUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Không thể tạo giao dịch MoMo.';
-      Alert.alert('Thanh toán gửi xe', message);
+      const displayMessage = isMomoConfigError(message)
+        ? 'Thanh toán MoMo chưa sẵn sàng trên môi trường hiện tại. Hãy kiểm tra các biến MOMO_* ở backend.'
+        : message;
+
+      Alert.alert('Thanh toán gửi xe', displayMessage);
     }
   };
 
@@ -272,6 +276,11 @@ function summarizeSubscriptions(
     },
     { inactive: 0, pending: 0, active: 0, expired: 0 },
   );
+}
+
+function isMomoConfigError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes('cấu hình momo') || normalized.includes('momo configuration is incomplete');
 }
 
 const styles = StyleSheet.create({

@@ -1,9 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMinSize,
+  ArrayUnique,
   IsDateString,
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsArray,
   IsString,
   MaxLength,
   Min,
@@ -20,10 +23,13 @@ export class CreateRoomBookingDto {
   @IsDateString()
   bookingDate!: string;
 
-  @ApiProperty({ example: 'slot-1' })
-  @IsString()
-  @IsNotEmpty()
-  timeSlotId!: string;
+  @ApiProperty({ example: ['slot-1', 'slot-2'] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  timeSlotIds!: string[];
 
   @ApiProperty({ example: 'Học nhóm' })
   @IsString()

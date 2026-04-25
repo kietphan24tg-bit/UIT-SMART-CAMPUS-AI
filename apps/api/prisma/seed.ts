@@ -1921,6 +1921,7 @@ async function main() {
     seededRooms.set(room.roomCode, room);
   }
 
+  await prisma.roomBookingSlot.deleteMany();
   await prisma.roomBooking.deleteMany();
 
   const bookingUsers = {
@@ -1949,52 +1950,43 @@ async function main() {
       .map((timeSlotSeed) => seededTimeSlots.get(timeSlotSeed.slotNumber))
       .filter((timeSlot): timeSlot is NonNullable<typeof timeSlot> => Boolean(timeSlot));
 
+    const firstTimeSlot = matchingTimeSlots[0] ?? null;
+    const lastTimeSlot = matchingTimeSlots[matchingTimeSlots.length - 1] ?? null;
+    const booking = await prisma.roomBooking.create({
+      data: {
+        roomId: room.id,
+        userId: createdBy.id,
+        bookingDate,
+        timeSlotId: firstTimeSlot?.id ?? null,
+        startTime: firstTimeSlot?.startTime ?? bookingSeed.startTime,
+        endTime: lastTimeSlot?.endTime ?? bookingSeed.endTime,
+        title: bookingSeed.title,
+        purpose: bookingSeed.purpose,
+        attendeeCount: bookingSeed.attendeeCount ?? null,
+        contactName: bookingSeed.contactName ?? null,
+        contactPhone: null,
+        departmentName: bookingSeed.departmentName ?? null,
+        status: RoomBookingStatus.booked,
+        approvedById: admin.id,
+        approvedAt: bookingDate,
+        notes:
+          bookingSeed.notes ??
+          'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
+      },
+    });
+
     if (matchingTimeSlots.length === 0) {
-      await prisma.roomBooking.create({
-        data: {
-          roomId: room.id,
-          userId: createdBy.id,
-          bookingDate,
-          startTime: bookingSeed.startTime,
-          endTime: bookingSeed.endTime,
-          title: bookingSeed.title,
-          purpose: bookingSeed.purpose,
-          attendeeCount: bookingSeed.attendeeCount ?? null,
-          contactName: bookingSeed.contactName ?? null,
-          contactPhone: null,
-          departmentName: bookingSeed.departmentName ?? null,
-          status: RoomBookingStatus.booked,
-          approvedById: admin.id,
-          approvedAt: bookingDate,
-          notes:
-            bookingSeed.notes ??
-            'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
-        },
-      });
       continue;
     }
 
-    for (const timeSlot of matchingTimeSlots) {
-      await prisma.roomBooking.create({
+    for (const [index, timeSlot] of matchingTimeSlots.entries()) {
+      await prisma.roomBookingSlot.create({
         data: {
+          bookingId: booking.id,
           roomId: room.id,
-          userId: createdBy.id,
           bookingDate,
           timeSlotId: timeSlot.id,
-          startTime: timeSlot.startTime,
-          endTime: timeSlot.endTime,
-          title: bookingSeed.title,
-          purpose: bookingSeed.purpose,
-          attendeeCount: bookingSeed.attendeeCount ?? null,
-          contactName: bookingSeed.contactName ?? null,
-          contactPhone: null,
-          departmentName: bookingSeed.departmentName ?? null,
-          status: RoomBookingStatus.booked,
-          approvedById: admin.id,
-          approvedAt: bookingDate,
-          notes:
-            bookingSeed.notes ??
-            'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
+          slotOrder: index + 1,
         },
       });
     }

@@ -17,7 +17,17 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/services/api/room-bookings', () => ({
   roomBookingsApi: {
-    listBuildings: jest.fn().mockResolvedValue([]),
+    listBuildings: jest.fn().mockResolvedValue([
+      {
+        id: 'C',
+        code: 'C',
+        name: 'Tòa C',
+        searchText: 'C',
+        availableRooms: 8,
+        totalRooms: 15,
+        subtitle: '8 phòng trống',
+      },
+    ]),
     listAllBuildingRooms: jest.fn().mockResolvedValue({}),
     listBuildingRooms: jest.fn().mockResolvedValue([
       {

@@ -1,37 +1,39 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { EventCategory, EventStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { PrismaService } from '../../database/prisma.service';
-
 import { EventsService } from './events.service';
+import { UitEventsScraper } from './uit-events.scraper';
 
 describe('EventsService', () => {
   let service: EventsService;
-  const prisma = {
-    event: {
-      findMany: jest.fn(),
-      count: jest.fn(),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-    eventRegistration: {
-      upsert: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
-    },
+  const configService = {
+    get: jest.fn((key: string, defaultValue?: number) =>
+      key === 'UIT_EVENTS_CACHE_TTL_MS' ? 900_000 : defaultValue,
+    ),
+  };
+  const scraper = {
+    fetchAggregatedList: jest.fn(),
+    fetchArticleDetail: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         EventsService,
         {
-          provide: PrismaService,
-          useValue: prisma,
+          provide: ConfigService,
+          useValue: configService,
+        },
+        {
+          provide: UitEventsScraper,
+          useValue: scraper,
         },
       ],
     }).compile();
@@ -39,38 +41,26 @@ describe('EventsService', () => {
     service = moduleRef.get(EventsService);
   });
 
-  it('returns paginated list with registration flags', async () => {
-    prisma.event.findMany.mockResolvedValue([
+  it('returns paginated items from UIT list cache', async () => {
+    scraper.fetchAggregatedList.mockResolvedValue([
       {
-        id: 'event-1',
         slug: 'smart-campus-workshop',
         title: 'Smart Campus Workshop',
+        sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+        dateLabel: '20-04-2026',
         excerpt: 'Workshop',
-        coverImageUrl: null,
-        location: 'Room A1',
-        status: EventStatus.open,
-        category: EventCategory.workshop,
-        startAt: new Date('2026-04-20T01:00:00.000Z'),
-        endAt: new Date('2026-04-20T03:00:00.000Z'),
-        maxAttendees: 100,
-        createdAt: new Date('2026-04-01T01:00:00.000Z'),
-        registrations: [{ id: 'reg-1' }],
-        _count: { registrations: 1 },
+        thumbnailUrl: 'https://www.uit.edu.vn/media/workshop.jpg',
       },
     ]);
-    prisma.event.count.mockResolvedValue(1);
 
     const result = await service.listEvents('student-1', 1, 10);
 
     expect(result.total).toBe(1);
     expect(result.totalPages).toBe(1);
     expect(result.items[0]).toMatchObject({
-      id: 'event-1',
       slug: 'smart-campus-workshop',
-      attendeeCount: 1,
-      isRegistered: true,
-      status: EventStatus.open,
-      category: EventCategory.workshop,
+      sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+      excerpt: 'Workshop',
     });
   });
 
@@ -80,172 +70,98 @@ describe('EventsService', () => {
     );
   });
 
-  it('returns event detail by slug', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
+  it('returns event detail by slug using UIT scraper', async () => {
+    scraper.fetchAggregatedList.mockResolvedValue([
+      {
+        slug: 'smart-campus-workshop',
+        title: 'Smart Campus Workshop',
+        sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+        dateLabel: '20-04-2026',
+        excerpt: 'Workshop',
+        thumbnailUrl: 'https://www.uit.edu.vn/media/workshop.jpg',
+      },
+    ]);
+    scraper.fetchArticleDetail.mockResolvedValue({
       slug: 'smart-campus-workshop',
       title: 'Smart Campus Workshop',
-      excerpt: 'Workshop',
-      location: 'Room A1',
+      publishedAtLabel: '20-04-2026',
+      excerpt: 'Workshop detail',
+      thumbnailUrl: 'https://www.uit.edu.vn/media/workshop-detail.jpg',
       contentHtml: '<p>Agenda</p>',
-      coverImageUrl: null,
-      status: EventStatus.open,
-      category: EventCategory.workshop,
-      startAt: new Date('2026-04-20T01:00:00.000Z'),
-      endAt: new Date('2026-04-20T03:00:00.000Z'),
-      maxAttendees: 100,
-      owner: {
-        id: 'lecturer-1',
-        email: 'lecturer@uit.edu.vn',
-        firstName: 'An',
-        lastName: 'Nguyen',
-      },
-      registrations: [{ id: 'reg-1' }],
-      _count: { registrations: 1 },
+      sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
     });
 
     const result = await service.getArticleBySlug('student-1', 'smart-campus-workshop');
 
     expect(result).toMatchObject({
-      id: 'event-1',
       slug: 'smart-campus-workshop',
-      isRegistered: true,
-      attendeeCount: 1,
-      owner: {
-        id: 'lecturer-1',
-        fullName: 'Nguyen An',
-      },
+      excerpt: 'Workshop',
+      thumbnailUrl: 'https://www.uit.edu.vn/media/workshop.jpg',
+      sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
     });
   });
 
-  it('throws not found when slug is missing', async () => {
-    prisma.event.findUnique.mockResolvedValue(null);
+  it('throws not found when UIT detail is missing', async () => {
+    scraper.fetchAggregatedList.mockResolvedValue([]);
+    scraper.fetchArticleDetail.mockResolvedValue(null);
+
     await expect(
       service.getArticleBySlug('student-1', 'missing-event'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('rejects registration when event status is not open', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      status: EventStatus.closed,
-      maxAttendees: null,
-      _count: { registrations: 0 },
-    });
+  it('reuses the in-memory list cache while it is still fresh', async () => {
+    scraper.fetchAggregatedList
+      .mockResolvedValueOnce([
+        {
+          slug: 'smart-campus-workshop',
+          title: 'Smart Campus Workshop',
+          sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+          dateLabel: '20-04-2026',
+          excerpt: 'Workshop',
+          thumbnailUrl: 'https://www.uit.edu.vn/media/workshop.jpg',
+        },
+      ]);
 
-    await expect(service.register('event-1', 'student-1')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await service.listEvents('student-1', 1, 10);
+    const result = await service.listEvents('student-1', 1, 10);
+
+    expect(result.items).toHaveLength(1);
   });
 
-  it('rejects registration when event is full', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      status: EventStatus.open,
-      maxAttendees: 100,
-      _count: { registrations: 100 },
-    });
+  it('reuses the in-memory detail cache while it is still fresh', async () => {
+    scraper.fetchAggregatedList.mockResolvedValue([
+      {
+        slug: 'smart-campus-workshop',
+        title: 'Smart Campus Workshop',
+        sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+        dateLabel: '20-04-2026',
+        excerpt: 'Workshop',
+        thumbnailUrl: 'https://www.uit.edu.vn/media/workshop.jpg',
+      },
+    ]);
+    scraper.fetchArticleDetail
+      .mockResolvedValueOnce({
+        slug: 'smart-campus-workshop',
+        title: 'Smart Campus Workshop',
+        publishedAtLabel: '20-04-2026',
+        excerpt: 'Workshop detail',
+        thumbnailUrl: 'https://www.uit.edu.vn/media/workshop-detail.jpg',
+        contentHtml: '<p>Agenda</p>',
+        sourceUrl: 'https://www.uit.edu.vn/bai-viet/smart-campus-workshop',
+      });
 
-    await expect(service.register('event-1', 'student-1')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await service.getArticleBySlug('student-1', 'smart-campus-workshop');
+    const result = await service.getArticleBySlug('student-1', 'smart-campus-workshop');
+
+    expect(result.slug).toBe('smart-campus-workshop');
   });
 
-  it('returns success when unregister is called for an already-cancelled registration', async () => {
-    prisma.eventRegistration.findUnique.mockResolvedValue({
-      id: 'reg-1',
-      cancelledAt: new Date('2026-04-24T10:00:00.000Z'),
-    });
+  it('throws service unavailable when list has no cache and UIT is down', async () => {
+    scraper.fetchAggregatedList.mockRejectedValue(new Error('Network error'));
 
-    const result = await service.unregister('event-1', 'student-1');
-
-    expect(result).toEqual({ success: true });
-    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects partial update when startAt moves after existing endAt', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      ownerId: 'lecturer-1',
-      startAt: new Date('2026-04-20T01:00:00.000Z'),
-      endAt: new Date('2026-04-20T03:00:00.000Z'),
-    });
-
-    await expect(
-      service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
-        startAt: '2026-04-20T04:00:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.event.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects partial update when endAt moves before existing startAt', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      ownerId: 'lecturer-1',
-      startAt: new Date('2026-04-20T01:00:00.000Z'),
-      endAt: new Date('2026-04-20T03:00:00.000Z'),
-    });
-
-    await expect(
-      service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
-        endAt: '2026-04-20T00:30:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.event.update).not.toHaveBeenCalled();
-  });
-
-  it('allows event owner to update when effective date range stays valid', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      ownerId: 'lecturer-1',
-      startAt: new Date('2026-04-20T01:00:00.000Z'),
-      endAt: new Date('2026-04-20T03:00:00.000Z'),
-    });
-    prisma.event.update.mockResolvedValue({
-      id: 'event-1',
-      title: 'Updated event',
-    });
-
-    await service.updateEvent('event-1', 'lecturer-1', 'lecturer', {
-      title: 'Updated event',
-      endAt: '2026-04-20T04:00:00.000Z',
-    });
-
-    expect(prisma.event.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'event-1' },
-        data: expect.objectContaining({
-          title: 'Updated event',
-          endAt: new Date('2026-04-20T04:00:00.000Z'),
-        }),
-      }),
-    );
-  });
-
-  it('allows admin to update another owner event', async () => {
-    prisma.event.findUnique.mockResolvedValue({
-      id: 'event-1',
-      ownerId: 'lecturer-1',
-      startAt: new Date('2026-04-20T01:00:00.000Z'),
-      endAt: new Date('2026-04-20T03:00:00.000Z'),
-    });
-    prisma.event.update.mockResolvedValue({
-      id: 'event-1',
-      status: EventStatus.closed,
-    });
-
-    await service.updateEvent('event-1', 'admin-1', 'admin', {
-      status: EventStatus.closed,
-    });
-
-    expect(prisma.event.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'event-1' },
-        data: expect.objectContaining({
-          status: EventStatus.closed,
-        }),
-      }),
+    await expect(service.listEvents('student-1', 1, 10)).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
     );
   });
 });

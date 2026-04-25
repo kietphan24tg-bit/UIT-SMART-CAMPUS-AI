@@ -15,6 +15,14 @@ import { PrismaService } from '../../database/prisma.service';
 const MONTHLY_FEE_VND = 40000;
 const MOMO_SANDBOX_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/create';
 
+interface MomoConfig {
+  partnerCode: string;
+  accessKey: string;
+  secretKey: string;
+  redirectUrl: string;
+  ipnUrl: string;
+}
+
 function resolveMonthlyFee(value: number | null | undefined) {
   return typeof value === 'number' && value > 0 ? value : MONTHLY_FEE_VND;
 }
@@ -26,10 +34,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async createMomoPayment(
-    userId: string,
-    vehicleId: string,
-  ): Promise<PaymentCheckout> {
+  async createMomoPayment(userId: string, vehicleId: string): Promise<PaymentCheckout> {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
       include: { subscription: true },
@@ -43,6 +48,8 @@ export class PaymentsService {
       throw new ForbiddenException('Bạn không có quyền thanh toán cho xe này');
     }
 
+    const momoConfig = this.getMomoConfigOrThrow();
+
     const subscription =
       vehicle.subscription ??
       (await this.prisma.parkingSubscription.create({
@@ -52,8 +59,8 @@ export class PaymentsService {
           status: 'inactive',
         },
       }));
-    const amount = resolveMonthlyFee(subscription.monthlyFee);
 
+    const amount = resolveMonthlyFee(subscription.monthlyFee);
     const now = Date.now();
     const orderId = `MOMO-${now}-${vehicle.id.slice(0, 8)}`;
     const requestId = `REQ-${now}-${vehicle.id.slice(0, 8)}`;
@@ -76,13 +83,11 @@ export class PaymentsService {
       },
     });
 
-    const checkout = this.hasMomoCredentials()
-      ? await this.createSandboxCheckout(vehicle.plateNumber, transaction)
-      : this.createMockCheckout(
-          transaction.id,
-          transaction.providerOrderId,
-          transaction.amount,
-        );
+    const checkout = await this.createSandboxCheckout(
+      vehicle.plateNumber,
+      transaction,
+      momoConfig,
+    );
 
     await this.prisma.paymentTransaction.update({
       where: { id: transaction.id },
@@ -152,47 +157,6 @@ export class PaymentsService {
     };
   }
 
-  async completeMockPayment(transactionId: string) {
-    const transaction = await this.prisma.paymentTransaction.findUnique({
-      where: { id: transactionId },
-    });
-
-    if (!transaction) {
-      throw new NotFoundException('Không tìm thấy giao dịch mock');
-    }
-
-    await this.markTransactionPaid(transactionId, {
-      orderId: transaction.providerOrderId,
-      requestId: transaction.requestId,
-      resultCode: 0,
-      message: 'Mock payment success',
-    });
-
-    return {
-      success: true,
-      transactionId,
-      redirectUrl: '/parking',
-    };
-  }
-
-  private createMockCheckout(
-    transactionId: string,
-    orderId: string,
-    amount: number,
-  ): PaymentCheckout {
-    const appBaseUrl =
-      this.configService.get<string>('APP_BASE_URL') || 'http://localhost:3000';
-
-    return {
-      transactionId,
-      provider: 'momo',
-      mode: 'mock',
-      amount,
-      orderId,
-      checkoutUrl: `${appBaseUrl}/api/v1/payments/momo/mock-success/${transactionId}`,
-    };
-  }
-
   private async createSandboxCheckout(
     plateNumber: string,
     transaction: {
@@ -201,43 +165,36 @@ export class PaymentsService {
       providerOrderId: string;
       requestId: string | null;
     },
+    momoConfig: MomoConfig,
   ): Promise<PaymentCheckout> {
-    const partnerCode = this.configService.get<string>('MOMO_PARTNER_CODE') || '';
-    const accessKey = this.configService.get<string>('MOMO_ACCESS_KEY') || '';
-    const secretKey = this.configService.get<string>('MOMO_SECRET_KEY') || '';
-    const redirectUrl =
-      this.configService.get<string>('MOMO_REDIRECT_URL') || '';
-    const ipnUrl = this.configService.get<string>('MOMO_IPN_URL') || '';
     const requestType = 'captureWallet';
     const requestId = transaction.requestId || transaction.providerOrderId;
     const extraData = '';
     const orderInfo = `Thanh toán gửi xe tháng cho ${plateNumber}`;
 
     const rawSignature = [
-      `accessKey=${accessKey}`,
+      `accessKey=${momoConfig.accessKey}`,
       `amount=${transaction.amount}`,
       `extraData=${extraData}`,
-      `ipnUrl=${ipnUrl}`,
+      `ipnUrl=${momoConfig.ipnUrl}`,
       `orderId=${transaction.providerOrderId}`,
       `orderInfo=${orderInfo}`,
-      `partnerCode=${partnerCode}`,
-      `redirectUrl=${redirectUrl}`,
+      `partnerCode=${momoConfig.partnerCode}`,
+      `redirectUrl=${momoConfig.redirectUrl}`,
       `requestId=${requestId}`,
       `requestType=${requestType}`,
     ].join('&');
 
-    const signature = createHmac('sha256', secretKey)
-      .update(rawSignature)
-      .digest('hex');
+    const signature = createHmac('sha256', momoConfig.secretKey).update(rawSignature).digest('hex');
 
     const requestPayload = {
-      partnerCode,
+      partnerCode: momoConfig.partnerCode,
       requestId,
       amount: String(transaction.amount),
       orderId: transaction.providerOrderId,
       orderInfo,
-      redirectUrl,
-      ipnUrl,
+      redirectUrl: momoConfig.redirectUrl,
+      ipnUrl: momoConfig.ipnUrl,
       lang: 'vi',
       requestType,
       autoCapture: true,
@@ -296,8 +253,7 @@ export class PaymentsService {
 
     const now = new Date();
     const currentEndDate = transaction.subscription?.endDate;
-    const renewalBase =
-      currentEndDate && currentEndDate > now ? currentEndDate : now;
+    const renewalBase = currentEndDate && currentEndDate > now ? currentEndDate : now;
     const nextEndDate = new Date(renewalBase.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     await this.prisma.$transaction([
@@ -327,14 +283,26 @@ export class PaymentsService {
     ]);
   }
 
-  private hasMomoCredentials() {
-    return Boolean(
-      this.configService.get<string>('MOMO_PARTNER_CODE') &&
-        this.configService.get<string>('MOMO_ACCESS_KEY') &&
-        this.configService.get<string>('MOMO_SECRET_KEY') &&
-        this.configService.get<string>('MOMO_REDIRECT_URL') &&
-        this.configService.get<string>('MOMO_IPN_URL'),
-    );
+  private getMomoConfigOrThrow(): MomoConfig {
+    const partnerCode = this.configService.get<string>('MOMO_PARTNER_CODE')?.trim();
+    const accessKey = this.configService.get<string>('MOMO_ACCESS_KEY')?.trim();
+    const secretKey = this.configService.get<string>('MOMO_SECRET_KEY')?.trim();
+    const redirectUrl = this.configService.get<string>('MOMO_REDIRECT_URL')?.trim();
+    const ipnUrl = this.configService.get<string>('MOMO_IPN_URL')?.trim();
+
+    if (!partnerCode || !accessKey || !secretKey || !redirectUrl || !ipnUrl) {
+      throw new InternalServerErrorException(
+        'Cấu hình MoMo chưa đầy đủ. Hãy kiểm tra các biến MOMO_* trên backend.',
+      );
+    }
+
+    return {
+      partnerCode,
+      accessKey,
+      secretKey,
+      redirectUrl,
+      ipnUrl,
+    };
   }
 
   private asJson(value: Record<string, unknown>): Prisma.InputJsonValue {

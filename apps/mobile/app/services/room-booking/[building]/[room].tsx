@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -12,8 +12,11 @@ import {
   Screen,
   SecondaryButton,
 } from '@/components/ui';
-import { getBuilding, getRoom } from '@/constants/room-booking-data';
-import { roomBookingsApi } from '@/services/api/room-bookings';
+import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
+import {
+  roomBookingsApi,
+  type RoomBookingResponse,
+} from '@/services/api/room-bookings';
 import { useAuthStore } from '@/stores/auth-store';
 import type { RoomScheduleDay, RoomScheduleSlot } from '@/types/room-booking';
 import { useAppTheme } from '@/theme';
@@ -31,10 +34,12 @@ function toDisplayDate(dateKey?: string) {
   if (!dateKey) {
     return '--/--/----';
   }
+
   const parsed = new Date(`${dateKey}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) {
     return dateKey;
   }
+
   return parsed.toLocaleDateString('vi-VN');
 }
 
@@ -56,16 +61,104 @@ function getUserDisplayName(
   return fullName || user?.email || '';
 }
 
+function isBookableSlot(slot: RoomScheduleSlot) {
+  return slot.status === 'free';
+}
+
+function sortSlotsByOrder(slots: RoomScheduleSlot[]) {
+  return [...slots].sort((left, right) => left.slotNumber - right.slotNumber);
+}
+
+function getSelectedSlots(day: RoomScheduleDay | null, selectedSlotIds: string[]) {
+  if (!day || selectedSlotIds.length === 0) {
+    return [];
+  }
+
+  const selectedIdSet = new Set(selectedSlotIds);
+  return sortSlotsByOrder(day.slots.filter((slot) => selectedIdSet.has(slot.id)));
+}
+
+function toggleSlotSelection(day: RoomScheduleDay, selectedSlotIds: string[], targetId: string) {
+  const targetSlot = day.slots.find((slot) => slot.id === targetId);
+  if (!targetSlot || !isBookableSlot(targetSlot)) {
+    return selectedSlotIds;
+  }
+
+  const selectedSlots = getSelectedSlots(day, selectedSlotIds);
+  if (selectedSlots.length === 0) {
+    return [targetSlot.id];
+  }
+
+  const firstSelected = selectedSlots[0]!;
+  const lastSelected = selectedSlots[selectedSlots.length - 1]!;
+  const selectedIdSet = new Set(selectedSlotIds);
+
+  if (selectedIdSet.has(targetSlot.id)) {
+    if (selectedSlots.length === 1) {
+      return [targetSlot.id];
+    }
+
+    if (targetSlot.id === firstSelected.id) {
+      return selectedSlots.slice(1).map((slot) => slot.id);
+    }
+
+    if (targetSlot.id === lastSelected.id) {
+      return selectedSlots.slice(0, -1).map((slot) => slot.id);
+    }
+
+    return [targetSlot.id];
+  }
+
+  if (targetSlot.slotNumber === firstSelected.slotNumber - 1) {
+    return [targetSlot.id, ...selectedSlots.map((slot) => slot.id)];
+  }
+
+  if (targetSlot.slotNumber === lastSelected.slotNumber + 1) {
+    return [...selectedSlots.map((slot) => slot.id), targetSlot.id];
+  }
+
+  return [targetSlot.id];
+}
+
+function getSelectionSummary(selectedSlots: RoomScheduleSlot[]) {
+  if (selectedSlots.length === 0) {
+    return '--';
+  }
+
+  const firstSlot = selectedSlots[0]!;
+  const lastSlot = selectedSlots[selectedSlots.length - 1]!;
+  const slotCountLabel = `${selectedSlots.length} tiết`;
+
+  return `${firstSlot.startTime} - ${lastSlot.endTime} · ${slotCountLabel}`;
+}
+
+function getScheduleErrorTitle(error: unknown) {
+  const message = getErrorMessage(error);
+  if (message.toLowerCase().includes('không tìm thấy phòng')) {
+    return 'Không tìm thấy phòng';
+  }
+
+  return 'Không tải được lịch phòng';
+}
+
+function getScheduleErrorDescription(error: unknown) {
+  const message = getErrorMessage(error);
+  if (message.toLowerCase().includes('không tìm thấy phòng')) {
+    return 'Kiểm tra lại liên kết hoặc quay về danh sách phòng.';
+  }
+
+  return 'Vui lòng thử lại khi backend sẵn sàng.';
+}
+
 export default function RoomDetailScreen() {
   const theme = useAppTheme();
+  const layout = useResponsiveLayout();
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const params = useLocalSearchParams<{ building?: string; room?: string }>();
   const buildingId = typeof params.building === 'string' ? params.building.toUpperCase() : '';
   const roomId = typeof params.room === 'string' ? params.room.toUpperCase() : '';
-  const building = getBuilding(buildingId);
-  const room = getRoom(buildingId, roomId);
 
   const scheduleQuery = useQuery({
     queryKey: ['room-bookings', 'room-schedule', roomId],
@@ -73,11 +166,15 @@ export default function RoomDetailScreen() {
     enabled: Boolean(roomId),
   });
 
-  const schedule = scheduleQuery.data ?? [];
-  const [selectedDayKey, setSelectedDayKey] = useState<RoomScheduleDay['dayKey']>(
-    schedule[0]?.dayKey ?? 'mon',
-  );
-  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const schedule = scheduleQuery.data?.days ?? [];
+  const roomCode = scheduleQuery.data?.roomCode ?? roomId;
+  const roomName = scheduleQuery.data?.roomName ?? null;
+  const buildingCode = scheduleQuery.data?.buildingCode ?? buildingId;
+  const buildingName =
+    scheduleQuery.data?.buildingName ?? (buildingCode ? `Tòa ${buildingCode}` : 'Đặt phòng');
+
+  const [selectedDayKey, setSelectedDayKey] = useState<RoomScheduleDay['dayKey']>('mon');
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
   const [mode, setMode] = useState<'schedule' | 'booking'>('schedule');
   const [title, setTitle] = useState('Học nhóm');
   const [purpose, setPurpose] = useState('Học nhóm');
@@ -85,26 +182,32 @@ export default function RoomDetailScreen() {
   const [contactPhone, setContactPhone] = useState(user?.phone ?? '');
   const [needsProjector, setNeedsProjector] = useState(true);
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedBooking, setSubmittedBooking] = useState<RoomBookingResponse | null>(null);
   const [formError, setFormError] = useState('');
 
   const createBookingMutation = useMutation({
     mutationFn: roomBookingsApi.createRoomBooking,
-    onSuccess: async () => {
-      setSubmitted(true);
+    onSuccess: async (booking) => {
+      setSubmittedBooking(booking);
       setFormError('');
       await queryClient.invalidateQueries({
         queryKey: ['room-bookings', 'room-schedule', roomId],
       });
     },
     onError: (error) => {
-      setSubmitted(false);
+      setSubmittedBooking(null);
       setFormError(getErrorMessage(error));
     },
   });
 
   const selectedDay =
     schedule.find((item) => item.dayKey === selectedDayKey) ?? schedule[0] ?? null;
+  const selectedSlots = useMemo(
+    () => getSelectedSlots(selectedDay, selectedSlotIds),
+    [selectedDay, selectedSlotIds],
+  );
+  const selectedDate = toDisplayDate(selectedDay?.dateKey);
+  const selectionSummary = getSelectionSummary(selectedSlots);
 
   useEffect(() => {
     if (!schedule.length) {
@@ -119,20 +222,18 @@ export default function RoomDetailScreen() {
 
   useEffect(() => {
     if (!selectedDay) {
-      setSelectedSlotId('');
+      setSelectedSlotIds([]);
       return;
     }
 
-    const firstBookableSlot = selectedDay.slots.find((slot) => slot.status !== 'occupied');
-    setSelectedSlotId((current) => {
-      if (
-        current &&
-        selectedDay.slots.some((slot) => slot.id === current && slot.status !== 'occupied')
-      ) {
-        return current;
+    const firstBookableSlot = selectedDay.slots.find(isBookableSlot);
+    setSelectedSlotIds((current) => {
+      const nextSelectedSlots = getSelectedSlots(selectedDay, current).filter(isBookableSlot);
+      if (nextSelectedSlots.length > 0) {
+        return nextSelectedSlots.map((slot) => slot.id);
       }
 
-      return firstBookableSlot?.id ?? '';
+      return firstBookableSlot ? [firstBookableSlot.id] : [];
     });
   }, [selectedDay]);
 
@@ -140,7 +241,7 @@ export default function RoomDetailScreen() {
     setContactPhone((current) => current || user?.phone || '');
   }, [user?.phone]);
 
-  if (!building || !room) {
+  if (!roomId) {
     return (
       <Screen>
         <ContentStack>
@@ -157,16 +258,39 @@ export default function RoomDetailScreen() {
     );
   }
 
-  const selectedSlot = selectedDay?.slots.find((slot) => slot.id === selectedSlotId) ?? null;
-  const canBook = Boolean(
-    selectedDay?.slots.some((slot) => slot.status !== 'occupied') && selectedSlot,
-  );
-  const selectedDate = toDisplayDate(selectedDay?.dateKey);
+  if (scheduleQuery.isError) {
+    return (
+      <Screen>
+        <ContentStack>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title={getScheduleErrorTitle(scheduleQuery.error)}
+            description={getScheduleErrorDescription(scheduleQuery.error)}
+            actionLabel={
+              getScheduleErrorTitle(scheduleQuery.error) === 'Không tìm thấy phòng'
+                ? 'Về danh sách phòng'
+                : 'Thử lại'
+            }
+            onActionPress={() => {
+              if (getScheduleErrorTitle(scheduleQuery.error) === 'Không tìm thấy phòng') {
+                router.replace(`/services/room-booking/${buildingId || 'C'}` as never);
+                return;
+              }
+
+              void scheduleQuery.refetch();
+            }}
+          />
+        </ContentStack>
+      </Screen>
+    );
+  }
+
+  const canBook = Boolean(selectedDay?.dateKey && selectedSlots.length > 0);
 
   const handleSubmitBooking = () => {
-    if (!selectedDay || !selectedSlot || !selectedDay.dateKey) {
-      setSubmitted(false);
-      setFormError('Không xác định được ngày đặt phòng từ lịch tuần hiện tại.');
+    if (!selectedDay?.dateKey || selectedSlots.length === 0) {
+      setSubmittedBooking(null);
+      setFormError('Không xác định được khung giờ đặt phòng hợp lệ.');
       return;
     }
 
@@ -181,35 +305,35 @@ export default function RoomDetailScreen() {
     ].filter(Boolean);
 
     if (!contactName) {
-      setSubmitted(false);
+      setSubmittedBooking(null);
       setFormError('Không tìm thấy thông tin người đặt phòng.');
       return;
     }
 
     if (!normalizedTitle) {
-      setSubmitted(false);
-      setFormError('Vui lòng nhập tiêu đề yêu cầu.');
+      setSubmittedBooking(null);
+      setFormError('Vui lòng nhập tên yêu cầu.');
       return;
     }
 
     if (!normalizedPurpose) {
-      setSubmitted(false);
+      setSubmittedBooking(null);
       setFormError('Vui lòng nhập mục đích sử dụng phòng.');
       return;
     }
 
     if (!Number.isInteger(normalizedAttendeeCount) || normalizedAttendeeCount < 1) {
-      setSubmitted(false);
+      setSubmittedBooking(null);
       setFormError('Số người phải lớn hơn 0.');
       return;
     }
 
-    setSubmitted(false);
+    setSubmittedBooking(null);
     setFormError('');
     createBookingMutation.mutate({
-      roomCode: room.code,
-      bookingDate: selectedDay.dateKey ?? '',
-      timeSlotId: selectedSlot.id,
+      roomCode,
+      bookingDate: selectedDay.dateKey,
+      timeSlotIds: selectedSlots.map((slot) => slot.id),
       purpose: equipment.length
         ? `${normalizedPurpose} - Thiết bị cần: ${equipment.join(', ')}`
         : normalizedPurpose,
@@ -250,19 +374,9 @@ export default function RoomDetailScreen() {
               { color: theme.colors.text, fontFamily: theme.fonts.semibold },
             ]}
           >
-            {mode === 'booking' ? 'Lịch phòng' : building.name}
+            {mode === 'booking' ? 'Lịch phòng' : buildingName}
           </Text>
         </Pressable>
-
-        {scheduleQuery.isError ? (
-          <EmptyState
-            icon="cloud-offline-outline"
-            title="Không tải được lịch phòng"
-            description="Vui lòng thử lại khi backend sẵn sàng."
-            actionLabel="Thử lại"
-            onActionPress={() => void scheduleQuery.refetch()}
-          />
-        ) : null}
 
         {mode === 'schedule' ? (
           <View
@@ -278,27 +392,42 @@ export default function RoomDetailScreen() {
             <Text
               style={[styles.roomTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}
             >
-              {room.code}
+              {roomCode}
             </Text>
+            {roomName ? (
+              <Text
+                style={[
+                  styles.roomMeta,
+                  { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                ]}
+              >
+                {roomName}
+              </Text>
+            ) : null}
 
             <View style={styles.dayTabs}>
               {schedule.map((day) => (
                 <Pressable
                   key={day.dayKey}
+                  testID={`room-day-tab-${day.dayKey}`}
                   accessibilityRole="button"
                   onPress={() => {
                     setSelectedDayKey(day.dayKey);
-                    setSubmitted(false);
+                    setSubmittedBooking(null);
+                    setFormError('');
                   }}
                   style={({ pressed }) => [
                     styles.dayTab,
+                    !layout.isTablet ? styles.dayTabMobile : null,
                     {
                       backgroundColor:
                         selectedDayKey === day.dayKey
                           ? theme.colors.primarySurface
                           : theme.colors.surfaceSubtle,
                       borderColor:
-                        selectedDayKey === day.dayKey ? theme.colors.primary : theme.colors.border,
+                        selectedDayKey === day.dayKey
+                          ? theme.colors.primary
+                          : theme.colors.border,
                       opacity: pressed ? 0.84 : 1,
                     },
                   ]}
@@ -312,7 +441,9 @@ export default function RoomDetailScreen() {
                             ? theme.colors.primary
                             : theme.colors.textMuted,
                         fontFamily:
-                          selectedDayKey === day.dayKey ? theme.fonts.semibold : theme.fonts.medium,
+                          selectedDayKey === day.dayKey
+                            ? theme.fonts.semibold
+                            : theme.fonts.medium,
                       },
                     ]}
                   >
@@ -336,17 +467,27 @@ export default function RoomDetailScreen() {
                 <ScheduleRow
                   key={slot.id}
                   slot={slot}
-                  selected={slot.id === selectedSlotId}
+                  selected={selectedSlotIds.includes(slot.id)}
                   onPress={() => {
-                    if (slot.status === 'occupied') {
-                      return;
-                    }
-
-                    setSelectedSlotId(slot.id);
-                    setSubmitted(false);
+                    setSelectedSlotIds((current) => toggleSlotSelection(selectedDay, current, slot.id));
+                    setSubmittedBooking(null);
+                    setFormError('');
                   }}
                 />
               ))}
+            </View>
+
+            <View
+              style={[
+                styles.selectionCard,
+                {
+                  backgroundColor: theme.colors.surfaceSubtle,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <MetaRow label="Ngày:" value={selectedDate} />
+              <MetaRow label="Giờ:" value={selectionSummary} />
             </View>
 
             <PrimaryButton
@@ -357,7 +498,7 @@ export default function RoomDetailScreen() {
           </View>
         ) : null}
 
-        {mode === 'booking' && selectedSlot ? (
+        {mode === 'booking' && selectedSlots.length > 0 ? (
           <View
             style={[
               styles.panel,
@@ -378,9 +519,9 @@ export default function RoomDetailScreen() {
             </Text>
 
             <View style={styles.metaList}>
-              <MetaRow label="Phòng:" value={room.code} />
+              <MetaRow label="Phòng:" value={roomCode} />
               <MetaRow label="Ngày:" value={selectedDate} />
-              <MetaRow label="Giờ:" value={`${selectedSlot.startTime} - ${selectedSlot.endTime}`} />
+              <MetaRow label="Giờ:" value={selectionSummary} />
             </View>
 
             <View style={styles.formSection}>
@@ -423,7 +564,7 @@ export default function RoomDetailScreen() {
               </View>
             </View>
 
-            {submitted ? (
+            {submittedBooking ? (
               <View
                 style={[
                   styles.notice,
@@ -466,7 +607,7 @@ export default function RoomDetailScreen() {
             ) : null}
 
             <PrimaryButton
-              label="Submit"
+              label="Gửi yêu cầu"
               loading={createBookingMutation.isPending}
               onPress={handleSubmitBooking}
             />
@@ -498,20 +639,20 @@ function ScheduleRow({
       : slot.status === 'occupied'
         ? theme.colors.text
         : theme.colors.info;
-  const slotText = slot.courseCode ?? slot.label;
+  const slotText = slot.courseCode ?? slot.statusLabel ?? slot.label;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: slot.status === 'occupied', selected }}
-      disabled={slot.status === 'occupied'}
+      accessibilityState={{ disabled: !isBookableSlot(slot), selected }}
+      disabled={!isBookableSlot(slot)}
       onPress={onPress}
       style={({ pressed }) => [
         styles.slotRow,
         {
           backgroundColor: selected ? theme.colors.primarySurface : theme.colors.surfaceSubtle,
           borderColor: selected ? theme.colors.primary : theme.colors.border,
-          opacity: slot.status === 'occupied' ? 1 : pressed ? 0.84 : 1,
+          opacity: !isBookableSlot(slot) ? 1 : pressed ? 0.84 : 1,
         },
       ]}
     >
@@ -599,19 +740,25 @@ const styles = StyleSheet.create({
   roomTitle: {
     fontSize: 28,
   },
+  roomMeta: {
+    marginTop: -8,
+    fontSize: 14,
+  },
   dayTabs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
   dayTab: {
-    minWidth: 48,
-    minHeight: 38,
+    minHeight: 42,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dayTabMobile: {
+    width: '31.5%',
   },
   dayTabLabel: {
     fontSize: 13,
@@ -639,6 +786,13 @@ const styles = StyleSheet.create({
   slotLabel: {
     flexShrink: 0,
     fontSize: 14,
+  },
+  selectionCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
   bookingHeader: {
     fontSize: 26,

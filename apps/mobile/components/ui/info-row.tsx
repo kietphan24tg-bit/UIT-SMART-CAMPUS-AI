@@ -19,9 +19,19 @@ export function InfoRow({ label, value }: InfoRowProps) {
           borderColor: theme.colors.border,
         },
       ]}
-    >
-      <Text style={[styles.label, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>{label}</Text>
-      <Text style={[styles.value, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>{value}</Text>
+      >
+      <Text
+        style={[styles.label, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[styles.value, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}
+        numberOfLines={1}
+        ellipsizeMode="middle"
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -39,11 +49,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    flex: 1,
+    flexShrink: 0,
+    minWidth: 72,
   },
   value: {
     fontSize: 14,
     flex: 1,
+    minWidth: 0,
     textAlign: 'right',
   },
 });

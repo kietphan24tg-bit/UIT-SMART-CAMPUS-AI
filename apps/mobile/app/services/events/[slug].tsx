@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { USER_ROLES } from '@smart-campus/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import RenderHTML, { defaultSystemFonts } from 'react-native-render-html';
@@ -15,7 +14,6 @@ import {
 } from '@/components/ui';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { eventsApi } from '@/services/api/events';
-import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 
 const UIT_ORIGIN = 'https://www.uit.edu.vn';
@@ -24,8 +22,6 @@ export default function EventDetailScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const role = useAuthStore((state) => state.user?.role);
   const params = useLocalSearchParams<{ slug?: string }>();
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const contentWidth = Math.max(layout.availableWidth, 0);
@@ -34,26 +30,6 @@ export default function EventDetailScreen() {
     queryKey: ['events', 'detail', slug],
     queryFn: () => eventsApi.detail(slug),
     enabled: slug.length > 0,
-  });
-
-  const registerMutation = useMutation({
-    mutationFn: (eventId: string) => eventsApi.register(eventId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['events', 'list'] }),
-        queryClient.invalidateQueries({ queryKey: ['events', 'detail', slug] }),
-      ]);
-    },
-  });
-
-  const unregisterMutation = useMutation({
-    mutationFn: (eventId: string) => eventsApi.unregister(eventId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['events', 'list'] }),
-        queryClient.invalidateQueries({ queryKey: ['events', 'detail', slug] }),
-      ]);
-    },
   });
 
   return (
@@ -103,6 +79,16 @@ export default function EventDetailScreen() {
                     {detailQuery.data.publishedAtLabel}
                   </Text>
                 </View>
+              ) : null}
+              {detailQuery.data.excerpt ? (
+                <Text
+                  style={[
+                    styles.excerpt,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                  ]}
+                >
+                  {detailQuery.data.excerpt}
+                </Text>
               ) : null}
             </View>
 
@@ -192,30 +178,10 @@ export default function EventDetailScreen() {
               }}
             />
 
-            {detailQuery.data.status === 'open' && role === USER_ROLES.STUDENT ? (
-              detailQuery.data.isRegistered ? (
-                <SecondaryButton
-                  label={unregisterMutation.isPending ? 'Đang hủy đăng ký...' : 'Hủy đăng ký tham gia'}
-                  onPress={() => {
-                    if (detailQuery.data?.id) {
-                      unregisterMutation.mutate(detailQuery.data.id);
-                    }
-                  }}
-                  disabled={registerMutation.isPending || unregisterMutation.isPending}
-                />
-              ) : (
-                <PrimaryButton
-                  label={registerMutation.isPending ? 'Đang đăng ký...' : 'Đăng ký tham gia'}
-                  onPress={() => {
-                    if (detailQuery.data?.id) {
-                      registerMutation.mutate(detailQuery.data.id);
-                    }
-                  }}
-                  disabled={registerMutation.isPending || unregisterMutation.isPending}
-                />
-              )
-            ) : null}
-
+            <PrimaryButton
+              label="Mở bài viết gốc UIT"
+              onPress={() => void Linking.openURL(detailQuery.data.sourceUrl)}
+            />
             <SecondaryButton label="Quay lại danh sách" onPress={() => router.back()} />
           </View>
         ) : null}
@@ -272,6 +238,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 13,
     lineHeight: 18,
+  },
+  excerpt: {
+    fontSize: 15,
+    lineHeight: 22,
   },
   skeleton: {
     gap: 12,

@@ -272,7 +272,34 @@ function slot(
   label: string,
   courseCode?: string,
 ): RoomScheduleSlot {
-  return { id, startTime, endTime, status, label, courseCode };
+  return {
+    id,
+    slotNumber: resolveSlotNumber(startTime),
+    startTime,
+    endTime,
+    status,
+    label,
+    courseCode,
+  };
+}
+
+function resolveSlotNumber(startTime: string) {
+  const slotNumberByStartTime: Record<string, number> = {
+    '07:30': 1,
+    '08:15': 2,
+    '09:00': 3,
+    '10:00': 4,
+    '10:45': 5,
+    '11:00': 11,
+    '13:00': 6,
+    '13:45': 7,
+    '14:30': 8,
+    '15:30': 9,
+    '16:15': 10,
+    '17:00': 12,
+  };
+
+  return slotNumberByStartTime[startTime] ?? 0;
 }
 
 function buildFreeDay(prefix: string) {

@@ -84,7 +84,7 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  MOMO_REDIRECT_URL = 'http://localhost:3000/api/v1/payments/momo/mock-return';
+  MOMO_REDIRECT_URL = 'http://localhost:3000/api/v1/payments/momo/return';
 
   @IsString()
   @IsOptional()

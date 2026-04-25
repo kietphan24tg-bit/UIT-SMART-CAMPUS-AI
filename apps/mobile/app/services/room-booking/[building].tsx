@@ -5,10 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentStack, EmptyState, Screen } from '@/components/ui';
-import {
-  getBuilding,
-  setRuntimeRoomsForBuilding,
-} from '@/constants/room-booking-data';
 import { roomBookingsApi } from '@/services/api/room-bookings';
 import type { RoomAvailabilitySummary } from '@/types/room-booking';
 import { useAppTheme } from '@/theme';
@@ -40,15 +36,31 @@ export default function RoomsInBuildingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ building?: string }>();
   const buildingId = typeof params.building === 'string' ? params.building.toUpperCase() : '';
-  const building = getBuilding(buildingId);
+  const buildingsQuery = useQuery({
+    queryKey: ['room-bookings', 'buildings'],
+    queryFn: () => roomBookingsApi.listBuildings(),
+    enabled: Boolean(buildingId),
+  });
 
   const roomsQuery = useQuery({
     queryKey: ['room-bookings', 'building', buildingId],
     queryFn: () => roomBookingsApi.listBuildingRooms(buildingId),
     enabled: Boolean(buildingId),
   });
-
   const rooms = roomsQuery.data ?? [];
+  const building =
+    buildingsQuery.data?.find((item) => item.id === buildingId) ??
+    (buildingId
+      ? {
+          id: buildingId,
+          code: buildingId,
+          name: `Tòa ${buildingId}`,
+          searchText: buildingId,
+          availableRooms: 0,
+          totalRooms: rooms.length,
+          subtitle: `${rooms.length} phòng`,
+        }
+      : null);
   const floorOptions = useMemo(
     () => ['Tất cả', ...Array.from(new Set(rooms.map((room) => String(room.floor)))).sort((left, right) => Number(left) - Number(right))],
     [rooms],
@@ -56,12 +68,6 @@ export default function RoomsInBuildingScreen() {
   const [selectedFloor, setSelectedFloor] = useState('Tất cả');
   const [selectedCapacity, setSelectedCapacity] = useState<(typeof CAPACITY_OPTIONS)[number]>('Tất cả');
   const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
-
-  useEffect(() => {
-    if (buildingId && roomsQuery.data) {
-      setRuntimeRoomsForBuilding(buildingId, roomsQuery.data);
-    }
-  }, [buildingId, roomsQuery.data]);
 
   useEffect(() => {
     if (!floorOptions.includes(selectedFloor)) {

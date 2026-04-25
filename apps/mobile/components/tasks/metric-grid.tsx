@@ -12,6 +12,7 @@ interface MetricGridProps {
   compactColumns?: number;
   cardMinHeight?: number;
   fixedColumns?: number;
+  layoutPreset?: 'default' | 'mobileTwoByTwo';
 }
 
 export function MetricGrid({
@@ -21,15 +22,20 @@ export function MetricGrid({
   compactColumns,
   cardMinHeight,
   fixedColumns,
+  layoutPreset = 'default',
 }: MetricGridProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const [containerWidth, setContainerWidth] = useState(0);
   const gap = 12;
   const resolvedWidth = containerWidth > 0 ? containerWidth : layout.availableWidth;
+  const shouldForceMobileTwoByTwo =
+    layoutPreset === 'mobileTwoByTwo' && !layout.isTablet && items.length >= 4;
   const columns =
     fixedColumns && fixedColumns > 0
       ? Math.max(1, Math.min(fixedColumns, items.length))
+      : shouldForceMobileTwoByTwo
+        ? 2
       : !layout.isTablet && compactColumns
         ? Math.max(1, Math.min(compactColumns, items.length))
         : Math.max(

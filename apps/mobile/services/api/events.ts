@@ -1,21 +1,12 @@
 import { apiClient } from './client';
 
 export interface EventListItem {
-  id: string;
   slug: string;
   title: string;
-  url: string;
+  sourceUrl: string;
   dateLabel: string;
   excerpt: string;
   thumbnailUrl: string;
-  location?: string;
-  status?: 'planned' | 'open' | 'closed';
-  category?: 'workshop' | 'seminar' | 'community' | 'club';
-  startAt?: string;
-  endAt?: string;
-  maxAttendees?: number | null;
-  attendeeCount?: number;
-  isRegistered?: boolean;
 }
 
 export interface ListEventsResponse {
@@ -27,26 +18,13 @@ export interface ListEventsResponse {
 }
 
 export interface EventDetail {
-  id: string;
   slug: string;
   title: string;
   publishedAtLabel: string;
+  excerpt: string;
+  thumbnailUrl: string;
   contentHtml: string;
-  excerpt?: string;
-  location?: string;
-  status?: 'planned' | 'open' | 'closed';
-  category?: 'workshop' | 'seminar' | 'community' | 'club';
-  startAt?: string;
-  endAt?: string;
-  maxAttendees?: number | null;
-  attendeeCount?: number;
-  isRegistered?: boolean;
-  coverImageUrl?: string | null;
-  owner?: {
-    id: string;
-    email: string;
-    fullName: string;
-  };
+  sourceUrl: string;
 }
 
 export const EVENTS_PAGE_SIZE = 12;
@@ -81,18 +59,6 @@ export const eventsApi = {
     }
 
     return (await apiClient.get(`/events/${encodeURIComponent(slug)}`)) as EventDetail;
-  },
-
-  register: async (eventId: string) => {
-    return (await apiClient.post(
-      `/events/${encodeURIComponent(eventId)}/register`,
-    )) as { id: string };
-  },
-
-  unregister: async (eventId: string) => {
-    return (await apiClient.delete(
-      `/events/${encodeURIComponent(eventId)}/register`,
-    )) as { success: boolean };
   },
 };
 

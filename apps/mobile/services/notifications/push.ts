@@ -10,6 +10,10 @@ export const NOTIFICATION_PROMPTED_KEY = 'notif_prompted';
 
 const EXPO_PUSH_TOKEN_CACHE_KEY = 'expo_push_token_cache';
 
+export function canUseRemotePushNotifications() {
+  return !(Platform.OS === 'android' && Constants.appOwnership === 'expo');
+}
+
 export async function readCachedExpoPushToken(): Promise<string | null> {
   return SecureStore.getItemAsync(EXPO_PUSH_TOKEN_CACHE_KEY);
 }
@@ -46,6 +50,10 @@ async function getExpoPushTokenFromDevice(): Promise<string> {
 
 /** Fetches token from Expo, updates local cache. */
 export async function fetchExpoPushTokenAndCache(): Promise<string> {
+  if (!canUseRemotePushNotifications()) {
+    throw new Error('Remote push notifications are disabled in Expo Go on Android.');
+  }
+
   await ensureAndroidChannel();
   const token = await getExpoPushTokenFromDevice();
   await writeCachedExpoPushToken(token);
@@ -58,6 +66,10 @@ export async function fetchExpoPushTokenAndCache(): Promise<string> {
  */
 export async function syncPushToken() {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return;
+  }
+
+  if (!canUseRemotePushNotifications()) {
     return;
   }
 
@@ -86,6 +98,10 @@ export async function syncPushToken() {
 
 /** Best-effort: remove this device's token for the current user (call before clearing JWT). */
 export async function unregisterPushTokenFromBackend() {
+  if (!canUseRemotePushNotifications()) {
+    return;
+  }
+
   try {
     let token = await readCachedExpoPushToken();
     if (!token) {

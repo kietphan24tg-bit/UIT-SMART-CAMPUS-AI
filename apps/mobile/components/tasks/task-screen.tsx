@@ -29,7 +29,12 @@ export function TaskScreen({
       />
 
       <ContentStack narrow={config.layout === 'narrow'}>
-        {config.metrics?.length ? <MetricGrid items={config.metrics} /> : null}
+        {config.metrics?.length ? (
+          <MetricGrid
+            items={config.metrics}
+            layoutPreset={config.metrics.length === 4 ? 'mobileTwoByTwo' : 'default'}
+          />
+        ) : null}
 
         {config.sections.map((section) => (
           <SectionCard key={section.title} title={section.title} subtitle={section.subtitle}>

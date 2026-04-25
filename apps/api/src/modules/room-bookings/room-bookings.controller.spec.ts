@@ -17,14 +17,38 @@ describe('RoomBookingsController', () => {
             createRoomBooking: jest.fn().mockResolvedValue({
               id: 'booking-1',
               roomCode: 'B1.02',
+              roomName: null,
+              buildingCode: 'B',
+              buildingName: 'Tòa B',
               bookingDate: '2026-04-24',
-              timeSlotId: 'slot-1',
+              timeSlotIds: ['slot-1', 'slot-2'],
+              timeSlots: [
+                {
+                  id: 'slot-1',
+                  slotNumber: 1,
+                  label: 'Tiết 1',
+                  startTime: '07:30',
+                  endTime: '08:15',
+                },
+                {
+                  id: 'slot-2',
+                  slotNumber: 2,
+                  label: 'Tiết 2',
+                  startTime: '08:15',
+                  endTime: '09:00',
+                },
+              ],
+              slotCount: 2,
+              startTime: '07:30',
+              endTime: '09:00',
               title: 'SE346 Team Meeting',
-              purpose: 'Hoc nhom',
+              purpose: 'Học nhóm',
               attendeeCount: 5,
               contactName: 'Nguyen Van A',
               contactPhone: '0901234567',
-              departmentName: 'Khoa Cong nghe phan mem',
+              departmentName: 'Khoa Công nghệ phần mềm',
+              notes: null,
+              approvedAt: null,
               status: 'pending',
               createdAt: '2026-04-23T10:00:00.000Z',
             }),
@@ -54,13 +78,13 @@ describe('RoomBookingsController', () => {
     const dto = {
       roomCode: 'B1.02',
       bookingDate: '2026-04-24',
-      timeSlotId: 'slot-1',
+      timeSlotIds: ['slot-1', 'slot-2'],
       title: 'SE346 Team Meeting',
-      purpose: 'Hoc nhom',
+      purpose: 'Học nhóm',
       contactName: 'Nguyen Van A',
       attendeeCount: 5,
       contactPhone: '0901234567',
-      departmentName: 'Khoa Cong nghe phan mem',
+      departmentName: 'Khoa Công nghệ phần mềm',
       status: 'booked',
     };
 
@@ -70,6 +94,7 @@ describe('RoomBookingsController', () => {
     expect(result).toMatchObject({
       id: 'booking-1',
       roomCode: 'B1.02',
+      timeSlotIds: ['slot-1', 'slot-2'],
       status: 'pending',
     });
   });

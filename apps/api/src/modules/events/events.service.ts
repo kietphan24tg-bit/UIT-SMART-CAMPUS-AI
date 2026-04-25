@@ -1,375 +1,144 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { EventStatus } from '@prisma/client';
-import { USER_ROLES } from '@smart-campus/shared';
+import { ConfigService } from '@nestjs/config';
 
-import { PrismaService } from '../../database/prisma.service';
-import { CreateEventDto } from './dto/create-event.dto';
-import { UpdateEventDto } from './dto/update-event.dto';
+import {
+  UitArticleDetail,
+  UitEventsScraper,
+  type UitListEventItem,
+} from './uit-events.scraper';
 
-const SLUG_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const SLUG_PATTERN = /^[a-z0-9_-]+$/i;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
-function normalizeSlug(slug: string) {
-  return String(slug || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-');
-}
+type CachedList = {
+  items: UitListEventItem[];
+  expiresAt: number;
+};
 
-function toDateLabel(date: Date) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(date);
-}
-
-function isAdminRole(role: string) {
-  return role === USER_ROLES.ADMIN || role === USER_ROLES.SUPER_ADMIN;
-}
+type CachedDetail = {
+  item: UitArticleDetail;
+  expiresAt: number;
+};
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly detailCache = new Map<string, CachedDetail>();
+  private listCache: CachedList | null = null;
 
-  async listEvents(userId: string, pageInput?: number, limitInput?: number) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly uitEventsScraper: UitEventsScraper,
+  ) {}
+
+  async listEvents(_userId?: string, pageInput?: number, limitInput?: number) {
     const page = Math.max(1, pageInput ?? 1);
     const limit = Math.min(Math.max(1, limitInput ?? DEFAULT_LIMIT), MAX_LIMIT);
-    const skip = (page - 1) * limit;
-
-    const [items, total] = await Promise.all([
-      this.prisma.event.findMany({
-        where: {
-          status: {
-            in: [EventStatus.planned, EventStatus.open, EventStatus.closed],
-          },
-        },
-        include: {
-          registrations: {
-            where: {
-              userId,
-              cancelledAt: null,
-            },
-            select: {
-              id: true,
-            },
-          },
-          _count: {
-            select: {
-              registrations: {
-                where: {
-                  cancelledAt: null,
-                },
-              },
-            },
-          },
-        },
-        orderBy: [{ startAt: 'asc' }, { createdAt: 'desc' }],
-        skip,
-        take: limit,
-      }),
-      this.prisma.event.count({
-        where: {
-          status: {
-            in: [EventStatus.planned, EventStatus.open, EventStatus.closed],
-          },
-        },
-      }),
-    ]);
-
+    const items = await this.getCachedList();
+    const total = items.length;
     const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const startIndex = (safePage - 1) * limit;
 
     return {
-      items: items.map((item) => ({
-        id: item.id,
+      items: items.slice(startIndex, startIndex + limit).map((item) => ({
         slug: item.slug,
         title: item.title,
-        url: `https://www.uit.edu.vn/bai-viet/${item.slug}`,
-        dateLabel: toDateLabel(item.startAt),
+        sourceUrl: item.sourceUrl,
+        dateLabel: item.dateLabel,
         excerpt: item.excerpt,
-        thumbnailUrl: item.coverImageUrl ?? '',
-        location: item.location,
-        status: item.status,
-        category: item.category,
-        startAt: item.startAt,
-        endAt: item.endAt,
-        maxAttendees: item.maxAttendees,
-        attendeeCount: item._count.registrations,
-        isRegistered: item.registrations.length > 0,
+        thumbnailUrl: item.thumbnailUrl,
       })),
       total,
-      page,
+      page: safePage,
       limit,
       totalPages,
     };
   }
 
-  async getArticleBySlug(userId: string, slug: string) {
+  async getArticleBySlug(_userId: string, slug: string) {
     if (!SLUG_PATTERN.test(slug)) {
-      throw new BadRequestException('Invalid slug');
+      throw new BadRequestException('Slug không hợp lệ.');
     }
 
-    const event = await this.prisma.event.findUnique({
-      where: { slug },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        registrations: {
-          where: {
-            userId,
-            cancelledAt: null,
-          },
-          select: {
-            id: true,
-          },
-        },
-        _count: {
-          select: {
-            registrations: {
-              where: {
-                cancelledAt: null,
-              },
-            },
-          },
-        },
-      },
-    });
+    const listItems = await this.getCachedList();
+    const listItem = listItems.find((item) => item.slug === slug);
 
-    if (!event) {
-      throw new NotFoundException('Article not found');
+    const detail = await this.getCachedDetail(slug);
+    if (!detail) {
+      throw new NotFoundException('Không tìm thấy bài viết từ UIT.');
     }
 
     return {
-      id: event.id,
-      slug: event.slug,
-      title: event.title,
-      publishedAtLabel: toDateLabel(event.startAt),
-      contentHtml: event.contentHtml,
-      excerpt: event.excerpt,
-      location: event.location,
-      status: event.status,
-      category: event.category,
-      startAt: event.startAt,
-      endAt: event.endAt,
-      maxAttendees: event.maxAttendees,
-      attendeeCount: event._count.registrations,
-      isRegistered: event.registrations.length > 0,
-      coverImageUrl: event.coverImageUrl,
-      owner: {
-        id: event.owner.id,
-        email: event.owner.email,
-        fullName: [event.owner.lastName, event.owner.firstName].filter(Boolean).join(' ').trim(),
-      },
+      slug: detail.slug,
+      title: detail.title,
+      publishedAtLabel: detail.publishedAtLabel,
+      excerpt: listItem?.excerpt ?? detail.excerpt,
+      thumbnailUrl: listItem?.thumbnailUrl || detail.thumbnailUrl,
+      contentHtml: detail.contentHtml,
+      sourceUrl: listItem?.sourceUrl ?? detail.sourceUrl,
     };
   }
 
-  async createEvent(ownerId: string, dto: CreateEventDto) {
-    const slug = normalizeSlug(dto.slug);
-    if (!SLUG_PATTERN.test(slug)) {
-      throw new BadRequestException('Invalid slug');
-    }
-
-    if (new Date(dto.endAt) <= new Date(dto.startAt)) {
-      throw new BadRequestException('endAt must be after startAt');
-    }
-
-    return this.prisma.event.create({
-      data: {
-        ownerId,
-        slug,
-        title: dto.title.trim(),
-        excerpt: dto.excerpt.trim(),
-        location: dto.location.trim(),
-        contentHtml: dto.contentHtml.trim(),
-        coverImageUrl: dto.coverImageUrl?.trim() || null,
-        status: dto.status ?? EventStatus.open,
-        category: dto.category ?? 'workshop',
-        startAt: new Date(dto.startAt),
-        endAt: new Date(dto.endAt),
-        maxAttendees: dto.maxAttendees ?? null,
-      },
-    });
+  private getCacheTtlMs() {
+    return this.configService.get<number>('UIT_EVENTS_CACHE_TTL_MS', 900_000);
   }
 
-  async updateEvent(eventId: string, userId: string, role: string, dto: UpdateEventDto) {
-    const existing = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      select: {
-        id: true,
-        ownerId: true,
-        startAt: true,
-        endAt: true,
-      },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Event not found');
+  private async getCachedList() {
+    const now = Date.now();
+    if (this.listCache && this.listCache.expiresAt > now) {
+      return this.listCache.items;
     }
 
-    if (!isAdminRole(role) && existing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to update this event');
-    }
+    try {
+      const items = await this.uitEventsScraper.fetchAggregatedList();
+      this.listCache = {
+        items,
+        expiresAt: now + this.getCacheTtlMs(),
+      };
+      return items;
+    } catch (error) {
+      if (this.listCache?.items.length) {
+        return this.listCache.items;
+      }
 
-    const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
-    const endAt = dto.endAt ? new Date(dto.endAt) : existing.endAt;
-    if (endAt <= startAt) {
-      throw new BadRequestException('endAt must be after startAt');
+      throw new ServiceUnavailableException('Không thể tải danh sách sự kiện từ UIT.');
     }
-
-    return this.prisma.event.update({
-      where: { id: eventId },
-      data: {
-        ...(dto.slug ? { slug: normalizeSlug(dto.slug) } : {}),
-        ...(dto.title ? { title: dto.title.trim() } : {}),
-        ...(dto.excerpt ? { excerpt: dto.excerpt.trim() } : {}),
-        ...(dto.location ? { location: dto.location.trim() } : {}),
-        ...(dto.contentHtml ? { contentHtml: dto.contentHtml.trim() } : {}),
-        ...(dto.coverImageUrl !== undefined ? { coverImageUrl: dto.coverImageUrl?.trim() || null } : {}),
-        ...(dto.status ? { status: dto.status } : {}),
-        ...(dto.category ? { category: dto.category } : {}),
-        ...(dto.startAt ? { startAt } : {}),
-        ...(dto.endAt ? { endAt } : {}),
-        ...(dto.maxAttendees !== undefined ? { maxAttendees: dto.maxAttendees ?? null } : {}),
-      },
-    });
   }
 
-  async register(eventId: string, userId: string) {
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      include: {
-        _count: {
-          select: {
-            registrations: {
-              where: { cancelledAt: null },
-            },
-          },
-        },
-      },
-    });
-
-    if (!event) {
-      throw new NotFoundException('Event not found');
+  private async getCachedDetail(slug: string) {
+    const now = Date.now();
+    const cached = this.detailCache.get(slug);
+    if (cached && cached.expiresAt > now) {
+      return cached.item;
     }
 
-    if (event.status !== EventStatus.open) {
-      throw new BadRequestException('Event registration is closed');
+    try {
+      const item = await this.uitEventsScraper.fetchArticleDetail(slug);
+      if (!item) {
+        throw new NotFoundException('Không tìm thấy bài viết từ UIT.');
+      }
+
+      this.detailCache.set(slug, {
+        item,
+        expiresAt: now + this.getCacheTtlMs(),
+      });
+      return item;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      if (cached?.item) {
+        return cached.item;
+      }
+
+      throw new ServiceUnavailableException('Không thể tải chi tiết bài viết từ UIT.');
     }
-
-    if (event.maxAttendees && event._count.registrations >= event.maxAttendees) {
-      throw new BadRequestException('Event is full');
-    }
-
-    return this.prisma.eventRegistration.upsert({
-      where: {
-        eventId_userId: {
-          eventId,
-          userId,
-        },
-      },
-      update: {
-        cancelledAt: null,
-      },
-      create: {
-        eventId,
-        userId,
-      },
-    });
-  }
-
-  async unregister(eventId: string, userId: string) {
-    const registration = await this.prisma.eventRegistration.findUnique({
-      where: {
-        eventId_userId: {
-          eventId,
-          userId,
-        },
-      },
-      select: {
-        id: true,
-        cancelledAt: true,
-      },
-    });
-
-    if (!registration) {
-      throw new NotFoundException('Registration not found');
-    }
-
-    if (registration.cancelledAt) {
-      return { success: true };
-    }
-
-    await this.prisma.eventRegistration.update({
-      where: { id: registration.id },
-      data: {
-        cancelledAt: new Date(),
-      },
-    });
-
-    return { success: true };
-  }
-
-  async listRegistrations(eventId: string, userId: string, role: string) {
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      select: {
-        id: true,
-        ownerId: true,
-      },
-    });
-
-    if (!event) {
-      throw new NotFoundException('Event not found');
-    }
-
-    if (!isAdminRole(role) && event.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to view registrations');
-    }
-
-    const registrations = await this.prisma.eventRegistration.findMany({
-      where: {
-        eventId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            studentId: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: { registeredAt: 'asc' },
-    });
-
-    return registrations.map((registration) => ({
-      id: registration.id,
-      registeredAt: registration.registeredAt,
-      cancelledAt: registration.cancelledAt,
-      checkedInAt: registration.checkedInAt,
-      user: {
-        id: registration.user.id,
-        email: registration.user.email,
-        fullName: [registration.user.lastName, registration.user.firstName].filter(Boolean).join(' ').trim(),
-        studentId: registration.user.studentId,
-        role: registration.user.role,
-      },
-    }));
   }
 }
-

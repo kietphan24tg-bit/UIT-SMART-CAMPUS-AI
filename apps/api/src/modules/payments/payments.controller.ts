@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -32,9 +32,18 @@ export class PaymentsController {
     return this.paymentsService.handleMomoWebhook(payload);
   }
 
-  @Get('payments/momo/mock-success/:transactionId')
-  @ApiOperation({ summary: 'Complete a mock MoMo payment for local development' })
-  completeMockPayment(@Param('transactionId') transactionId: string) {
-    return this.paymentsService.completeMockPayment(transactionId);
+  @Get('payments/momo/return')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  @ApiOperation({ summary: 'Handle MoMo redirect return' })
+  handleMomoReturn(
+    @Query('resultCode') resultCode?: string,
+    @Query('orderId') orderId?: string,
+  ) {
+    const isSuccess = String(resultCode ?? '').trim() === '0';
+    const safeOrderId = orderId?.trim() || 'không xác định';
+
+    return isSuccess
+      ? `Thanh toán MoMo cho đơn ${safeOrderId} đã được ghi nhận. Bạn có thể quay lại ứng dụng.`
+      : `MoMo đã chuyển hướng về hệ thống. Giao dịch ${safeOrderId} đang chờ đồng bộ kết quả.`;
   }
 }

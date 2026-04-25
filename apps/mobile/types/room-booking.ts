@@ -14,6 +14,8 @@ export interface RoomAvailabilitySummary {
   id: string;
   buildingId: string;
   code: string;
+  name?: string | null;
+  buildingName?: string;
   floor: number;
   capacity: number;
   status: RoomSlotStatus;
@@ -24,11 +26,13 @@ export interface RoomAvailabilitySummary {
 
 export interface RoomScheduleSlot {
   id: string;
+  slotNumber: number;
   startTime: string;
   endTime: string;
   status: RoomSlotStatus;
   label: string;
   courseCode?: string;
+  statusLabel?: string;
 }
 
 export interface RoomScheduleDay {
@@ -36,6 +40,15 @@ export interface RoomScheduleDay {
   dateKey?: string;
   label: string;
   slots: RoomScheduleSlot[];
+}
+
+export interface RoomSchedule {
+  roomCode: string;
+  roomName: string | null;
+  buildingCode: string;
+  buildingName: string;
+  capacity: number;
+  days: RoomScheduleDay[];
 }
 
 export interface RoomBookingDraft {

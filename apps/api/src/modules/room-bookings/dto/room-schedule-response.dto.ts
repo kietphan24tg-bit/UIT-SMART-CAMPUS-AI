@@ -47,6 +47,12 @@ export class RoomScheduleResponseDto {
   @ApiPropertyOptional({ example: 'Phong hoc 1', nullable: true })
   name!: string | null;
 
+  @ApiProperty({ example: 'B' })
+  buildingCode!: string;
+
+  @ApiProperty({ example: 'Tòa B' })
+  buildingName!: string;
+
   @ApiProperty({ type: () => RoomScheduleDayDto, isArray: true })
   days!: RoomScheduleDayDto[];
 }

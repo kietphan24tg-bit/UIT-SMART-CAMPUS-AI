@@ -1,14 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SectionCard, TopHero } from '@/components/ui';
-import {
-  setRuntimeBuildingAvailability,
-  setRuntimeRoomCatalog,
-} from '@/constants/room-booking-data';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { roomBookingsApi } from '@/services/api/room-bookings';
 import { useAuthStore } from '@/stores/auth-store';
@@ -46,18 +41,6 @@ export default function RoomBookingHomeScreen() {
     columns <= 1
       ? contentWidth
       : Math.max((contentWidth - BUILDING_CARD_GAP * (columns - 1)) / columns, 0);
-
-  useEffect(() => {
-    if (buildingsQuery.data?.length) {
-      setRuntimeBuildingAvailability(buildingsQuery.data);
-    }
-  }, [buildingsQuery.data]);
-
-  useEffect(() => {
-    if (roomCatalogQuery.data) {
-      setRuntimeRoomCatalog(roomCatalogQuery.data);
-    }
-  }, [roomCatalogQuery.data]);
 
   return (
     <Screen>
