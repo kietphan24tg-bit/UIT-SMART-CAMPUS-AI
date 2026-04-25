@@ -22,6 +22,7 @@
     "db:generate": "turbo db:generate --filter=api",
     "db:migrate": "turbo db:migrate --filter=api",
     "db:seed": "turbo db:seed --filter=api",
+    "db:reset:demo": "pnpm --filter api run db:reset:demo",
     "iot-mock": "pnpm --filter api run iot-mock",
     "prepare": "husky"
   },

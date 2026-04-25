@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { USER_ROLES } from '@smart-campus/shared';
 import { Camera, CameraView, type PermissionResponse } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
@@ -97,8 +98,8 @@ export default function AttendanceScanScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const TEST_SKIP_GUARDS = true;
-  // const role = useAuthStore((s) => s.user?.role);
+  const TEST_SKIP_GUARDS = false;
+  const role = useAuthStore((s) => s.user?.role);
   const [permission, setPermission] = useState<PermissionResponse | null>(null);
   const [sessionResolved, setSessionResolved] = useState(false);
   const [hasSessionToken, setHasSessionToken] = useState(false);
@@ -177,15 +178,14 @@ export default function AttendanceScanScreen() {
     }, [clearProcessingDelayTimer, refreshCameraPermission, resolveSession]),
   );
 
-  // Role guard placeholder (comment để test):
-  // useEffect(() => {
-  //   if (role !== USER_ROLES.STUDENT) {
-  //     router.replace('/services/attendance' as never);
-  //   }
-  // }, [role, router]);
-  // if (role !== USER_ROLES.STUDENT) {
-  //   return null;
-  // }
+  useEffect(() => {
+    if (role !== USER_ROLES.STUDENT) {
+      router.replace('/services/attendance' as never);
+    }
+  }, [role, router]);
+  if (role !== USER_ROLES.STUDENT) {
+    return null;
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setStallWarning(true), STALL_WARNING_MS);

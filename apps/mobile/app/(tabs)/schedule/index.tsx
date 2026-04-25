@@ -681,7 +681,7 @@ export default function ScheduleScreen() {
                 description="Chuẩn bị phiên điểm danh."
                 badgeLabel="Sắp triển khai"
                 badgeTone="info"
-                onPress={() => router.push('/schedule/attendance-session')}
+                onPress={() => router.push('/services/attendance/lecturer')}
               />
               <NavigationRow
                 icon="bar-chart-outline"

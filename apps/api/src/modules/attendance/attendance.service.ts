@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AttendanceSession, Prisma } from '@prisma/client';
-import { AttendanceSessionStatus } from '@prisma/client';
+import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
 import { API_PREFIX, PAGINATION_DEFAULTS } from '@smart-campus/shared';
 import { createClient } from 'redis';
 
@@ -63,11 +63,15 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   async startSession(lecturerId: string, dto: StartAttendanceSessionDto) {
     const classSection = await this.prisma.classSection.findUnique({
       where: { id: dto.classSectionId },
-      select: { id: true },
+      select: { id: true, lecturerId: true },
     });
 
     if (!classSection) {
       throw new NotFoundException('Class section not found');
+    }
+
+    if (!classSection.lecturerId || classSection.lecturerId !== lecturerId) {
+      throw new ForbiddenException('You are not assigned to this class section');
     }
 
     const existingActiveSession = await this.prisma.attendanceSession.findFirst({
@@ -215,6 +219,22 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
     const activeSession = await this.ensureSessionActive(session);
 
+    const activeEnrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        studentId,
+        classSectionId: activeSession.classSectionId,
+        status: EnrollmentStatus.active,
+      },
+      select: { id: true },
+    });
+
+    if (!activeEnrollment) {
+      throw new ForbiddenException({
+        code: 'NOT_ENROLLED',
+        message: 'Student is not enrolled in this class section',
+      });
+    }
+
     try {
       const record = await this.prisma.attendanceRecord.create({
         data: {
@@ -340,6 +360,129 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         closedAt: item.closedAt,
         classSection: item.classSection,
         checkedInCount: item._count.records,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getLecturerClassSections(lecturerId: string) {
+    const sections = await this.prisma.classSection.findMany({
+      where: {
+        lecturerId,
+      },
+      include: {
+        course: {
+          select: {
+            code: true,
+            name: true,
+            credits: true,
+          },
+        },
+        semester: {
+          select: {
+            id: true,
+            name: true,
+            isCurrent: true,
+          },
+        },
+        meetings: {
+          select: {
+            id: true,
+            dayOfWeek: true,
+            room: true,
+            startTime: true,
+            endTime: true,
+            startPeriod: true,
+            endPeriod: true,
+            sessionType: true,
+            note: true,
+          },
+          orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+        },
+        _count: {
+          select: {
+            enrollments: {
+              where: { status: EnrollmentStatus.active },
+            },
+          },
+        },
+      },
+      orderBy: [{ semester: { startDate: 'desc' } }, { classCode: 'asc' }],
+    });
+
+    return sections.map((section) => ({
+      id: section.id,
+      classCode: section.classCode,
+      sectionCode: section.sectionCode,
+      note: section.note,
+      capacity: section.capacity,
+      registrationOpen: section.registrationOpen,
+      enrolledCount: section._count.enrollments,
+      course: section.course,
+      semester: section.semester,
+      meetings: section.meetings,
+    }));
+  }
+
+  async getStudentHistory(studentId: string, query: GetSessionRecordsDto) {
+    const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
+    const limit = Math.min(
+      Math.max(query.limit ?? PAGINATION_DEFAULTS.LIMIT, 1),
+      PAGINATION_DEFAULTS.MAX_LIMIT,
+    );
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.attendanceRecord.findMany({
+        where: { studentId },
+        include: {
+          session: {
+            include: {
+              classSection: {
+                include: {
+                  course: {
+                    select: {
+                      code: true,
+                      name: true,
+                      credits: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { checkinTime: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.attendanceRecord.count({
+        where: { studentId },
+      }),
+    ]);
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        checkinTime: item.checkinTime,
+        sessionId: item.sessionId,
+        classSection: {
+          id: item.session.classSection.id,
+          classCode: item.session.classSection.classCode,
+          sectionCode: item.session.classSection.sectionCode,
+          course: item.session.classSection.course,
+        },
+        session: {
+          id: item.session.id,
+          status: item.session.status,
+          startedAt: item.session.startedAt,
+          expiresAt: item.session.expiresAt,
+        },
       })),
       meta: {
         total,

@@ -7,7 +7,7 @@ export class RoomScheduleSlotDto {
   @ApiProperty({ example: 1 })
   slotNumber!: number;
 
-  @ApiProperty({ example: 'Tiết 1' })
+  @ApiProperty({ example: 'Tiet 1' })
   label!: string;
 
   @ApiProperty({ example: '07:30' })
@@ -27,7 +27,10 @@ export class RoomScheduleDayDto {
   @ApiProperty({ example: 2, description: '2 = Monday, 7 = Saturday' })
   dayOfWeek!: number;
 
-  @ApiProperty({ example: 'Thứ 2' })
+  @ApiProperty({ example: '2026-04-20' })
+  dateKey!: string;
+
+  @ApiProperty({ example: 'Thu 2' })
   label!: string;
 
   @ApiProperty({ type: () => RoomScheduleSlotDto, isArray: true })
@@ -41,9 +44,10 @@ export class RoomScheduleResponseDto {
   @ApiProperty({ example: 60 })
   capacity!: number;
 
-  @ApiPropertyOptional({ example: 'Phòng học 1', nullable: true })
+  @ApiPropertyOptional({ example: 'Phong hoc 1', nullable: true })
   name!: string | null;
 
   @ApiProperty({ type: () => RoomScheduleDayDto, isArray: true })
   days!: RoomScheduleDayDto[];
 }
+

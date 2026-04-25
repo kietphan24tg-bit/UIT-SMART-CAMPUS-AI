@@ -12,7 +12,7 @@ import {
   Screen,
   SecondaryButton,
 } from '@/components/ui';
-import { getBuilding, getRoom, getRoomSchedule } from '@/constants/room-booking-data';
+import { getBuilding, getRoom } from '@/constants/room-booking-data';
 import { roomBookingsApi } from '@/services/api/room-bookings';
 import { useAuthStore } from '@/stores/auth-store';
 import type { RoomScheduleDay, RoomScheduleSlot } from '@/types/room-booking';
@@ -27,23 +27,16 @@ const DAY_TITLES: Record<RoomScheduleDay['dayKey'], string> = {
   sat: 'Thứ 7:',
 };
 
-const DAY_DATES: Record<RoomScheduleDay['dayKey'], string> = {
-  mon: '20/04/2026',
-  tue: '21/04/2026',
-  wed: '22/04/2026',
-  thu: '23/04/2026',
-  fri: '24/04/2026',
-  sat: '25/04/2026',
-};
-
-const API_BOOKING_DATES: Record<RoomScheduleDay['dayKey'], string> = {
-  mon: '2026-04-20',
-  tue: '2026-04-21',
-  wed: '2026-04-22',
-  thu: '2026-04-23',
-  fri: '2026-04-24',
-  sat: '2026-04-25',
-};
+function toDisplayDate(dateKey?: string) {
+  if (!dateKey) {
+    return '--/--/----';
+  }
+  const parsed = new Date(`${dateKey}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return dateKey;
+  }
+  return parsed.toLocaleDateString('vi-VN');
+}
 
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -78,7 +71,6 @@ export default function RoomDetailScreen() {
     queryKey: ['room-bookings', 'room-schedule', roomId],
     queryFn: () => roomBookingsApi.getRoomSchedule(roomId),
     enabled: Boolean(roomId),
-    initialData: getRoomSchedule(roomId),
   });
 
   const schedule = scheduleQuery.data ?? [];
@@ -169,10 +161,12 @@ export default function RoomDetailScreen() {
   const canBook = Boolean(
     selectedDay?.slots.some((slot) => slot.status !== 'occupied') && selectedSlot,
   );
-  const selectedDate = selectedDay ? DAY_DATES[selectedDay.dayKey] : '22/04/2026';
+  const selectedDate = toDisplayDate(selectedDay?.dateKey);
 
   const handleSubmitBooking = () => {
-    if (!selectedDay || !selectedSlot) {
+    if (!selectedDay || !selectedSlot || !selectedDay.dateKey) {
+      setSubmitted(false);
+      setFormError('Không xác định được ngày đặt phòng từ lịch tuần hiện tại.');
       return;
     }
 
@@ -214,7 +208,7 @@ export default function RoomDetailScreen() {
     setFormError('');
     createBookingMutation.mutate({
       roomCode: room.code,
-      bookingDate: API_BOOKING_DATES[selectedDay.dayKey],
+      bookingDate: selectedDay.dateKey ?? '',
       timeSlotId: selectedSlot.id,
       purpose: equipment.length
         ? `${normalizedPurpose} - Thiết bị cần: ${equipment.join(', ')}`
@@ -259,6 +253,16 @@ export default function RoomDetailScreen() {
             {mode === 'booking' ? 'Lịch phòng' : building.name}
           </Text>
         </Pressable>
+
+        {scheduleQuery.isError ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Không tải được lịch phòng"
+            description="Vui lòng thử lại khi backend sẵn sàng."
+            actionLabel="Thử lại"
+            onActionPress={() => void scheduleQuery.refetch()}
+          />
+        ) : null}
 
         {mode === 'schedule' ? (
           <View

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
@@ -10,6 +11,7 @@ interface MetricGridProps {
   maxColumns?: number;
   compactColumns?: number;
   cardMinHeight?: number;
+  fixedColumns?: number;
 }
 
 export function MetricGrid({
@@ -18,21 +20,38 @@ export function MetricGrid({
   maxColumns = 4,
   compactColumns,
   cardMinHeight,
+  fixedColumns,
 }: MetricGridProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const gap = 12;
+  const resolvedWidth = containerWidth > 0 ? containerWidth : layout.availableWidth;
   const columns =
-    !layout.isTablet && compactColumns
-      ? Math.max(1, Math.min(compactColumns, items.length))
-      : layout.getGridColumns({
-          minItemWidth,
-          gap: 12,
-          maxColumns: layout.isTablet ? maxColumns : 2,
-        });
-  const width = layout.getGridItemWidth({ columns, gap: 12 });
+    fixedColumns && fixedColumns > 0
+      ? Math.max(1, Math.min(fixedColumns, items.length))
+      : !layout.isTablet && compactColumns
+        ? Math.max(1, Math.min(compactColumns, items.length))
+        : Math.max(
+            1,
+            Math.min(
+              layout.isTablet ? maxColumns : 2,
+              Math.floor((resolvedWidth + gap) / (minItemWidth + gap)) || 1,
+            ),
+          );
+  const width =
+    columns <= 1 ? resolvedWidth : Math.max((resolvedWidth - gap * (columns - 1)) / columns, 0);
 
   return (
-    <View style={styles.grid}>
+    <View
+      style={styles.grid}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        if (nextWidth > 0 && nextWidth !== containerWidth) {
+          setContainerWidth(nextWidth);
+        }
+      }}
+    >
       {items.map((item) => (
         <View
           key={item.label}

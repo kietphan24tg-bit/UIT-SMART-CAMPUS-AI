@@ -1,16 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Camera, type PermissionResponse } from 'expo-camera';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, Redirect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { USER_ROLES } from '@smart-campus/shared';
 
 import { AttendanceCtaButton } from '@/components/attendance/attendance-cta-button';
 import { ContentStack, Screen } from '@/components/ui';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import { isLecturerRole } from '@/utils/app';
 
 export default function AttendanceHubScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
   const [cameraPerm, setCameraPerm] = useState<PermissionResponse | null>(null);
   const hubNavLockRef = useRef(false);
   // Dev-only: bật true để giả lập "chưa cấp quyền camera" khi test UI.
@@ -25,6 +29,22 @@ export default function AttendanceHubScreen() {
 
   const hasCameraPermission =
     !(__DEV__ && DEV_FORCE_CAMERA_PERMISSION_DENIED) && cameraPerm?.granted === true;
+
+  if (isLecturerRole(role)) {
+    return <Redirect href="/services/attendance/lecturer" />;
+  }
+
+  if (role !== USER_ROLES.STUDENT) {
+    return (
+      <Screen>
+        <ContentStack narrow overlapHero={false}>
+          <Text style={[styles.permissionDescription, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            Tính năng quét QR hiện chỉ dành cho tài khoản sinh viên.
+          </Text>
+        </ContentStack>
+      </Screen>
+    );
+  }
 
   const handlePrimaryCta = useCallback(() => {
     if (hubNavLockRef.current) {
@@ -183,7 +203,7 @@ export default function AttendanceHubScreen() {
             Lịch sử điểm danh
           </Text>
           <View style={styles.historyRight}>
-            <Text style={{ color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }}>Sắp cập nhật</Text>
+            <Text style={{ color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }}>Mở</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.textSoft} />
           </View>
         </Pressable>

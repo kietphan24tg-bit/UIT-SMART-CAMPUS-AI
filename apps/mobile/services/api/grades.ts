@@ -1,32 +1,24 @@
-import {
-  getStudentSemesterGradesById,
-  STUDENT_GRADES_SUMMARY,
-  STUDENT_SEMESTER_GRADES,
-} from '@/constants/student-academic-data';
 import type { GPASummary, SemesterGradesRecord } from '@/types/app-data';
 
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
+import { apiClient } from './client';
 
 export const gradesApi = {
   getAllSemesterGrades: async (): Promise<SemesterGradesRecord[]> => {
-    return clone(STUDENT_SEMESTER_GRADES);
+    return (await apiClient.get('/grades')) as SemesterGradesRecord[];
   },
 
   getGradesSummary: async (): Promise<GPASummary> => {
-    return clone(STUDENT_GRADES_SUMMARY);
+    return (await apiClient.get('/grades/summary')) as GPASummary;
   },
 
   getCurrentSemesterGrades: async (): Promise<SemesterGradesRecord> => {
-    return clone(STUDENT_SEMESTER_GRADES.find((item) => item.isCurrent) ?? STUDENT_SEMESTER_GRADES[0]);
+    return (await apiClient.get('/grades/current')) as SemesterGradesRecord;
   },
 
   getSemesterGradesById: async (semesterId: string): Promise<SemesterGradesRecord> => {
-    const semester = getStudentSemesterGradesById(semesterId);
-    if (!semester) {
-      throw new Error(`Grades semester not found: ${semesterId}`);
-    }
-    return clone(semester);
+    return (await apiClient.get(
+      `/grades/semesters/${encodeURIComponent(semesterId)}`,
+    )) as SemesterGradesRecord;
   },
 };
+

@@ -167,7 +167,7 @@ export default function HomeScreen() {
                       },
                     ]}
                     minItemWidth={132}
-                    maxColumns={4}
+                    fixedColumns={2}
                     compactColumns={2}
                     cardMinHeight={112}
                   />

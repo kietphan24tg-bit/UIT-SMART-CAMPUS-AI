@@ -32,22 +32,72 @@ jest.mock('@/stores/auth-store', () => ({
 
 jest.mock('@/services/api/room-bookings', () => ({
   roomBookingsApi: {
-    getRoomSchedule: jest.fn(async (roomCode: string) => {
-      const actual = jest.requireActual('@/constants/room-booking-data');
-      return actual.getRoomSchedule(roomCode);
-    }),
+    getRoomSchedule: jest.fn().mockResolvedValue([
+      {
+        dayKey: 'mon',
+        dateKey: '2026-04-20',
+        label: 'Th2',
+        slots: [
+          {
+            id: 'mon-1',
+            startTime: '07:30',
+            endTime: '08:15',
+            status: 'free',
+            label: 'Tiết 1',
+          },
+          {
+            id: 'mon-2',
+            startTime: '08:15',
+            endTime: '09:00',
+            status: 'occupied',
+            label: 'Tiết 2',
+            courseCode: 'CE124.Q21',
+          },
+          {
+            id: 'mon-3',
+            startTime: '09:00',
+            endTime: '09:45',
+            status: 'occupied',
+            label: 'Tiết 3',
+            courseCode: 'CE124.Q21',
+          },
+        ],
+      },
+      {
+        dayKey: 'sat',
+        dateKey: '2026-04-25',
+        label: 'Th7',
+        slots: [
+          {
+            id: 'sat-1',
+            startTime: '07:30',
+            endTime: '09:00',
+            status: 'available_later',
+            label: 'Trống lúc 09:00',
+          },
+        ],
+      },
+    ]),
     createRoomBooking: jest.fn().mockResolvedValue({
       id: 'booking-1',
       roomCode: 'C101',
+      roomName: null,
+      buildingCode: 'C',
+      buildingName: 'Tòa C',
       bookingDate: '2026-04-20',
-      timeSlotId: 'mon-2',
+      timeSlotId: 'mon-1',
+      startTime: '07:30',
+      endTime: '08:15',
+      timeSlot: null,
       title: 'Học nhóm',
       purpose: 'Học nhóm',
       attendeeCount: 5,
       contactName: 'Nguyen Van A',
       contactPhone: '0901234567',
       departmentName: null,
-      status: 'PENDING',
+      notes: null,
+      status: 'pending',
+      approvedAt: null,
       createdAt: '2026-04-23T00:00:00.000Z',
     }),
   },
@@ -64,7 +114,7 @@ describe('RoomDetailScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the room schedule wireframe and submits the booking form to the API', async () => {
+  it('renders room schedule and submits booking form to API', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -79,8 +129,8 @@ describe('RoomDetailScreen', () => {
       </QueryClientProvider>,
     );
 
+    await waitFor(() => expect(getByText('Th2')).toBeTruthy());
     expect(getByText('C101')).toBeTruthy();
-    expect(getByText('Th2')).toBeTruthy();
     expect(getByText('Th7')).toBeTruthy();
     expect(getByText('Thứ 2:')).toBeTruthy();
     expect(getByText('07:30 - 08:15')).toBeTruthy();
@@ -108,7 +158,7 @@ describe('RoomDetailScreen', () => {
         {
           roomCode: 'C101',
           bookingDate: '2026-04-20',
-          timeSlotId: expect.any(String),
+          timeSlotId: 'mon-1',
           purpose: 'Học nhóm - Thiết bị cần: Máy chiếu',
           contactName: 'Nguyen Van A',
           contactPhone: '0912345678',

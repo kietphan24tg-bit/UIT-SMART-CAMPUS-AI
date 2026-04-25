@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { USER_ROLES } from '@smart-campus/shared';
 
 import EventDetailScreen from '../[slug]';
 
 import { eventsApi } from '@/services/api/events';
+import { useAuthStore } from '@/stores/auth-store';
 
 const mockRouter = {
   push: jest.fn(),
@@ -19,12 +21,18 @@ jest.mock('expo-router', () => ({
 jest.mock('@/services/api/events', () => ({
   eventsApi: {
     detail: jest.fn(),
+    register: jest.fn(),
+    unregister: jest.fn(),
   },
 }));
+jest.mock('@/stores/auth-store');
 
 const mockEventsApi = eventsApi as unknown as {
   detail: jest.Mock;
+  register: jest.Mock;
+  unregister: jest.Mock;
 };
+const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -42,6 +50,13 @@ function renderWithClient(ui: React.ReactElement) {
 describe('EventDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+      selector({
+        user: {
+          role: USER_ROLES.STUDENT,
+        },
+      }),
+    );
   });
 
   it('fetches by slug and renders representative HTML content', async () => {
@@ -81,5 +96,34 @@ describe('EventDetailScreen', () => {
     fireEvent.press(getByText('Thử lại'));
 
     await waitFor(() => expect(getByText('Bài viết đã tải lại')).toBeTruthy());
+  });
+
+  it('does not show registration actions for non-student role', async () => {
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+      selector({
+        user: {
+          role: USER_ROLES.LECTURER,
+        },
+      }),
+    );
+
+    mockEventsApi.detail.mockResolvedValue({
+      id: 'event-1',
+      slug: 'hoi-nghi-ra-soat',
+      title: 'Hội nghị rà soát',
+      publishedAtLabel: '17-04-2026',
+      contentHtml: '<p>Nội dung</p>',
+      status: 'open',
+      isRegistered: false,
+    });
+
+    const { queryByText } = renderWithClient(<EventDetailScreen />);
+
+    await waitFor(() => {
+      expect(queryByText('Hội nghị rà soát')).toBeTruthy();
+    });
+
+    expect(queryByText('Đăng ký tham gia')).toBeNull();
+    expect(queryByText('Hủy đăng ký tham gia')).toBeNull();
   });
 });

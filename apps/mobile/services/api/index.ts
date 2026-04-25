@@ -1,10 +1,13 @@
 export { apiClient } from './client';
 export { attendanceApi } from './attendance';
 export { authApi } from './auth';
+export { catalogApi } from './catalog';
 export { eventsApi } from './events';
 export { gradesApi } from './grades';
 export { notificationsApi } from './notifications';
 export { parkingApi } from './parking';
+export { registrationsApi } from './registrations';
+export { roomBookingsApi } from './room-bookings';
 export { safetyApi } from './safety';
 export { scheduleApi } from './schedule';
 export { usersApi } from './users';

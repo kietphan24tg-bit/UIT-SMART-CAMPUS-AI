@@ -6,12 +6,14 @@ import { DatabaseModule } from './database/database.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { EventsModule } from './modules/events/events.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { GradesModule } from './modules/grades/grades.module';
 import { HealthModule } from './modules/health/health.module';
 import { IotModule } from './modules/iot/iot.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ParkingModule } from './modules/parking/parking.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { RegistrationsModule } from './modules/registrations/registrations.module';
 import { RoomBookingsModule } from './modules/room-bookings/room-bookings.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { UsersModule } from './modules/users/users.module';
@@ -26,6 +28,7 @@ import { UsersModule } from './modules/users/users.module';
     DatabaseModule,
     AuthModule,
     AttendanceModule,
+    CatalogModule,
     UsersModule,
     ScheduleModule,
     GradesModule,
@@ -34,6 +37,7 @@ import { UsersModule } from './modules/users/users.module';
     NotificationsModule,
     ParkingModule,
     RoomBookingsModule,
+    RegistrationsModule,
     IotModule,
     PaymentsModule,
   ],

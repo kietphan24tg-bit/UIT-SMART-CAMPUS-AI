@@ -31,8 +31,8 @@ export class RoomBookingResponseDto {
   @ApiPropertyOptional({ example: 'Khoa Công nghệ phần mềm', nullable: true })
   departmentName!: string | null;
 
-  @ApiProperty({ enum: ['pending', 'approved', 'booked', 'maintenance'] })
-  status!: 'pending' | 'approved' | 'booked' | 'maintenance';
+  @ApiProperty({ enum: ['pending', 'approved', 'booked', 'maintenance', 'rejected', 'cancelled'] })
+  status!: 'pending' | 'approved' | 'booked' | 'maintenance' | 'rejected' | 'cancelled';
 
   @ApiProperty({ example: '2026-04-23T10:00:00.000Z' })
   createdAt!: string;

@@ -287,6 +287,7 @@ export function getRoleQuickActions(role?: string | null) {
 export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const teachingCategory = 'Công cụ giảng dạy' as const;
   const adminCategory = 'Công cụ quản trị' as const;
+  const isStudentRole = role === USER_ROLES.STUDENT;
 
   const entries: ServiceEntry[] = [
     {
@@ -331,16 +332,20 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'course-registration',
       title: 'Đăng ký môn học',
-      summary: 'Sắp triển khai đăng ký học phần theo đợt.',
+      summary: isStudentRole
+        ? 'Đăng ký học phần theo lớp mở.'
+        : 'Tính năng dành cho tài khoản sinh viên.',
       category: 'Học vụ',
       icon: 'document-text-outline',
-      supportState: 'unsupported',
-      isInteractive: false,
-      disabledReason: 'Sắp triển khai đăng ký và hủy đăng ký học phần.',
-      lastVerifiedSource: 'manual',
-      primaryAction: 'Theo dõi cập nhật',
-      route: '/services/course-registration',
-      description: 'Sắp triển khai đăng ký học phần và theo dõi trạng thái.',
+      supportState: isStudentRole ? 'live' : 'unsupported',
+      isInteractive: isStudentRole,
+      disabledReason: isStudentRole ? undefined : 'Chỉ tài khoản sinh viên mới có thể đăng ký học phần.',
+      lastVerifiedSource: 'schedule',
+      primaryAction: isStudentRole ? 'Mở đăng ký' : 'Xem trạng thái',
+      route: isStudentRole ? '/services/course-registration' : '/services',
+      description: isStudentRole
+        ? 'Đăng ký, hủy đăng ký và theo dõi trạng thái học phần.'
+        : 'Tính năng đăng ký học phần chỉ áp dụng cho sinh viên.',
     },
     {
       id: 'attendance',
@@ -348,28 +353,27 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       summary: 'Quét mã QR trên màn hình lớp để điểm danh (sinh viên).',
       category: isLecturerRole(role) ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
-      supportState: isLecturerRole(role) ? 'partial' : 'live',
+      supportState: 'live',
       isInteractive: true,
-      lastVerifiedSource: 'manual',
-      primaryAction: isLecturerRole(role) ? 'Mở lịch giảng dạy' : 'Mở điểm danh QR',
+      lastVerifiedSource: 'schedule',
+      primaryAction: isLecturerRole(role) ? 'Quản lý phiên QR' : 'Mở điểm danh QR',
       route: '/services/attendance',
       description: isLecturerRole(role)
-        ? 'Sinh viên quét QR; giảng viên quản lý phiên từ lịch giảng dạy.'
+        ? 'Giảng viên mở và đóng phiên QR cho lớp được phân công.'
         : 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.',
     },
     {
       id: 'room-booking',
       title: 'Đặt phòng',
-      summary: 'Sắp triển khai đặt phòng học và phòng lab.',
+      summary: 'Đặt phòng và theo dõi trạng thái phê duyệt.',
       category: 'Tiện ích campus',
       icon: 'business-outline',
-      supportState: 'unsupported',
-      isInteractive: false,
-      disabledReason: 'Sắp triển khai đặt phòng và theo dõi trạng thái.',
+      supportState: 'live',
+      isInteractive: true,
       lastVerifiedSource: 'manual',
-      primaryAction: 'Theo dõi cập nhật',
+      primaryAction: 'Mở đặt phòng',
       route: '/services/room-booking',
-      description: 'Sắp triển khai đặt phòng học hoặc phòng lab.',
+      description: 'Đặt phòng học, xem yêu cầu của tôi và queue phê duyệt.',
     },
     {
       id: 'library',

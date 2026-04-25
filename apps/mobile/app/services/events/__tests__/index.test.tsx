@@ -46,6 +46,7 @@ function renderWithClient(ui: React.ReactElement) {
 const listResponse = (overrides: Partial<ListEventsResponse>) => ({
   items: [
     {
+      id: 'event-1',
       slug: 'hoi-nghi-ra-soat',
       title: 'Hội nghị rà soát, đánh giá 5 năm công tác khảo sát',
       url: 'https://www.uit.edu.vn/bai-viet/hoi-nghi-ra-soat',
@@ -100,6 +101,7 @@ describe('EventsScreen', () => {
           page: 2,
           items: [
             {
+              id: 'event-2',
               slug: 'uitseminar-worldquant',
               title: page2Title,
               url: 'https://www.uit.edu.vn/bai-viet/uitseminar-worldquant',

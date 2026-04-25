@@ -223,7 +223,7 @@ describe('RoomBookingsService', () => {
           roomBookings: {
             where: {
               bookingDate: new Date('2026-04-22T00:00:00.000Z'),
-              status: { in: ['booked', 'maintenance'] },
+              status: { in: ['approved', 'booked', 'maintenance'] },
               timeSlotId: 'slot-1',
             },
             select: { id: true },
@@ -474,7 +474,7 @@ describe('RoomBookingsService', () => {
             gte: new Date('2026-04-20T00:00:00.000Z'),
             lte: new Date('2026-04-25T00:00:00.000Z'),
           },
-          status: { in: ['booked', 'maintenance'] },
+          status: { in: ['approved', 'booked', 'maintenance'] },
           timeSlotId: { not: null },
         },
         select: {
@@ -555,7 +555,7 @@ describe('RoomBookingsService', () => {
             gte: new Date('2026-04-20T00:00:00.000Z'),
             lte: new Date('2026-04-25T00:00:00.000Z'),
           },
-          status: { in: ['booked', 'maintenance'] },
+          status: { in: ['approved', 'booked', 'maintenance'] },
           timeSlotId: { not: null },
         },
         select: {

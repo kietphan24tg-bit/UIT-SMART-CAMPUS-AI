@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { AttendanceSessionStatus } from '@prisma/client';
+import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -56,6 +56,9 @@ describe('AttendanceService', () => {
               findMany: jest.fn(),
               count: jest.fn(),
             },
+            classEnrollment: {
+              findFirst: jest.fn(),
+            },
           },
         },
         {
@@ -88,6 +91,7 @@ describe('AttendanceService', () => {
         id: 'session-1',
         status: AttendanceSessionStatus.active,
         expiresAt: new Date(Date.now() + 60_000),
+        classSectionId: 'section-1',
       };
       redisGetMock.mockResolvedValue(
         JSON.stringify({
@@ -97,6 +101,9 @@ describe('AttendanceService', () => {
         }),
       );
       (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue(session);
+      (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue({
+        id: 'enrollment-1',
+      });
       (prisma.attendanceRecord.create as jest.Mock).mockResolvedValue({
         id: 'record-1',
         sessionId: session.id,
@@ -112,6 +119,14 @@ describe('AttendanceService', () => {
           sessionId: session.id,
           studentId: 'student-1',
         },
+      });
+      expect(prisma.classEnrollment.findFirst).toHaveBeenCalledWith({
+        where: {
+          studentId: 'student-1',
+          classSectionId: 'section-1',
+          status: EnrollmentStatus.active,
+        },
+        select: { id: true },
       });
     });
 
@@ -142,6 +157,28 @@ describe('AttendanceService', () => {
       );
     });
 
+    it('throws ForbiddenException when student is not enrolled', async () => {
+      redisGetMock.mockResolvedValue(
+        JSON.stringify({
+          sessionId: 'session-1',
+          issuedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 90_000).toISOString(),
+        }),
+      );
+      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+        status: AttendanceSessionStatus.active,
+        expiresAt: new Date(Date.now() + 60_000),
+        classSectionId: 'section-1',
+      });
+      (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.checkin('student-1', { token: 'token' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.attendanceRecord.create).not.toHaveBeenCalled();
+    });
+
     it('throws ALREADY_CHECKED_IN when unique constraint is violated', async () => {
       redisGetMock.mockResolvedValue(
         JSON.stringify({
@@ -154,6 +191,10 @@ describe('AttendanceService', () => {
         id: 'session-1',
         status: AttendanceSessionStatus.active,
         expiresAt: new Date(Date.now() + 60_000),
+        classSectionId: 'section-1',
+      });
+      (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue({
+        id: 'enrollment-1',
       });
       (prisma.attendanceRecord.create as jest.Mock).mockRejectedValue({
         code: 'P2002',
@@ -162,6 +203,23 @@ describe('AttendanceService', () => {
       await expect(service.checkin('student-1', { token: 'token' })).rejects.toThrow(
         ConflictException,
       );
+    });
+  });
+
+  describe('startSession', () => {
+    it('throws ForbiddenException when lecturer does not own class section', async () => {
+      (prisma.classSection.findUnique as jest.Mock).mockResolvedValue({
+        id: 'section-1',
+        lecturerId: 'lecturer-2',
+      });
+
+      await expect(
+        service.startSession('lecturer-1', {
+          classSectionId: 'section-1',
+          durationMinutes: 10,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.attendanceSession.create).not.toHaveBeenCalled();
     });
   });
 

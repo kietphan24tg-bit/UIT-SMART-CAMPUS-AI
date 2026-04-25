@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
 import {
+  EnrollmentStatus,
+  EventCategory,
+  EventStatus,
   PrismaClient,
   Role,
   RoomBookingStatus,
@@ -741,6 +744,21 @@ interface ScheduleSeed {
   instructor?: string;
 }
 
+interface EventSeed {
+  slug: string;
+  title: string;
+  excerpt: string;
+  location: string;
+  contentHtml: string;
+  coverImageUrl: string | null;
+  status: EventStatus;
+  category: EventCategory;
+  startAt: string;
+  endAt: string;
+  maxAttendees?: number;
+  createdBy: 'admin' | 'lecturer';
+}
+
 const scheduleSeedsBySemester: Array<{
   semesterId: (typeof semesterSeeds)[number]['id'];
   items: ScheduleSeed[];
@@ -1259,6 +1277,79 @@ const scheduleSeedsBySemester: Array<{
   },
 ] as const;
 
+const eventSeeds: EventSeed[] = [
+  {
+    slug: 'hoi-thao-iot-cho-do-an-se346',
+    title: 'Hội thảo IoT cho đồ án SE346',
+    excerpt: 'Buổi chia sẻ định hướng triển khai thiết bị, gateway và pipeline dữ liệu cho nhóm đồ án.',
+    location: 'Phòng E4.1',
+    contentHtml:
+      '<p>Hội thảo tập trung vào cách dựng luồng dữ liệu IoT từ cảm biến đến dashboard vận hành.</p><p>Sinh viên sẽ được hướng dẫn cách demo end-to-end bằng dữ liệu thật, tránh mock trong phần bảo vệ đồ án.</p>',
+    coverImageUrl: 'https://www.uit.edu.vn/sites/vi/files/banner_uit_1.png',
+    status: EventStatus.open,
+    category: EventCategory.seminar,
+    startAt: '2026-04-28T08:30:00.000Z',
+    endAt: '2026-04-28T10:30:00.000Z',
+    maxAttendees: 80,
+    createdBy: 'lecturer',
+  },
+  {
+    slug: 'ngay-hoi-clb-cong-nghe-uit',
+    title: 'Ngày hội CLB Công nghệ UIT',
+    excerpt: 'Không gian kết nối các CLB học thuật và cộng đồng công nghệ trong trường.',
+    location: 'Sảnh C',
+    contentHtml:
+      '<p>Sự kiện quy tụ các CLB học thuật, nhóm nghiên cứu và đội thi để giới thiệu hoạt động học kỳ mới.</p><p>Sinh viên có thể đăng ký tham gia trực tiếp trên ứng dụng.</p>',
+    coverImageUrl: 'https://www.uit.edu.vn/sites/vi/files/banner_uit_1.png',
+    status: EventStatus.open,
+    category: EventCategory.community,
+    startAt: '2026-04-29T01:00:00.000Z',
+    endAt: '2026-04-29T05:00:00.000Z',
+    maxAttendees: 150,
+    createdBy: 'admin',
+  },
+  {
+    slug: 'workshop-kiem-thu-mobile-thuc-chien',
+    title: 'Workshop kiểm thử mobile thực chiến',
+    excerpt: 'Chia sẻ cách viết test UI và API đủ sâu để bảo vệ đồ án với dữ liệu thật.',
+    location: 'Phòng B2.16',
+    contentHtml:
+      '<p>Workshop tập trung vào test React Native, API integration và các tình huống dễ vỡ khi demo.</p><p>Người tham dự sẽ nhận bộ checklist kiểm thử trước buổi bảo vệ.</p>',
+    coverImageUrl: 'https://www.uit.edu.vn/sites/vi/files/banner_uit_1.png',
+    status: EventStatus.planned,
+    category: EventCategory.workshop,
+    startAt: '2026-05-02T06:30:00.000Z',
+    endAt: '2026-05-02T09:00:00.000Z',
+    maxAttendees: 60,
+    createdBy: 'lecturer',
+  },
+  {
+    slug: 'dien-dan-cong-dong-open-source-uit',
+    title: 'Diễn đàn cộng đồng Open Source UIT',
+    excerpt: 'Buổi trao đổi về đóng góp mã nguồn mở và lộ trình phát triển kỹ năng kỹ thuật.',
+    location: 'Hội Trường A',
+    contentHtml:
+      '<p>Diễn đàn quy tụ sinh viên, giảng viên và cựu sinh viên đang tham gia các dự án open source.</p><p>Nội dung bao gồm quy trình review code, đóng góp issue và xây dựng hồ sơ kỹ thuật.</p>',
+    coverImageUrl: 'https://www.uit.edu.vn/sites/vi/files/banner_uit_1.png',
+    status: EventStatus.open,
+    category: EventCategory.club,
+    startAt: '2026-05-05T00:30:00.000Z',
+    endAt: '2026-05-05T03:30:00.000Z',
+    maxAttendees: 200,
+    createdBy: 'admin',
+  },
+];
+
+const instructorNames = Array.from(
+  new Set(
+    scheduleSeedsBySemester.flatMap((entry) =>
+      entry.items
+        .map((item) => item.instructor?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ),
+).sort();
+
 interface GradeSeed {
   courseCode: string;
   assignment?: number | null;
@@ -1579,6 +1670,31 @@ function parseClassCode(classCode: string) {
   };
 }
 
+function splitVietnameseName(fullName: string) {
+  const parts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const firstName = parts.pop() ?? fullName;
+  const lastName = parts.join(' ') || firstName;
+
+  return {
+    firstName,
+    lastName,
+  };
+}
+
+function buildLecturerEmail(fullName: string) {
+  return `${fullName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')}@uit.edu.vn`;
+}
+
+function timeRangesOverlap(startA: string, endA: string, startB: string, endB: string) {
+  return startA < endB && startB < endA;
+}
+
 async function main() {
   const passwordHash = await bcrypt.hash('Password123', 10);
 
@@ -1617,13 +1733,15 @@ async function main() {
       where: { email: 'lecturer@uit.edu.vn' },
       update: {
         passwordHash,
+        firstName: 'Son',
+        lastName: 'Le Thanh',
         isActive: true,
       },
       create: {
         email: 'lecturer@uit.edu.vn',
         passwordHash,
-        firstName: 'Giảng',
-        lastName: 'Viên',
+        firstName: 'Son',
+        lastName: 'Le Thanh',
         role: Role.lecturer,
         faculty: 'Khoa Công nghệ thông tin',
         isActive: true,
@@ -1656,6 +1774,39 @@ async function main() {
       },
     }),
   ]);
+
+  const instructorUsers = new Map<string, Awaited<ReturnType<typeof prisma.user.upsert>>>();
+  instructorUsers.set('Le Thanh Son', lecturer);
+
+  for (const instructorName of instructorNames) {
+    if (instructorUsers.has(instructorName)) {
+      continue;
+    }
+
+    const { firstName, lastName } = splitVietnameseName(instructorName);
+    const instructorUser = await prisma.user.upsert({
+      where: { email: buildLecturerEmail(instructorName) },
+      update: {
+        passwordHash,
+        firstName,
+        lastName,
+        role: Role.lecturer,
+        faculty: 'Giảng viên UIT',
+        isActive: true,
+      },
+      create: {
+        email: buildLecturerEmail(instructorName),
+        passwordHash,
+        firstName,
+        lastName,
+        role: Role.lecturer,
+        faculty: 'Giảng viên UIT',
+        isActive: true,
+      },
+    });
+
+    instructorUsers.set(instructorName, instructorUser);
+  }
 
   await prisma.semester.updateMany({
     data: { isCurrent: false },
@@ -1708,8 +1859,10 @@ async function main() {
     }
   }
 
+  const seededTimeSlots = new Map<number, Awaited<ReturnType<typeof prisma.timeSlot.upsert>>>();
+
   for (const timeSlotSeed of timeSlotSeeds) {
-    await prisma.timeSlot.upsert({
+    const timeSlot = await prisma.timeSlot.upsert({
       where: { slotNumber: timeSlotSeed.slotNumber },
       update: {
         label: timeSlotSeed.label,
@@ -1718,6 +1871,8 @@ async function main() {
       },
       create: timeSlotSeed,
     });
+
+    seededTimeSlots.set(timeSlot.slotNumber, timeSlot);
   }
 
   const seededRooms = new Map<string, Awaited<ReturnType<typeof prisma.room.upsert>>>();
@@ -1766,28 +1921,68 @@ async function main() {
     }
 
     const createdBy = bookingUsers[bookingSeed.createdBy];
+    const bookingDate = new Date(`${bookingSeed.bookingDate}T00:00:00.000Z`);
+    const matchingTimeSlots = timeSlotSeeds
+      .filter((timeSlotSeed) =>
+        timeRangesOverlap(
+          bookingSeed.startTime,
+          bookingSeed.endTime,
+          timeSlotSeed.startTime,
+          timeSlotSeed.endTime,
+        ),
+      )
+      .map((timeSlotSeed) => seededTimeSlots.get(timeSlotSeed.slotNumber))
+      .filter((timeSlot): timeSlot is NonNullable<typeof timeSlot> => Boolean(timeSlot));
 
-    await prisma.roomBooking.create({
-      data: {
-        roomId: room.id,
-        userId: createdBy.id,
-        bookingDate: new Date(`${bookingSeed.bookingDate}T00:00:00.000Z`),
-        startTime: bookingSeed.startTime,
-        endTime: bookingSeed.endTime,
-        title: bookingSeed.title,
-        purpose: bookingSeed.purpose,
-        attendeeCount: bookingSeed.attendeeCount ?? null,
-        contactName: bookingSeed.contactName ?? null,
-        contactPhone: null,
-        departmentName: bookingSeed.departmentName ?? null,
-        status: RoomBookingStatus.booked,
-        approvedById: admin.id,
-        approvedAt: new Date(`${bookingSeed.bookingDate}T00:00:00.000Z`),
-        notes:
-          bookingSeed.notes ??
-          'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
-      },
-    });
+    if (matchingTimeSlots.length === 0) {
+      await prisma.roomBooking.create({
+        data: {
+          roomId: room.id,
+          userId: createdBy.id,
+          bookingDate,
+          startTime: bookingSeed.startTime,
+          endTime: bookingSeed.endTime,
+          title: bookingSeed.title,
+          purpose: bookingSeed.purpose,
+          attendeeCount: bookingSeed.attendeeCount ?? null,
+          contactName: bookingSeed.contactName ?? null,
+          contactPhone: null,
+          departmentName: bookingSeed.departmentName ?? null,
+          status: RoomBookingStatus.booked,
+          approvedById: admin.id,
+          approvedAt: bookingDate,
+          notes:
+            bookingSeed.notes ??
+            'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
+        },
+      });
+      continue;
+    }
+
+    for (const timeSlot of matchingTimeSlots) {
+      await prisma.roomBooking.create({
+        data: {
+          roomId: room.id,
+          userId: createdBy.id,
+          bookingDate,
+          timeSlotId: timeSlot.id,
+          startTime: timeSlot.startTime,
+          endTime: timeSlot.endTime,
+          title: bookingSeed.title,
+          purpose: bookingSeed.purpose,
+          attendeeCount: bookingSeed.attendeeCount ?? null,
+          contactName: bookingSeed.contactName ?? null,
+          contactPhone: null,
+          departmentName: bookingSeed.departmentName ?? null,
+          status: RoomBookingStatus.booked,
+          approvedById: admin.id,
+          approvedAt: bookingDate,
+          notes:
+            bookingSeed.notes ??
+            'Nguồn seed: https://student.uit.edu.vn/lichphong tuần 20-04-2026 đến 26-04-2026',
+        },
+      });
+    }
   }
 
   const semesters = new Map<string, Awaited<ReturnType<typeof prisma.semester.upsert>>>();
@@ -1835,37 +2030,153 @@ async function main() {
     entry.items.map((item) => ({ ...item, semesterId: entry.semesterId })),
   );
 
+  type AggregatedSectionSeed = {
+    semesterId: string;
+    classCode: string;
+    courseCode: string;
+    sectionCode: string;
+    note: string | null;
+    instructor: string | null;
+    meetings: ScheduleSeed[];
+  };
+
+  const aggregatedSectionSeeds = new Map<string, AggregatedSectionSeed>();
+
   for (const item of allScheduleSeeds) {
     const { courseCode, sectionCode } = parseClassCode(item.classCode);
-    const course = courses.get(courseCode);
-    const semester = semesters.get(item.semesterId);
+    const existing = aggregatedSectionSeeds.get(item.classCode);
+
+    if (existing) {
+      existing.meetings.push(item);
+      if (!existing.note && item.note) {
+        existing.note = item.note;
+      }
+      if (!existing.instructor && item.instructor) {
+        existing.instructor = item.instructor;
+      }
+      continue;
+    }
+
+    aggregatedSectionSeeds.set(item.classCode, {
+      semesterId: item.semesterId,
+      classCode: item.classCode,
+      courseCode,
+      sectionCode,
+      note: item.note ?? null,
+      instructor: item.instructor ?? null,
+      meetings: [item],
+    });
+  }
+
+  for (const sectionSeed of aggregatedSectionSeeds.values()) {
+    const course = courses.get(sectionSeed.courseCode);
+    const semester = semesters.get(sectionSeed.semesterId);
 
     if (!course) {
-      throw new Error(`Course ${courseCode} was not seeded`);
+      throw new Error(`Course ${sectionSeed.courseCode} was not seeded`);
     }
 
     if (!semester) {
-      throw new Error(`Semester ${item.semesterId} was not seeded`);
+      throw new Error(`Semester ${sectionSeed.semesterId} was not seeded`);
     }
 
+    const lecturerUser = sectionSeed.instructor ? instructorUsers.get(sectionSeed.instructor) : null;
+
     const classSection = await prisma.classSection.upsert({
-      where: { classCode: item.classCode },
+      where: { classCode: sectionSeed.classCode },
       update: {
         semesterId: semester.id,
         courseId: course.id,
-        sectionCode,
-        note: item.note ?? null,
+        sectionCode: sectionSeed.sectionCode,
+        note: sectionSeed.note,
+        lecturerId: lecturerUser?.id ?? null,
+        capacity: 60,
+        registrationOpen: semester.isCurrent,
       },
       create: {
         semesterId: semester.id,
         courseId: course.id,
-        classCode: item.classCode,
-        sectionCode,
-        note: item.note ?? null,
+        classCode: sectionSeed.classCode,
+        sectionCode: sectionSeed.sectionCode,
+        note: sectionSeed.note,
+        lecturerId: lecturerUser?.id ?? null,
+        capacity: 60,
+        registrationOpen: semester.isCurrent,
       },
     });
 
-    classSections.set(item.classCode, classSection);
+    classSections.set(sectionSeed.classCode, classSection);
+  }
+
+  await prisma.classMeeting.deleteMany();
+  await prisma.classMeeting.createMany({
+    data: allScheduleSeeds.map((item) => {
+      const classSection = classSections.get(item.classCode);
+
+      if (!classSection) {
+        throw new Error(`Class section ${item.classCode} was not seeded`);
+      }
+
+      return {
+        classSectionId: classSection.id,
+        dayOfWeek: item.dayOfWeek,
+        room: item.room ?? null,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        startPeriod: item.startPeriod,
+        endPeriod: item.endPeriod,
+        sessionType: item.sessionType,
+        note: item.note ?? null,
+      };
+    }),
+  });
+
+  await prisma.classEnrollment.deleteMany({
+    where: {
+      studentId: student.id,
+    },
+  });
+
+  const currentSemesterId = semesterSeeds.find((item) => item.isCurrent)?.id ?? semesterSeeds[0].id;
+  const currentSemesterSectionCodes = Array.from(
+    new Set(
+      allScheduleSeeds
+        .filter((item) => item.semesterId === currentSemesterId)
+        .map((item) => item.classCode),
+    ),
+  );
+  const activeSectionCodeSet = new Set(currentSemesterSectionCodes);
+
+  for (const classCode of currentSemesterSectionCodes) {
+    const classSection = classSections.get(classCode);
+
+    if (!classSection) {
+      throw new Error(`Class section ${classCode} was not seeded for enrollments`);
+    }
+
+    await prisma.classEnrollment.create({
+      data: {
+        studentId: student.id,
+        classSectionId: classSection.id,
+        status: EnrollmentStatus.active,
+      },
+    });
+  }
+
+  const droppedEnrollmentCode = allScheduleSeeds.find((item) => item.semesterId !== currentSemesterId)?.classCode;
+  if (droppedEnrollmentCode) {
+    const droppedClassSection = classSections.get(droppedEnrollmentCode);
+
+    if (droppedClassSection) {
+      await prisma.classEnrollment.create({
+        data: {
+          studentId: student.id,
+          classSectionId: droppedClassSection.id,
+          status: EnrollmentStatus.dropped,
+          droppedAt: new Date('2025-03-01T00:00:00.000Z'),
+        },
+      });
+    }
   }
 
   await prisma.scheduleItem.deleteMany({
@@ -1875,7 +2186,9 @@ async function main() {
   });
 
   await prisma.scheduleItem.createMany({
-    data: allScheduleSeeds.map((item) => {
+    data: allScheduleSeeds
+      .filter((item) => activeSectionCodeSet.has(item.classCode))
+      .map((item) => {
       const classSection = classSections.get(item.classCode);
 
       if (!classSection) {
@@ -1894,7 +2207,7 @@ async function main() {
         room: item.room ?? null,
         instructor: item.instructor ?? null,
       };
-    }),
+      }),
   });
 
   await prisma.grade.deleteMany({
@@ -1956,6 +2269,59 @@ async function main() {
     }
   }
 
+  await prisma.eventRegistration.deleteMany();
+  await prisma.event.deleteMany();
+
+  const eventOwners = {
+    admin,
+    lecturer,
+  } as const;
+
+  const seededEvents = new Map<string, Awaited<ReturnType<typeof prisma.event.create>>>();
+
+  for (const eventSeed of eventSeeds) {
+    const owner = eventOwners[eventSeed.createdBy];
+    const event = await prisma.event.create({
+      data: {
+        ownerId: owner.id,
+        slug: eventSeed.slug,
+        title: eventSeed.title,
+        excerpt: eventSeed.excerpt,
+        location: eventSeed.location,
+        contentHtml: eventSeed.contentHtml,
+        coverImageUrl: eventSeed.coverImageUrl,
+        status: eventSeed.status,
+        category: eventSeed.category,
+        startAt: new Date(eventSeed.startAt),
+        endAt: new Date(eventSeed.endAt),
+        maxAttendees: eventSeed.maxAttendees ?? null,
+      },
+    });
+
+    seededEvents.set(event.slug, event);
+  }
+
+  const openEvents = [...seededEvents.values()].filter((item) => item.status === EventStatus.open);
+
+  if (openEvents[0]) {
+    await prisma.eventRegistration.create({
+      data: {
+        eventId: openEvents[0].id,
+        userId: student.id,
+      },
+    });
+  }
+
+  if (openEvents[1]) {
+    await prisma.eventRegistration.create({
+      data: {
+        eventId: openEvents[1].id,
+        userId: student.id,
+        cancelledAt: new Date('2026-04-24T10:00:00.000Z'),
+      },
+    });
+  }
+
   const vehicle = await prisma.vehicle.upsert({
     where: { plateNumber: '51F44614' },
     update: {},
@@ -2010,6 +2376,20 @@ async function main() {
     });
   }
 
+  const [
+    seededRoomBookingCount,
+    seededMeetingCount,
+    seededEnrollmentCount,
+    seededEventCount,
+    seededEventRegistrationCount,
+  ] = await Promise.all([
+    prisma.roomBooking.count(),
+    prisma.classMeeting.count(),
+    prisma.classEnrollment.count(),
+    prisma.event.count(),
+    prisma.eventRegistration.count(),
+  ]);
+
   console.warn('Seed completed:', {
     superAdmin: superAdmin.email,
     admin: admin.email,
@@ -2017,13 +2397,17 @@ async function main() {
     student: student.email,
     buildings: buildingSeeds.length,
     rooms: roomSeeds.length,
-    roomBookings: roomBookingSeeds.length,
+    roomBookings: seededRoomBookingCount,
     timeSlots: timeSlotSeeds.length,
     semesters: semesterSeeds.length,
     currentSemester: semesterSeeds.find((item) => item.isCurrent)?.name ?? null,
     sections: classSections.size,
-    scheduleItems: allScheduleSeeds.length,
+    classMeetings: seededMeetingCount,
+    classEnrollments: seededEnrollmentCount,
+    scheduleItems: allScheduleSeeds.filter((item) => activeSectionCodeSet.has(item.classCode)).length,
     grades: gradeSeedsBySemester.reduce((total, semester) => total + semester.items.length, 0),
+    events: seededEventCount,
+    eventRegistrations: seededEventRegistrationCount,
     vehicle: vehicle.plateNumber,
   });
 }

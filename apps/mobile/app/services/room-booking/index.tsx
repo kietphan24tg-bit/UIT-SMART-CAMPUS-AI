@@ -4,15 +4,16 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, Screen, SectionCard, TopHero } from '@/components/ui';
+import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SectionCard, TopHero } from '@/components/ui';
 import {
-  getBuildings,
   setRuntimeBuildingAvailability,
   setRuntimeRoomCatalog,
 } from '@/constants/room-booking-data';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { roomBookingsApi } from '@/services/api/room-bookings';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import { isAdminRole } from '@/utils/app';
 
 const BUILDING_CARD_GAP = 12;
 const BUILDING_MIN_WIDTH = 150;
@@ -21,16 +22,17 @@ export default function RoomBookingHomeScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
+  const admin = isAdminRole(role);
   const buildingsQuery = useQuery({
     queryKey: ['room-bookings', 'buildings'],
     queryFn: () => roomBookingsApi.listBuildings(),
-    initialData: getBuildings(),
   });
   const roomCatalogQuery = useQuery({
     queryKey: ['room-bookings', 'catalog'],
     queryFn: () => roomBookingsApi.listAllBuildingRooms(),
   });
-  const buildings = buildingsQuery.data;
+  const buildings = buildingsQuery.data ?? [];
   const availableWidth =
     typeof layout.availableWidth === 'number'
       ? layout.availableWidth
@@ -68,6 +70,15 @@ export default function RoomBookingHomeScreen() {
       />
 
       <ContentStack gap={16} overlapHero={false}>
+        {buildingsQuery.isError ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Không tải được dữ liệu đặt phòng"
+            description="Vui lòng kiểm tra kết nối tới backend."
+            actionLabel="Thử lại"
+            onActionPress={() => void buildingsQuery.refetch()}
+          />
+        ) : null}
         <SectionCard
           title="Tòa nhà"
           subtitle={`${buildings.length} khu vực khả dụng`}
@@ -126,6 +137,16 @@ export default function RoomBookingHomeScreen() {
             ))}
           </View>
         </SectionCard>
+        <PrimaryButton
+          label="Yêu cầu của tôi"
+          onPress={() => router.push('/services/room-booking/my' as never)}
+        />
+        {admin ? (
+          <SecondaryButton
+            label="Queue phê duyệt"
+            onPress={() => router.push('/services/room-booking/approvals' as never)}
+          />
+        ) : null}
       </ContentStack>
     </Screen>
   );

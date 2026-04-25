@@ -141,21 +141,58 @@ export function getScheduleTaskConfig(task: ScheduleTaskKey): TaskScreenConfig |
         route: '/schedule',
       });
     case 'attendance-session':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Điểm danh QR',
         title: 'Phiên điểm danh QR',
-        subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Tính năng điểm danh QR đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
-        route: '/services/attendance',
-      });
+        subtitle: 'Quản lý phiên điểm danh theo lớp được phân công.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'schedule',
+        sections: [
+          {
+            title: 'Tác vụ',
+            body: 'Mở phiên QR, trình chiếu mã động và theo dõi danh sách sinh viên đã check-in.',
+          },
+        ],
+        primaryAction: {
+          label: 'Mở quản lý điểm danh',
+          route: '/services/attendance/lecturer',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'schedule',
+        },
+      };
     case 'attendance-report':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Điểm danh QR',
         title: 'Báo cáo điểm danh',
-        subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Báo cáo điểm danh sẽ được mở trong các bản cập nhật sau. Theo dõi cập nhật trong ứng dụng.',
-        route: '/services/attendance',
-      });
+        subtitle: 'Xem lịch sử phiên và số lượng check-in theo lớp.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'schedule',
+        sections: [
+          {
+            title: 'Nguồn dữ liệu',
+            infoRows: [
+              { label: 'Lịch sử phiên', value: 'GET /attendance/history' },
+              { label: 'Danh sách check-in', value: 'GET /attendance/session/:id/records' },
+            ],
+          },
+        ],
+        primaryAction: {
+          label: 'Mở quản lý điểm danh',
+          route: '/services/attendance/lecturer',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'schedule',
+        },
+      };
     case 'grade-sheet':
       return buildUnavailableConfig({
         eyebrow: 'Điểm số',
@@ -295,13 +332,33 @@ export function getOperationsTaskConfig(
         route: '/alerts',
       });
     case 'approvals':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Vận hành',
         title: 'Phê duyệt yêu cầu',
-        subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Tính năng phê duyệt yêu cầu đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
-        route: '/schedule',
-      });
+        subtitle: 'Duyệt yêu cầu đặt phòng theo queue pending.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'manual',
+        sections: [
+          {
+            title: 'Nguồn dữ liệu',
+            infoRows: [
+              { label: 'Queue pending', value: 'GET /room-bookings?status=pending' },
+              { label: 'Duyệt/Từ chối', value: 'PATCH /room-bookings/:id/approve|reject' },
+            ],
+          },
+        ],
+        primaryAction: {
+          label: 'Mở queue phê duyệt',
+          route: '/services/room-booking/approvals',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'manual',
+        },
+      };
     case 'users':
       return buildUnavailableConfig({
         eyebrow: 'Vận hành',
@@ -311,13 +368,34 @@ export function getOperationsTaskConfig(
         route: '/profile',
       });
     case 'catalog':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Vận hành',
         title: 'Danh mục học vụ',
-        subtitle: 'Danh mục học kỳ và học phần chưa có luồng quản trị thật.',
-        reason: 'Tính năng quản trị danh mục sẽ được mở trong các bản cập nhật sau. Theo dõi cập nhật trong ứng dụng.',
-        route: '/schedule',
-      });
+        subtitle: 'Quản trị học phần, lớp học phần và lịch học.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'schedule',
+        sections: [
+          {
+            title: 'Nguồn dữ liệu',
+            infoRows: [
+              { label: 'Danh mục', value: 'GET /catalog/*' },
+              { label: 'Tạo lớp', value: 'POST /catalog/class-sections' },
+              { label: 'Lịch học', value: 'PATCH /catalog/class-sections/:id/meetings' },
+            ],
+          },
+        ],
+        primaryAction: {
+          label: 'Mở quản trị danh mục',
+          route: '/services/admin-catalog',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'schedule',
+        },
+      };
     default:
       return null;
   }

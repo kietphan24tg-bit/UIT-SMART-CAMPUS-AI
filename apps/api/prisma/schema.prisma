@@ -61,6 +61,26 @@ enum RoomBookingStatus {
   approved
   booked
   maintenance
+  rejected
+  cancelled
+}
+
+enum EnrollmentStatus {
+  active
+  dropped
+}
+
+enum EventStatus {
+  planned
+  open
+  closed
+}
+
+enum EventCategory {
+  workshop
+  seminar
+  community
+  club
 }
 
 model User {
@@ -82,17 +102,21 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  refreshTokens        RefreshToken[]
-  passwordResetOtps    PasswordResetOtp[]
-  scheduleItems        ScheduleItem[]
-  grades               Grade[]
-  notifications        Notification[]
-  pushTokens           UserDevicePushToken[]
-  attendanceSessions   AttendanceSession[]
-  attendanceRecords    AttendanceRecord[]
-  vehicles             Vehicle[]
-  roomBookings         RoomBooking[]         @relation("RoomBookingsCreatedBy")
-  approvedRoomBookings RoomBooking[]         @relation("RoomBookingsApprovedBy")
+  refreshTokens         RefreshToken[]
+  passwordResetOtps     PasswordResetOtp[]
+  scheduleItems         ScheduleItem[]
+  grades                Grade[]
+  notifications         Notification[]
+  pushTokens            UserDevicePushToken[]
+  attendanceSessions    AttendanceSession[]
+  attendanceRecords     AttendanceRecord[]
+  vehicles              Vehicle[]
+  roomBookings          RoomBooking[]         @relation("RoomBookingsCreatedBy")
+  approvedRoomBookings  RoomBooking[]         @relation("RoomBookingsApprovedBy")
+  lecturedClassSections ClassSection[]
+  classEnrollments      ClassEnrollment[]     @relation("ClassEnrollmentStudent")
+  createdEvents         Event[]               @relation("EventOwner")
+  eventRegistrations    EventRegistration[]
 
   @@map("users")
 }
@@ -247,21 +271,67 @@ model Course {
 }
 
 model ClassSection {
-  id          String   @id @default(uuid())
-  semesterId  String   @map("semester_id")
-  courseId    String   @map("course_id")
-  classCode   String   @unique @map("class_code")
-  sectionCode String   @map("section_code")
-  note        String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  semesterId       String   @map("semester_id")
+  courseId         String   @map("course_id")
+  lecturerId       String?  @map("lecturer_id")
+  classCode        String   @unique @map("class_code")
+  sectionCode      String   @map("section_code")
+  note             String?
+  capacity         Int      @default(40)
+  registrationOpen Boolean  @default(true) @map("registration_open")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   semester           Semester            @relation(fields: [semesterId], references: [id], onDelete: Cascade)
   course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturer           User?               @relation(fields: [lecturerId], references: [id], onDelete: SetNull)
+  meetings           ClassMeeting[]
+  enrollments        ClassEnrollment[]
   scheduleItems      ScheduleItem[]
   attendanceSessions AttendanceSession[]
 
   @@unique([semesterId, courseId, sectionCode])
+  @@index([lecturerId, semesterId])
   @@map("class_sections")
+}
+
+model ClassMeeting {
+  id             String              @id @default(uuid())
+  classSectionId String              @map("class_section_id")
+  dayOfWeek      Int                 @map("day_of_week")
+  room           String?
+  startTime      String              @map("start_time")
+  endTime        String              @map("end_time")
+  startPeriod    Int?                @map("start_period")
+  endPeriod      Int?                @map("end_period")
+  sessionType    ScheduleSessionType @default(daytime) @map("session_type")
+  note           String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@index([classSectionId, dayOfWeek, startTime])
+  @@map("class_meetings")
+}
+
+model ClassEnrollment {
+  id             String           @id @default(uuid())
+  studentId      String           @map("student_id")
+  classSectionId String           @map("class_section_id")
+  status         EnrollmentStatus @default(active)
+  registeredAt   DateTime         @default(now()) @map("registered_at")
+  droppedAt      DateTime?        @map("dropped_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  student      User         @relation("ClassEnrollmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classSectionId])
+  @@index([classSectionId, status])
+  @@map("class_enrollments")
 }
 
 model AttendanceSession {
@@ -359,6 +429,48 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+model Event {
+  id            String        @id @default(uuid())
+  ownerId       String        @map("owner_id")
+  slug          String        @unique
+  title         String
+  excerpt       String
+  location      String
+  contentHtml   String        @map("content_html")
+  coverImageUrl String?       @map("cover_image_url")
+  status        EventStatus   @default(planned)
+  category      EventCategory @default(workshop)
+  startAt       DateTime      @map("start_at")
+  endAt         DateTime      @map("end_at")
+  maxAttendees  Int?          @map("max_attendees")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  owner         User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  registrations EventRegistration[]
+
+  @@index([status, startAt])
+  @@map("events")
+}
+
+model EventRegistration {
+  id           String    @id @default(uuid())
+  eventId      String    @map("event_id")
+  userId       String    @map("user_id")
+  registeredAt DateTime  @default(now()) @map("registered_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  checkedInAt  DateTime? @map("checked_in_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId, registeredAt])
+  @@map("event_registrations")
 }
 
 model UserDevicePushToken {

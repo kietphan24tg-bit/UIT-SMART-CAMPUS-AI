@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Role, type Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
-function buildSemesterWithSchedulesInclude(userId: string) {
+function buildStudentSemesterInclude(userId: string) {
   return {
     classSections: {
       include: {
@@ -18,50 +18,118 @@ function buildSemesterWithSchedulesInclude(userId: string) {
   } satisfies Prisma.SemesterInclude;
 }
 
-type SemesterWithSchedules = Prisma.SemesterGetPayload<{
-  include: ReturnType<typeof buildSemesterWithSchedulesInclude>;
+function buildLecturerSemesterInclude(userId: string) {
+  return {
+    classSections: {
+      where: {
+        lecturerId: userId,
+      },
+      include: {
+        course: { select: { code: true, name: true, credits: true } },
+        lecturer: { select: { firstName: true, lastName: true } },
+        meetings: {
+          orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+        },
+      },
+      orderBy: [{ classCode: 'asc' }],
+    },
+  } satisfies Prisma.SemesterInclude;
+}
+
+type StudentSemesterWithSchedules = Prisma.SemesterGetPayload<{
+  include: ReturnType<typeof buildStudentSemesterInclude>;
 }>;
+
+type LecturerSemesterWithSchedules = Prisma.SemesterGetPayload<{
+  include: ReturnType<typeof buildLecturerSemesterInclude>;
+}>;
+
+function toFullName(firstName: string, lastName: string) {
+  return [lastName, firstName].filter(Boolean).join(' ').trim();
+}
 
 @Injectable()
 export class ScheduleService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getAllSemestersWithSchedules(userId: string) {
-    const semesters = await this.prisma.semester.findMany({
-      include: buildSemesterWithSchedulesInclude(userId),
-      orderBy: { startDate: 'desc' },
-    });
-
-    return semesters.map((semester) => this.mapSemesterSchedule(semester));
+    const role = await this.getUserRole(userId);
+    return this.getSemestersByRole(role, userId);
   }
 
   async getCurrentSemesterSchedule(userId: string) {
-    const semester = await this.prisma.semester.findFirst({
-      where: { isCurrent: true },
-      include: buildSemesterWithSchedulesInclude(userId),
-    });
+    const role = await this.getUserRole(userId);
+    const semesters = await this.getSemestersByRole(role, userId);
+    const current = semesters.find((item) => item.isCurrent);
 
-    if (!semester) {
+    if (!current) {
       throw new NotFoundException('Current semester not found');
     }
 
-    return this.mapSemesterSchedule(semester);
+    return current;
   }
 
   async getSemesterScheduleById(userId: string, semesterId: string) {
-    const semester = await this.prisma.semester.findUnique({
-      where: { id: semesterId },
-      include: buildSemesterWithSchedulesInclude(userId),
-    });
+    const role = await this.getUserRole(userId);
+    const semesters = await this.getSemestersByRole(role, userId);
+    const semester = semesters.find((entry) => entry.id === semesterId);
 
     if (!semester) {
       throw new NotFoundException('Semester not found');
     }
 
-    return this.mapSemesterSchedule(semester);
+    return semester;
   }
 
-  private mapSemesterSchedule(semester: SemesterWithSchedules) {
+  private async getUserRole(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user.role;
+  }
+
+  private async getSemestersByRole(role: Role, userId: string) {
+    if (role === Role.student) {
+      const semesters = await this.prisma.semester.findMany({
+        include: buildStudentSemesterInclude(userId),
+        orderBy: { startDate: 'desc' },
+      });
+
+      return semesters.map((semester) => this.mapStudentSemesterSchedule(semester));
+    }
+
+    if (role === Role.lecturer) {
+      const semesters = await this.prisma.semester.findMany({
+        include: buildLecturerSemesterInclude(userId),
+        orderBy: { startDate: 'desc' },
+      });
+
+      return semesters.map((semester) => this.mapLecturerSemesterSchedule(semester));
+    }
+
+    const semesters = await this.prisma.semester.findMany({
+      orderBy: { startDate: 'desc' },
+    });
+
+    return semesters.map((semester) => ({
+      id: semester.id,
+      name: semester.name,
+      academicYear: semester.academicYear,
+      term: semester.term,
+      startDate: semester.startDate,
+      endDate: semester.endDate,
+      isCurrent: semester.isCurrent,
+      sessions: [],
+    }));
+  }
+
+  private mapStudentSemesterSchedule(semester: StudentSemesterWithSchedules) {
     return {
       id: semester.id,
       name: semester.name,
@@ -97,4 +165,44 @@ export class ScheduleService {
         }),
     };
   }
+
+  private mapLecturerSemesterSchedule(semester: LecturerSemesterWithSchedules) {
+    return {
+      id: semester.id,
+      name: semester.name,
+      academicYear: semester.academicYear,
+      term: semester.term,
+      startDate: semester.startDate,
+      endDate: semester.endDate,
+      isCurrent: semester.isCurrent,
+      sessions: semester.classSections
+        .flatMap((classSection) =>
+          classSection.meetings.map((meeting) => ({
+            id: meeting.id,
+            classCode: classSection.classCode,
+            sectionCode: classSection.sectionCode,
+            note: meeting.note ?? classSection.note,
+            instructor: classSection.lecturer
+              ? toFullName(classSection.lecturer.firstName, classSection.lecturer.lastName)
+              : null,
+            room: meeting.room ?? null,
+            dayOfWeek: meeting.dayOfWeek,
+            startTime: meeting.startTime,
+            endTime: meeting.endTime,
+            startPeriod: meeting.startPeriod,
+            endPeriod: meeting.endPeriod,
+            sessionType: meeting.sessionType,
+            course: classSection.course,
+          })),
+        )
+        .sort((left, right) => {
+          if (left.dayOfWeek !== right.dayOfWeek) {
+            return left.dayOfWeek - right.dayOfWeek;
+          }
+
+          return left.startTime.localeCompare(right.startTime);
+        }),
+    };
+  }
 }
+

@@ -33,6 +33,7 @@ export interface RoomScheduleSlot {
 
 export interface RoomScheduleDay {
   dayKey: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+  dateKey?: string;
   label: string;
   slots: RoomScheduleSlot[];
 }

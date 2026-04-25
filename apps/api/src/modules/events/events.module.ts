@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 
+import { DatabaseModule } from '../../database/database.module';
 import { EventsController } from './events.controller';
 import { EventsService } from './events.service';
-import { UitEventsScraper } from './uit-events.scraper';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [EventsController],
-  providers: [EventsService, UitEventsScraper],
+  providers: [EventsService],
 })
 export class EventsModule {}

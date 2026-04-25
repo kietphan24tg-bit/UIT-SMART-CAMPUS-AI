@@ -7,7 +7,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ContentStack, EmptyState, Screen } from '@/components/ui';
 import {
   getBuilding,
-  getRoomsForBuilding,
   setRuntimeRoomsForBuilding,
 } from '@/constants/room-booking-data';
 import { roomBookingsApi } from '@/services/api/room-bookings';
@@ -47,7 +46,6 @@ export default function RoomsInBuildingScreen() {
     queryKey: ['room-bookings', 'building', buildingId],
     queryFn: () => roomBookingsApi.listBuildingRooms(buildingId),
     enabled: Boolean(buildingId),
-    initialData: getRoomsForBuilding(buildingId),
   });
 
   const rooms = roomsQuery.data ?? [];
@@ -85,7 +83,7 @@ export default function RoomsInBuildingScreen() {
         <ContentStack>
           <EmptyState
             title="Không tìm thấy tòa nhà"
-            description="Dữ liệu mock không có khu vực này."
+            description="Không tìm thấy dữ liệu tòa nhà từ backend."
             actionLabel="Quay lại đặt phòng"
             onActionPress={() => router.replace('/services/room-booking')}
           />
@@ -161,6 +159,16 @@ export default function RoomsInBuildingScreen() {
             </View>
           </View>
         </View>
+
+        {roomsQuery.isError ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Không tải được danh sách phòng"
+            description="Vui lòng kiểm tra backend và thử lại."
+            actionLabel="Thử lại"
+            onActionPress={() => void roomsQuery.refetch()}
+          />
+        ) : null}
 
         <View style={styles.roomsSection}>
           <Text style={[styles.sectionLabel, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>

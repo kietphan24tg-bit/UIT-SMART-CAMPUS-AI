@@ -88,4 +88,27 @@ export class AttendanceController {
   getHistory(@CurrentUser('id') lecturerId: string, @Query() query: GetAttendanceHistoryDto) {
     return this.attendanceService.getHistory(lecturerId, query);
   }
+
+  @Get('lecturer/class-sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get class sections assigned to current lecturer' })
+  getLecturerClassSections(@CurrentUser('id') lecturerId: string) {
+    return this.attendanceService.getLecturerClassSections(lecturerId);
+  }
+
+  @Get('me/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.STUDENT)
+  @ApiBearerAuth()
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOperation({ summary: 'Get attendance check-in history of current student' })
+  getStudentHistory(
+    @CurrentUser('id') studentId: string,
+    @Query() query: GetSessionRecordsDto,
+  ) {
+    return this.attendanceService.getStudentHistory(studentId, query);
+  }
 }

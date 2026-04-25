@@ -278,7 +278,7 @@ export default function EventsScreen() {
             <Text
               style={[styles.subtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}
             >
-              Bài viết mới từ cổng thông tin UIT.
+              Danh sách sự kiện và cộng đồng từ hệ thống campus.
             </Text>
           </View>
         </View>

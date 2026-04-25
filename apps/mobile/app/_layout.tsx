@@ -79,10 +79,15 @@ function RootNavigator() {
         <Stack.Screen name="operations/[task]" />
         <Stack.Screen name="parking/[task]" />
         <Stack.Screen name="services/room-booking/index" />
+        <Stack.Screen name="services/room-booking/my" />
+        <Stack.Screen name="services/room-booking/approvals" />
         <Stack.Screen name="services/room-booking/[building]" />
         <Stack.Screen name="services/room-booking/[building]/[room]" />
         <Stack.Screen name="services/[service]" />
+        <Stack.Screen name="services/course-registration/index" />
+        <Stack.Screen name="services/admin-catalog/index" />
         <Stack.Screen name="services/attendance/index" />
+        <Stack.Screen name="services/attendance/lecturer" />
         <Stack.Screen name="services/attendance/scan" />
         <Stack.Screen name="services/attendance/result" />
         <Stack.Screen name="services/attendance/history" />

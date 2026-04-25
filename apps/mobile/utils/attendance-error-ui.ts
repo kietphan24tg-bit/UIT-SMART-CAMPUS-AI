@@ -4,6 +4,7 @@ export type AttendanceErrorCode =
   | 'RATE_LIMITED'
   | 'SESSION_CLOSED'
   | 'ALREADY_CHECKED_IN'
+  | 'NOT_ENROLLED'
   | 'NETWORK'
   | 'UNKNOWN';
 
@@ -27,6 +28,7 @@ function normalizeCode(raw: string | undefined, statusCode: number | undefined):
     raw === 'RATE_LIMITED' ||
     raw === 'SESSION_CLOSED' ||
     raw === 'ALREADY_CHECKED_IN' ||
+    raw === 'NOT_ENROLLED' ||
     raw === 'NETWORK'
   ) {
     return raw;
@@ -114,6 +116,16 @@ export function mapAttendanceErrorToUi(err: unknown): AttendanceErrorUi {
           typeof body?.message === 'string' && body.message.length > 0
             ? body.message
             : 'Bạn đã điểm danh cho buổi học này rồi. Không cần thực hiện lại.',
+      };
+    case 'NOT_ENROLLED':
+      return {
+        code,
+        recoverable: false,
+        title: 'Bạn chưa đăng ký lớp này',
+        message:
+          typeof body?.message === 'string' && body.message.length > 0
+            ? body.message
+            : 'Bạn không có trong danh sách đăng ký học phần của lớp này.',
       };
     default:
       if (statusCode != null && statusCode >= 500) {

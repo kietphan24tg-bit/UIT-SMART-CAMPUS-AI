@@ -248,20 +248,20 @@ export default function ServiceDetailScreen() {
             </Text>
           </SectionCard>
 
-          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
-            <View style={styles.column}>
-              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
-              <InfoRow label="Thông báo" value="Danh sách, chưa đọc, đánh dấu đã đọc" />
-              <InfoRow label="Hồ sơ" value="Xem và cập nhật thông tin cá nhân" />
-            </View>
-          </SectionCard>
+            <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
+              <View style={styles.column}>
+                <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
+                <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
+                <InfoRow label="Catalog học vụ" value="Tạo học phần, lớp học phần và lịch học" />
+              </View>
+            </SectionCard>
 
-          <PrimaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
-          <SecondaryButton label="Mở trung tâm cảnh báo" onPress={() => router.push('/alerts')} />
-          <SecondaryButton label="Mo parking + IoT" onPress={() => router.push('/parking')} />
-        </ContentStack>
-      </Screen>
-    );
+            <PrimaryButton label="Mở catalog học vụ" onPress={() => router.push('/services/admin-catalog')} />
+            <SecondaryButton label="Mở queue phê duyệt đặt phòng" onPress={() => router.push('/services/room-booking/approvals')} />
+            <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
+          </ContentStack>
+        </Screen>
+      );
   }
 
   return (
