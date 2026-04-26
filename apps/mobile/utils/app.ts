@@ -65,6 +65,14 @@ export function isCanteenAdminRole(role?: string | null) {
   return role === USER_ROLES.CANTEEN_ADMIN;
 }
 
+export function canManageAttendanceRole(role?: string | null) {
+  return isLecturerRole(role) || isAdminRole(role);
+}
+
+export function canManageCanteenRole(role?: string | null) {
+  return isCanteenAdminRole(role) || isAdminRole(role);
+}
+
 export function getGreetingName(
   user?: {
     firstName?: string | null;
@@ -276,7 +284,7 @@ export function getRoleQuickActions(role?: string | null) {
   if (isLecturerRole(role)) {
     return [
       { id: 'schedule', label: 'Lịch dạy', icon: 'calendar-outline', route: '/schedule' },
-      { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
+      { id: 'attendance', label: 'Điểm danh QR', icon: 'qr-code-outline', route: '/services/attendance' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
     ];
@@ -294,21 +302,29 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const teachingCategory = 'Công cụ giảng dạy' as const;
   const adminCategory = 'Công cụ quản trị' as const;
   const isStudentRole = role === USER_ROLES.STUDENT;
-  const isCanteenAdmin = role === USER_ROLES.CANTEEN_ADMIN;
+  const attendanceManager = canManageAttendanceRole(role);
+  const canteenManager = canManageCanteenRole(role);
 
   const entries: ServiceEntry[] = [
     {
       id: 'grades',
       title: 'Điểm & GPA',
-      summary: 'Theo dõi bảng điểm theo học kỳ.',
+      summary: isStudentRole
+        ? 'Theo dõi bảng điểm theo học kỳ.'
+        : 'Luồng dữ liệu điểm cho vai trò này sẽ được triển khai sau.',
       category: 'Học vụ',
       icon: 'bar-chart-outline',
-      supportState: 'live',
-      isInteractive: true,
+      supportState: isStudentRole ? 'live' : 'unsupported',
+      isInteractive: isStudentRole,
+      disabledReason: isStudentRole
+        ? undefined
+        : 'Vai trò này chưa được hỗ trợ luồng điểm & GPA trong app.',
       lastVerifiedSource: 'grades',
-      primaryAction: 'Xem bảng điểm',
-      route: '/services/grades',
-      description: 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.',
+      primaryAction: isStudentRole ? 'Xem bảng điểm' : 'Theo dõi cập nhật',
+      route: isStudentRole ? '/services/grades' : '/services',
+      description: isStudentRole
+        ? 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.'
+        : 'Chức năng xem/nhập điểm cho vai trò này đang ở trạng thái sắp triển khai.',
     },
     {
       id: 'parking',
@@ -357,16 +373,18 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'attendance',
       title: 'Điểm danh QR',
-      summary: 'Quét mã QR trên màn hình lớp để điểm danh (sinh viên).',
-      category: isLecturerRole(role) ? teachingCategory : 'Học vụ',
+      summary: attendanceManager
+        ? 'Quản lý phiên điểm danh và theo dõi check-in theo lớp.'
+        : 'Quét mã QR trên màn hình lớp để điểm danh (sinh viên).',
+      category: attendanceManager ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
       supportState: 'live',
       isInteractive: true,
       lastVerifiedSource: 'schedule',
-      primaryAction: isLecturerRole(role) ? 'Quản lý phiên QR' : 'Mở điểm danh QR',
+      primaryAction: attendanceManager ? 'Quản lý phiên QR' : 'Mở điểm danh QR',
       route: '/services/attendance',
-      description: isLecturerRole(role)
-        ? 'Giảng viên mở và đóng phiên QR cho lớp được phân công.'
+      description: attendanceManager
+        ? 'Giảng viên, admin và super admin có thể mở/đóng phiên QR và theo dõi điểm danh.'
         : 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.',
     },
     {
@@ -385,7 +403,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'canteen',
       title: 'Canteen',
-      summary: isCanteenAdmin
+      summary: canteenManager
         ? 'Quản lý menu, đơn hàng và trạng thái phục vụ.'
         : 'Đặt món, thanh toán online và theo dõi hóa đơn.',
       category: 'Đời sống campus',
@@ -393,10 +411,10 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       supportState: 'live',
       isInteractive: true,
       lastVerifiedSource: 'payments',
-      primaryAction: isCanteenAdmin ? 'Mở quản trị canteen' : 'Mở menu canteen',
-      route: isCanteenAdmin ? '/services/canteen/admin' : '/services/canteen',
-      description: isCanteenAdmin
-        ? 'Quản trị canteen cập nhật món ăn, xem đơn và hoàn thành đơn đã thanh toán.'
+      primaryAction: canteenManager ? 'Mở quản trị canteen' : 'Mở menu canteen',
+      route: canteenManager ? '/services/canteen/admin' : '/services/canteen',
+      description: canteenManager
+        ? 'Canteen admin, admin và super admin có thể cập nhật menu, xem đơn và hoàn thành đơn.'
         : 'Sinh viên và giảng viên có thể đặt món, thanh toán và xem lịch sử hóa đơn.',
     },
     {

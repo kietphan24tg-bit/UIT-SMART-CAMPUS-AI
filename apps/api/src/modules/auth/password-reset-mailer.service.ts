@@ -24,23 +24,23 @@ export class PasswordResetMailerService {
       await transporter.sendMail({
         from,
         to: email,
-        subject: 'UIT Smart Campus | Ma OTP dat lai mat khau',
+        subject: 'UIT Smart Campus | Mã OTP đặt lại mật khẩu',
         text: [
-          'Ban da yeu cau dat lai mat khau cho tai khoan UIT Smart Campus.',
-          `Ma OTP cua ban la: ${otp}`,
-          `Ma co hieu luc trong ${expiresInMinutes} phut.`,
-          'Neu ban khong thuc hien yeu cau nay, vui long bo qua email.',
+          'Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản UIT Smart Campus.',
+          `Mã OTP của bạn là: ${otp}`,
+          `Mã có hiệu lực trong ${expiresInMinutes} phút.`,
+          'Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.',
         ].join('\n'),
         html: `
           <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
-            <p>Ban da yeu cau dat lai mat khau cho tai khoan <strong>UIT Smart Campus</strong>.</p>
+            <p>Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản <strong>UIT Smart Campus</strong>.</p>
             <p style="margin: 20px 0;">
               <span style="display: inline-block; padding: 12px 18px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; font-size: 24px; font-weight: 700; letter-spacing: 4px;">
                 ${otp}
               </span>
             </p>
-            <p>Ma OTP co hieu luc trong <strong>${expiresInMinutes} phut</strong>.</p>
-            <p>Neu ban khong thuc hien yeu cau nay, vui long bo qua email.</p>
+            <p>Mã OTP có hiệu lực trong <strong>${expiresInMinutes} phút</strong>.</p>
+            <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.</p>
           </div>
         `,
       });

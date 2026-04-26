@@ -4,17 +4,18 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, EmptyState, Screen, SkeletonBlock } from '@/components/ui';
 import {
   LecturerAttendanceScheduleCard,
   groupAttendanceCardsByDay,
   mapScheduleToAttendanceCards,
   resolveScheduleCardToClassSection,
 } from '@/app/services/attendance/lecturer-data';
+import { ContentStack, EmptyState, Screen, SkeletonBlock } from '@/components/ui';
 import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { attendanceApi } from '@/services/api/attendance';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { getDayLabel } from '@/utils/app';
+import { canManageAttendanceRole, getDayLabel, isLecturerRole } from '@/utils/app';
 
 export {
   groupAttendanceCardsByDay,
@@ -46,7 +47,6 @@ function ScheduleCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: false }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.scheduleCard,
@@ -78,7 +78,7 @@ function ScheduleCard({
           style={[
             styles.cardEyebrow,
             {
-              color: isUnlinked ? theme.colors.textSoft : theme.colors.warning,
+              color: isUnlinked ? theme.colors.warning : theme.colors.textSoft,
               fontFamily: theme.fonts.medium,
             },
           ]}
@@ -87,31 +87,36 @@ function ScheduleCard({
           {card.classCode ? ` · ${card.classCode}` : ''}
         </Text>
         <Text
-          style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}
+          style={[
+            styles.cardTitle,
+            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+          ]}
           numberOfLines={2}
         >
           {card.course.name}
         </Text>
         <Text
-          style={[styles.cardMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}
+          style={[
+            styles.cardMeta,
+            { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+          ]}
           numberOfLines={1}
         >
           {card.startTime} - {card.endTime} · {getRoomLabel(card.room)}
         </Text>
         {isUnlinked ? (
           <Text
-            style={[styles.cardHint, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}
+            style={[
+              styles.cardHint,
+              { color: theme.colors.danger, fontFamily: theme.fonts.medium },
+            ]}
           >
             Chưa liên kết dữ liệu điểm danh
           </Text>
         ) : null}
       </View>
 
-      <Ionicons
-        name="chevron-forward"
-        size={20}
-        color={theme.colors.textMuted}
-      />
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
     </Pressable>
   );
 }
@@ -119,25 +124,53 @@ function ScheduleCard({
 export default function LecturerAttendanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
+  const canManageAttendance = canManageAttendanceRole(role);
   const scheduleState = useScheduleScreenData();
 
   const classSectionsQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'class-sections'],
     queryFn: attendanceApi.getLecturerClassSections,
+    enabled: canManageAttendance,
   });
 
   const scheduleCards = React.useMemo(
     () => mapScheduleToAttendanceCards(scheduleState.schedule, classSectionsQuery.data ?? []),
     [classSectionsQuery.data, scheduleState.schedule],
   );
-  const groupedCards = React.useMemo(() => groupAttendanceCardsByDay(scheduleCards), [scheduleCards]);
+  const groupedCards = React.useMemo(
+    () => groupAttendanceCardsByDay(scheduleCards),
+    [scheduleCards],
+  );
+
+  if (!canManageAttendance) {
+    return (
+      <Screen>
+        <ContentStack narrow overlapHero={false}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Bạn không có quyền truy cập"
+            description="Màn hình này chỉ dành cho giảng viên, quản trị viên hoặc quản trị hệ thống."
+            actionLabel="Quay lại"
+            onActionPress={() => router.back()}
+          />
+        </ContentStack>
+      </Screen>
+    );
+  }
 
   const showScheduleLoading = scheduleState.isLoading;
-  const showEmptySchedule = !showScheduleLoading && !scheduleState.isError && scheduleCards.length === 0;
+  const showEmptySchedule =
+    !showScheduleLoading && !scheduleState.isError && scheduleCards.length === 0;
 
   return (
     <Screen>
-      <View style={[styles.headerRow, { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg }]}>
+      <View
+        style={[
+          styles.headerRow,
+          { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg },
+        ]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
@@ -146,7 +179,12 @@ export default function LecturerAttendanceScreen() {
         >
           <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+        <Text
+          style={[
+            styles.headerTitle,
+            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+          ]}
+        >
           Chọn lớp điểm danh QR
         </Text>
         <View style={styles.backHit} />
@@ -162,11 +200,22 @@ export default function LecturerAttendanceScreen() {
             },
           ]}
         >
-          <Text style={[styles.introTitle, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.introTitle,
+              { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+            ]}
+          >
             Danh sách lớp theo lịch học kỳ
           </Text>
-          <Text style={[styles.introBody, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-            Chọn một lớp để vào workspace điểm danh: tạo phiên QR, xem sinh viên, lịch sử và thống kê.
+          <Text
+            style={[
+              styles.introBody,
+              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+            ]}
+          >
+            Chọn một lớp để vào workspace điểm danh: tạo phiên QR, xem sinh viên, lịch sử
+            và thống kê.
           </Text>
         </View>
 
@@ -190,9 +239,13 @@ export default function LecturerAttendanceScreen() {
 
         {showEmptySchedule ? (
           <EmptyState
-            icon="calendar-clear-outline"
-            title="Chưa có lịch dạy trong học kỳ"
-            description="Danh sách lớp sẽ xuất hiện khi có lịch giảng dạy hiện tại."
+            icon="albums-outline"
+            title={isLecturerRole(role) ? 'Chưa có lớp được phân công' : 'Chưa có lớp học phần'}
+            description={
+              isLecturerRole(role)
+                ? 'Bạn chưa được gán lớp học phần nào.'
+                : 'Hiện chưa có lớp học phần khả dụng để quản lý.'
+            }
           />
         ) : null}
 
@@ -202,7 +255,10 @@ export default function LecturerAttendanceScreen() {
               {groupedCards.map((group) => (
                 <View key={group.dayOfWeek} style={styles.dayGroup}>
                   <Text
-                    style={[styles.dayHeading, { color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }]}
+                    style={[
+                      styles.dayHeading,
+                      { color: theme.colors.textSoft, fontFamily: theme.fonts.semibold },
+                    ]}
                   >
                     {getDayLabel(group.dayOfWeek)}
                   </Text>

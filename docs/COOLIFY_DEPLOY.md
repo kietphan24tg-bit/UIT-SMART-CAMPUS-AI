@@ -54,6 +54,7 @@ JWT_EXPIRATION=15m
 JWT_REFRESH_EXPIRATION=7d
 CORS_ORIGIN=https://<your-frontend-domain>
 APP_BASE_URL=https://<your-api-domain>
+REDIS_URL=redis://<host>:6379
 IOT_SHARED_SECRET=<secret-if-needed>
 ```
 

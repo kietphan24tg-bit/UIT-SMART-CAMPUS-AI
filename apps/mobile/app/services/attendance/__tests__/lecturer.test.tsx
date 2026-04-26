@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import { USER_ROLES } from '@smart-campus/shared';
 import React from 'react';
 
 import LecturerAttendanceScreen, {
@@ -8,6 +9,7 @@ import LecturerAttendanceScreen, {
 } from '../lecturer';
 
 import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
+import { useAuthStore } from '@/stores/auth-store';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -21,15 +23,13 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/hooks/use-schedule-screen');
+jest.mock('@/stores/auth-store');
 jest.mock('@tanstack/react-query', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
-  useMutation: jest.fn(),
-  useQueryClient: () => ({
-    invalidateQueries: jest.fn(),
-  }),
 }));
 
 const mockUseScheduleScreenData = useScheduleScreenData as unknown as jest.Mock;
+const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
 
 const scheduleData = [
   {
@@ -101,6 +101,17 @@ const classSections = [
   },
 ];
 
+function mockRole(role: string) {
+  mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+    selector({
+      user: {
+        id: 'user-1',
+        role,
+      },
+    }),
+  );
+}
+
 describe('lecturer attendance helpers', () => {
   it('matches class sections by priority order', () => {
     const matched = resolveScheduleCardToClassSection(scheduleData[0], classSections);
@@ -123,6 +134,7 @@ describe('lecturer attendance helpers', () => {
 describe('LecturerAttendanceScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRole(USER_ROLES.LECTURER);
 
     mockUseScheduleScreenData.mockReturnValue({
       semesters: [
@@ -144,40 +156,12 @@ describe('LecturerAttendanceScreen', () => {
       schedule: scheduleData,
     });
 
-    mockUseQuery.mockImplementation(({ queryKey, enabled }: { queryKey: unknown[]; enabled?: boolean }) => {
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       const key = queryKey.join(':');
 
       if (key === 'attendance:lecturer:class-sections') {
         return {
           data: classSections,
-          isLoading: false,
-          isError: false,
-          refetch: jest.fn(),
-        };
-      }
-
-      if (key.startsWith('attendance:lecturer:history')) {
-        return {
-          data: enabled
-            ? {
-                items: [],
-                meta: { total: 0, page: 1, limit: 10, totalPages: 0 },
-              }
-            : undefined,
-          isLoading: false,
-          isError: false,
-          refetch: jest.fn(),
-        };
-      }
-
-      if (key.startsWith('attendance:lecturer:records')) {
-        return {
-          data: enabled
-            ? {
-                items: [],
-                meta: { total: 0, page: 1, limit: 100, totalPages: 0 },
-              }
-            : undefined,
           isLoading: false,
           isError: false,
           refetch: jest.fn(),
@@ -193,7 +177,7 @@ describe('LecturerAttendanceScreen', () => {
     });
   });
 
-  it('renders schedule cards from lecturer mock schedule and auto-selects the first sorted card', () => {
+  it('renders schedule cards from lecturer mock schedule', () => {
     const { getAllByText, getByText } = render(<LecturerAttendanceScreen />);
 
     expect(getByText('Thứ ba')).toBeTruthy();
@@ -214,9 +198,43 @@ describe('LecturerAttendanceScreen', () => {
     });
   });
 
-  it('shows disabled state when a schedule card cannot be mapped to attendance data', () => {
+  it('shows warning state when a schedule card cannot be mapped to attendance data', () => {
     const { getAllByText } = render(<LecturerAttendanceScreen />);
 
     expect(getAllByText('Chưa liên kết dữ liệu điểm danh').length).toBeGreaterThan(0);
   });
+
+  it('shows an access denied state for unsupported roles', () => {
+    mockRole(USER_ROLES.CANTEEN_ADMIN);
+
+    const { getByText } = render(<LecturerAttendanceScreen />);
+
+    expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
+  });
+
+  it.each([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
+    'shows admin-friendly empty state for %s role',
+    (role) => {
+      mockRole(role);
+      mockUseScheduleScreenData.mockReturnValue({
+        semesters: [],
+        resolvedSemesterId: 'sem-current',
+        isLoading: false,
+        isError: false,
+        error: null,
+        refetch: jest.fn(),
+        schedule: [],
+      });
+      mockUseQuery.mockReturnValue({
+        data: [],
+        isLoading: false,
+        isError: false,
+        refetch: jest.fn(),
+      });
+
+      const { getByText } = render(<LecturerAttendanceScreen />);
+
+      expect(getByText('Chưa có lớp học phần')).toBeTruthy();
+    },
+  );
 });

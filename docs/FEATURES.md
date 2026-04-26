@@ -8,9 +8,28 @@ Smart Campus gồm **8 nhóm tính năng**, chia thành **3 giai đoạn** phát
 
 ## Phân quyền (Role-Based Access Control)
 
-Hệ thống có **4 vai trò** với quyền hạn khác nhau:
+Hệ thống có **5 vai trò chính thức** với quyền hạn khác nhau:
+- `student`
+- `lecturer`
+- `canteen_admin`
+- `admin`
+- `super_admin`
 
-### Bảng phân quyền tổng quan
+### Cập nhật RBAC hiện tại (04/2026)
+
+- `admin/super_admin` có toàn quyền trên các tính năng đã live.
+- Các năng lực chưa hoàn chỉnh được đánh dấu `upcoming/unsupported`, không coi là đã live.
+- `canteen_admin` là vai trò chuyên biệt cho canteen, không gộp vào `admin`.
+
+| Nhóm tính năng live | student | lecturer | canteen_admin | admin | super_admin |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Attendance management (`/attendance/session/*`, `/attendance/history`, `/attendance/lecturer/class-sections`) | ❌ | ✅ (scope lớp được phân công) | ❌ | ✅ | ✅ |
+| Attendance check-in QR (`/attendance/checkin`, mobile scan) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Canteen admin mutations (hoàn tất đơn, CRUD category/product) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Canteen consumer flow (đặt món/thanh toán cá nhân) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Grades trên mobile | ✅ `live` | ❌ `unsupported` | ❌ `unsupported` | ❌ `unsupported` | ❌ `unsupported` |
+
+### Bảng phân quyền tổng quan (roadmap tham khảo)
 
 | Tính năng / Hành động | Student | Lecturer | Admin | Super Admin |
 |------------------------|:-------:|:--------:|:-----:|:-----------:|

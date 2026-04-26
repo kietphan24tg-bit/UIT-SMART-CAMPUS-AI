@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
+import { AttendanceSessionStatus, EnrollmentStatus, Role } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -32,7 +32,7 @@ describe('AttendanceService', () => {
       status: AttendanceSessionStatus.active,
     });
 
-    const sessionStart = await service.startSession('lecturer-1', {
+    const sessionStart = await service.startSession('lecturer-1', Role.lecturer, {
       classSectionId,
       durationMinutes: 10,
     });
@@ -63,6 +63,7 @@ describe('AttendanceService', () => {
           useValue: {
             classSection: {
               findUnique: jest.fn(),
+              findMany: jest.fn(),
             },
             attendanceSession: {
               create: jest.fn(),
@@ -94,6 +95,9 @@ describe('AttendanceService', () => {
               if (key === 'APP_BASE_URL') {
                 return 'http://localhost:3000';
               }
+              if (key === 'REDIS_URL') {
+                return 'redis://localhost:6379';
+              }
               return defaultValue;
             }),
           },
@@ -107,16 +111,12 @@ describe('AttendanceService', () => {
 
   describe('checkin', () => {
     it('creates attendance record when token and session are valid', async () => {
-      const session = {
-        id: 'session-1',
-        classSectionId: 'section-1',
-      };
       (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue({
         id: 'enrollment-1',
       });
       (prisma.attendanceRecord.create as jest.Mock).mockResolvedValue({
         id: 'record-1',
-        sessionId: session.id,
+        sessionId: 'session-1',
         studentId: 'student-1',
         checkinTime: new Date(),
       });
@@ -127,7 +127,7 @@ describe('AttendanceService', () => {
       expect(result.studentId).toBe('student-1');
       expect(prisma.attendanceRecord.create).toHaveBeenCalledWith({
         data: {
-          sessionId: session.id,
+          sessionId: 'session-1',
           studentId: 'student-1',
         },
       });
@@ -196,12 +196,124 @@ describe('AttendanceService', () => {
       });
 
       await expect(
-        service.startSession('lecturer-1', {
+        service.startSession('lecturer-1', Role.lecturer, {
           classSectionId: 'section-1',
           durationMinutes: 10,
         }),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.attendanceSession.create).not.toHaveBeenCalled();
+    });
+
+    it('allows admin to start session for any class section and keep assigned lecturer', async () => {
+      const createdSession = {
+        id: 'session-1',
+        startedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+        status: AttendanceSessionStatus.active,
+      };
+      (prisma.classSection.findUnique as jest.Mock).mockResolvedValue({
+        id: 'section-1',
+        lecturerId: 'lecturer-2',
+      });
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.attendanceSession.create as jest.Mock).mockResolvedValue(createdSession);
+
+      await service.startSession('admin-1', Role.admin, {
+        classSectionId: 'section-1',
+        durationMinutes: 10,
+      });
+
+      expect(prisma.attendanceSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            classSectionId: 'section-1',
+            lecturerId: 'lecturer-2',
+          }),
+        }),
+      );
+    });
+
+    it('falls back to admin actor as session lecturer when class section has no lecturer', async () => {
+      const createdSession = {
+        id: 'session-2',
+        startedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+        status: AttendanceSessionStatus.active,
+      };
+      (prisma.classSection.findUnique as jest.Mock).mockResolvedValue({
+        id: 'section-1',
+        lecturerId: null,
+      });
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.attendanceSession.create as jest.Mock).mockResolvedValue(createdSession);
+
+      await service.startSession('admin-1', Role.admin, {
+        classSectionId: 'section-1',
+        durationMinutes: 10,
+      });
+
+      expect(prisma.attendanceSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            classSectionId: 'section-1',
+            lecturerId: 'admin-1',
+          }),
+        }),
+      );
+    });
+
+    it('rejects canteen_admin role on attendance management actions', async () => {
+      await expect(
+        service.startSession('canteen-admin-1', Role.canteen_admin, {
+          classSectionId: 'section-1',
+          durationMinutes: 10,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.classSection.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('management scope', () => {
+    beforeEach(() => {
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue({ id: 'session-1' });
+      (prisma.attendanceRecord.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.attendanceRecord.count as jest.Mock).mockResolvedValue(0);
+    });
+
+    it('scopes lecturer session records by lecturerId', async () => {
+      await service.getSessionRecords('session-1', 'lecturer-1', Role.lecturer, {
+        page: 1,
+        limit: 20,
+      });
+
+      expect(prisma.attendanceSession.findFirst).toHaveBeenCalledWith({
+        where: { id: 'session-1', lecturerId: 'lecturer-1' },
+        select: { id: true },
+      });
+    });
+
+    it('allows admin to query records for any session', async () => {
+      await service.getSessionRecords('session-1', 'admin-1', Role.admin, {
+        page: 1,
+        limit: 20,
+      });
+
+      expect(prisma.attendanceSession.findFirst).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        select: { id: true },
+      });
+    });
+
+    it('returns all class sections for super_admin in management list', async () => {
+      (prisma.classSection.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.getLecturerClassSections('super-admin-1', Role.super_admin);
+
+      expect(prisma.classSection.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {},
+        }),
+      );
     });
   });
 
@@ -232,6 +344,9 @@ describe('AttendanceService', () => {
   describe('exportSessionAttendance', () => {
     it('exports roster with present and absent students', async () => {
       (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+      });
+      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
         id: 'session-1',
         classSectionId: 'section-1',
         lecturerId: 'lecturer-1',
@@ -288,7 +403,11 @@ describe('AttendanceService', () => {
         },
       ]);
 
-      const result = await service.exportSessionAttendance('session-1', 'lecturer-1');
+      const result = await service.exportSessionAttendance(
+        'session-1',
+        'lecturer-1',
+        Role.lecturer,
+      );
 
       expect(result.fileName).toContain('attendance-SE346.Q21-');
       expect(result.fileName.endsWith('.xlsx')).toBe(true);
@@ -318,12 +437,37 @@ describe('AttendanceService', () => {
       });
     });
 
-    it('throws when session does not belong to lecturer', async () => {
-      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue(null);
+    it('allows admin to export a managed session outside lecturer scope', async () => {
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+      });
+      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+        classSectionId: 'section-1',
+        lecturerId: 'lecturer-2',
+        status: AttendanceSessionStatus.closed,
+        startedAt: new Date('2026-04-25T00:30:00.000Z'),
+        expiresAt: new Date('2026-04-25T00:45:00.000Z'),
+        classSection: {
+          id: 'section-1',
+          classCode: 'SE346.Q21',
+          sectionCode: 'Q21',
+          course: {
+            code: 'SE346',
+            name: 'Lap trinh tren thiet bi di dong',
+            credits: 4,
+          },
+        },
+        records: [],
+      });
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([]);
 
-      await expect(service.exportSessionAttendance('session-1', 'lecturer-1')).rejects.toThrow(
-        'Attendance session not found',
-      );
+      await service.exportSessionAttendance('session-1', 'admin-1', Role.admin);
+
+      expect(prisma.attendanceSession.findFirst).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        select: { id: true },
+      });
     });
   });
 });

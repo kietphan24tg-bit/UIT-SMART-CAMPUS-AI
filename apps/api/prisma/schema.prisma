@@ -291,7 +291,7 @@ model RoomBookingSlot {
 
   @@unique([bookingId, timeSlotId])
   @@unique([bookingId, slotOrder])
-  @@index([roomId, bookingDate, timeSlotId])
+  @@unique([roomId, bookingDate, timeSlotId])
   @@index([timeSlotId])
   @@map("room_booking_slots")
 }

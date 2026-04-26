@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { USER_ROLES } from '@smart-campus/shared';
 import React from 'react';
 
 import CanteenScreen from '../index';
@@ -53,26 +54,29 @@ describe('CanteenScreen', () => {
     mockCanteenApi.getMyOrders.mockResolvedValue([]);
   });
 
-  it('redirects canteen_admin to management screen CTA', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'canteen-admin-1', role: 'canteen_admin' },
-      }),
-    );
+  it.each([USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
+    'redirects %s to management screen CTA',
+    async (role) => {
+      mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+        selector({
+          user: { id: 'manager-1', role },
+        }),
+      );
 
-    const { getByText } = renderWithClient(<CanteenScreen />);
+      const { getByText } = renderWithClient(<CanteenScreen />);
 
-    fireEvent.press(getByText('Mở quản trị'));
+      fireEvent.press(getByText('Mở quản trị'));
 
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith('/services/canteen/admin');
-    });
-  });
+      await waitFor(() => {
+        expect(mockRouter.replace).toHaveBeenCalledWith('/services/canteen/admin');
+      });
+    },
+  );
 
   it('renders menu for student role', async () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
       selector({
-        user: { id: 'student-1', role: 'student' },
+        user: { id: 'student-1', role: USER_ROLES.STUDENT },
       }),
     );
     mockCanteenApi.getCatalog.mockResolvedValue([

@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { USER_ROLES } from '@smart-campus/shared';
 import { Camera, type PermissionResponse } from 'expo-camera';
-import { useFocusEffect, useRouter, Redirect } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AttendanceCtaButton } from '@/components/attendance/attendance-cta-button';
 import { ContentStack, Screen } from '@/components/ui';
-import { useEffectiveRole } from '@/hooks/use-effective-role';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { isLecturerRole } from '@/utils/app';
+import { canManageAttendanceRole } from '@/utils/app';
 
 const CAMERA_PERMISSION_FALLBACK = {
   status: 'undetermined',
@@ -21,12 +21,11 @@ const CAMERA_PERMISSION_FALLBACK = {
 export default function AttendanceHubScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  // const role = useAuthStore((state) => state.user?.role);
-  const role = useEffectiveRole();
+  const role = useAuthStore((state) => state.user?.role ?? USER_ROLES.STUDENT);
   const [cameraPerm, setCameraPerm] = useState<PermissionResponse | null>(null);
   const hubNavLockRef = useRef(false);
-  // Dev-only: bật true để giả lập "chưa cấp quyền camera" khi test UI.
-  const DEV_FORCE_CAMERA_PERMISSION_DENIED = false;
+  const devForceCameraPermissionDenied = false;
+
   const refreshCameraPermission = useCallback(() => {
     void Camera.getCameraPermissionsAsync()
       .then(setCameraPerm)
@@ -80,9 +79,9 @@ export default function AttendanceHubScreen() {
   }, [cameraPerm, router]);
 
   const hasCameraPermission =
-    !(__DEV__ && DEV_FORCE_CAMERA_PERMISSION_DENIED) && cameraPerm?.granted === true;
+    !(__DEV__ && devForceCameraPermissionDenied) && cameraPerm?.granted === true;
 
-  if (isLecturerRole(role)) {
+  if (canManageAttendanceRole(role)) {
     return <Redirect href="/services/attendance/lecturer" />;
   }
 
@@ -90,7 +89,12 @@ export default function AttendanceHubScreen() {
     return (
       <Screen>
         <ContentStack narrow overlapHero={false}>
-          <Text style={[styles.permissionDescription, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+          <Text
+            style={[
+              styles.permissionDescription,
+              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+            ]}
+          >
             Tính năng quét QR hiện chỉ dành cho tài khoản sinh viên.
           </Text>
         </ContentStack>
@@ -98,45 +102,14 @@ export default function AttendanceHubScreen() {
     );
   }
 
-  // Role guard placeholder (giữ lại trong comment theo yêu cầu):
-  // if (!isStudent) {
-  //   return (
-  //     <Screen>
-  //       <View style={[styles.headerRow, { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg }]}>
-  //         <Pressable
-  //           accessibilityRole="button"
-  //           accessibilityLabel="Quay lại"
-  //           onPress={() => router.back()}
-  //           style={styles.backHit}
-  //         >
-  //           <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
-  //         </Pressable>
-  //         <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-  //           Điểm danh QR
-  //         </Text>
-  //         <View style={styles.backHit} />
-  //       </View>
-  //       <ContentStack narrow overlapHero={false}>
-  //         <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-  //           {isLecturerRole(role)
-  //             ? 'Điểm danh bằng QR hiện dành cho sinh viên. Giảng viên có thể quản lý phiên điểm danh từ lịch giảng dạy.'
-  //             : 'Điểm danh bằng QR hiện dành cho sinh viên. Vui lòng đăng nhập tài khoản sinh viên để sử dụng.'}
-  //         </Text>
-  //         {isLecturerRole(role) ? (
-  //           <AttendanceCtaButton
-  //             label="Mở lịch giảng dạy"
-  //             onPress={() => router.push('/schedule/attendance-session' as never)}
-  //           />
-  //         ) : null}
-  //         <SecondaryButton label="Quay lại" onPress={() => router.back()} />
-  //       </ContentStack>
-  //     </Screen>
-  //   );
-  // }
-
   return (
     <Screen>
-      <View style={[styles.headerRow, { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg }]}>
+      <View
+        style={[
+          styles.headerRow,
+          { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg },
+        ]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
@@ -145,7 +118,12 @@ export default function AttendanceHubScreen() {
         >
           <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+        <Text
+          style={[
+            styles.headerTitle,
+            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+          ]}
+        >
           Quét QR điểm danh
         </Text>
         <View style={styles.backHit} />
@@ -164,10 +142,20 @@ export default function AttendanceHubScreen() {
           <View style={[styles.guideIcon, { backgroundColor: theme.colors.primary }]}>
             <Ionicons name="qr-code-outline" size={22} color={theme.colors.onPrimary} />
           </View>
-          <Text style={[styles.guideTitle, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.guideTitle,
+              { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+            ]}
+          >
             Hướng dẫn
           </Text>
-          <Text style={[styles.guideText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+          <Text
+            style={[
+              styles.guideText,
+              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+            ]}
+          >
             Quét mã QR trên màn hình lớp học.
           </Text>
         </View>
@@ -194,7 +182,12 @@ export default function AttendanceHubScreen() {
                 Sẵn sàng quét
               </Text>
             </View>
-            <Text style={[styles.readyHint, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.readyHint,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Đưa mã vào camera để bắt đầu
             </Text>
           </View>
@@ -208,13 +201,28 @@ export default function AttendanceHubScreen() {
               },
             ]}
           >
-            <View style={[styles.permissionIconWrap, { backgroundColor: theme.colors.dangerSurface }]}>
+            <View
+              style={[
+                styles.permissionIconWrap,
+                { backgroundColor: theme.colors.dangerSurface },
+              ]}
+            >
               <Ionicons name="videocam-off-outline" size={28} color={theme.colors.danger} />
             </View>
-            <Text style={[styles.permissionTitle, { color: theme.colors.danger, fontFamily: theme.fonts.semibold }]}>
+            <Text
+              style={[
+                styles.permissionTitle,
+                { color: theme.colors.danger, fontFamily: theme.fonts.semibold },
+              ]}
+            >
               Chưa có quyền camera
             </Text>
-            <Text style={[styles.permissionDescription, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.permissionDescription,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Vào Cài đặt {'>'} Ứng dụng {'>'} Camera để bật, sau đó quay lại đây.
             </Text>
             <Pressable
@@ -239,11 +247,18 @@ export default function AttendanceHubScreen() {
             { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
           ]}
         >
-          <Text style={[styles.historyTitle, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+          <Text
+            style={[
+              styles.historyTitle,
+              { color: theme.colors.text, fontFamily: theme.fonts.medium },
+            ]}
+          >
             Lịch sử điểm danh
           </Text>
           <View style={styles.historyRight}>
-            <Text style={{ color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }}>Mở</Text>
+            <Text style={{ color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }}>
+              Mở
+            </Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.textSoft} />
           </View>
         </Pressable>
@@ -286,7 +301,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   guideTitle: {
-    fontSize: 30 / 2,
+    fontSize: 15,
   },
   guideText: {
     fontSize: 14,
@@ -321,7 +336,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   permissionTitle: {
-    fontSize: 30 / 2,
+    fontSize: 15,
     textAlign: 'center',
   },
   permissionDescription: {

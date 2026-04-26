@@ -21,7 +21,7 @@ import {
 } from '@/services/api/canteen';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { formatCurrency } from '@/utils/app';
+import { canManageCanteenRole, formatCurrency, getRoleLabel } from '@/utils/app';
 
 type CartMap = Record<string, number>;
 
@@ -35,6 +35,7 @@ export default function CanteenScreen() {
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.user?.role);
   const consumer = isConsumerRole(role);
+  const canManageCanteen = canManageCanteenRole(role);
   const [cart, setCart] = useState<CartMap>({});
   const [note, setNote] = useState('');
 
@@ -83,14 +84,14 @@ export default function CanteenScreen() {
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const cartAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  if (role === USER_ROLES.CANTEEN_ADMIN) {
+  if (canManageCanteen) {
     return (
       <Screen>
         <TopHero
           eyebrow="Dịch vụ campus"
           title="Canteen"
-          subtitle="Tài khoản của bạn là quản trị canteen."
-          badge={{ label: 'Quản trị canteen', tone: 'info' }}
+          subtitle={`Tài khoản của bạn là ${getRoleLabel(role).toLowerCase()}.`}
+          badge={{ label: getRoleLabel(role), tone: 'info' }}
           variant="accent"
           showBrand
         />

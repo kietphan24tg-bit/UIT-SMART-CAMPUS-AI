@@ -15,7 +15,7 @@ import {
 import { canteenApi, type CanteenAdminOrderRecord } from '@/services/api/canteen';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { formatCurrency } from '@/utils/app';
+import { formatCurrency, getRoleLabel } from '@/utils/app';
 
 export default function CanteenAdminScreen() {
   const theme = useAppTheme();
@@ -76,7 +76,7 @@ export default function CanteenAdminScreen() {
         <TopHero
           eyebrow="Dịch vụ campus"
           title="Quản trị canteen"
-          subtitle="Khu vực này chỉ dành cho canteen admin."
+          subtitle="Khu vực này chỉ dành cho canteen admin, quản trị viên hoặc quản trị hệ thống."
           variant="accent"
           showBrand
         />
@@ -104,7 +104,7 @@ export default function CanteenAdminScreen() {
         eyebrow="Dịch vụ campus"
         title="Quản trị canteen"
         subtitle="Quản lý menu chung, lịch sử đơn và hoàn thành đơn hàng."
-        badge={{ label: 'Canteen admin', tone: 'info' }}
+        badge={{ label: getRoleLabel(role), tone: 'info' }}
         variant="accent"
         showBrand
       />

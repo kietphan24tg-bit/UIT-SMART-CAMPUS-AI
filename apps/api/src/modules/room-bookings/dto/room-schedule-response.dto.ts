@@ -41,6 +41,12 @@ export class RoomScheduleResponseDto {
   @ApiProperty({ example: 'B1.02' })
   roomCode!: string;
 
+  @ApiProperty({ example: 'B' })
+  buildingCode!: string;
+
+  @ApiProperty({ example: 'Tòa B' })
+  buildingName!: string;
+
   @ApiProperty({ example: 60 })
   capacity!: number;
 

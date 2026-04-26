@@ -9,11 +9,14 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AttendanceSession, Prisma } from '@prisma/client';
-import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
+import { AttendanceSessionStatus, EnrollmentStatus, Role } from '@prisma/client';
 import { API_PREFIX, PAGINATION_DEFAULTS } from '@smart-campus/shared';
+import { createClient } from 'redis';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -21,8 +24,6 @@ import type { CheckinAttendanceDto } from './dto/checkin-attendance.dto';
 import type { GetAttendanceHistoryDto } from './dto/get-attendance-history.dto';
 import type { GetSessionRecordsDto } from './dto/get-session-records.dto';
 import type { StartAttendanceSessionDto } from './dto/start-attendance-session.dto';
-
-const DEMO_ATTENDANCE_STUDENT_EMAIL = 'student@gm.uit.edu.vn';
 
 interface AttendanceTokenPayload {
   sessionId: string;
@@ -90,11 +91,15 @@ function sanitizeFileName(value: string) {
 }
 
 @Injectable()
-export class AttendanceService {
+export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   private readonly qrRefreshSeconds = 30;
   private readonly tokenTtlSeconds: number;
   private readonly checkinRateLimitSeconds = 2;
-  private readonly store = new Map<string, MemoryValue>();
+  private readonly memoryStore = new Map<string, MemoryValue>();
+
+  private readonly redisClient: ReturnType<typeof createClient>;
+
+  private redisEnabled = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -103,9 +108,30 @@ export class AttendanceService {
     this.tokenTtlSeconds = Number(
       this.configService.get<number>('ATTENDANCE_TOKEN_TTL_SECONDS', 90),
     );
+    this.redisClient = createClient({
+      url: this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
+    });
   }
 
-  async startSession(lecturerId: string, dto: StartAttendanceSessionDto) {
+  async onModuleInit() {
+    try {
+      if (!this.redisClient.isOpen) {
+        await this.redisClient.connect();
+      }
+      this.redisEnabled = this.redisClient.isOpen;
+    } catch {
+      this.redisEnabled = false;
+    }
+  }
+
+  async onModuleDestroy() {
+    if (this.redisClient.isOpen) {
+      await this.redisClient.quit();
+    }
+  }
+
+  async startSession(actorId: string, actorRole: Role, dto: StartAttendanceSessionDto) {
+    this.assertCanManageAttendance(actorRole);
     const classSection = await this.prisma.classSection.findUnique({
       where: { id: dto.classSectionId },
       select: { id: true, lecturerId: true },
@@ -115,9 +141,17 @@ export class AttendanceService {
       throw new NotFoundException('Class section not found');
     }
 
-    if (!classSection.lecturerId || classSection.lecturerId !== lecturerId) {
+    if (
+      !this.canManageAllAttendance(actorRole) &&
+      (!classSection.lecturerId || classSection.lecturerId !== actorId)
+    ) {
       throw new ForbiddenException('You are not assigned to this class section');
     }
+
+    const sessionLecturerId =
+      this.canManageAllAttendance(actorRole) && classSection.lecturerId
+        ? classSection.lecturerId
+        : actorId;
 
     const existingActiveSession = await this.prisma.attendanceSession.findFirst({
       where: {
@@ -140,7 +174,7 @@ export class AttendanceService {
     const session = await this.prisma.attendanceSession.create({
       data: {
         classSectionId: dto.classSectionId,
-        lecturerId,
+        lecturerId: sessionLecturerId,
         expiresAt,
       },
     });
@@ -150,7 +184,7 @@ export class AttendanceService {
       1,
       Math.ceil((expiresAt.getTime() - startedAt.getTime()) / 1000),
     );
-    this.setValue(this.buildDisplayKeyKey(session.id), displayKey, displayTtlSeconds);
+    await this.setStoreValue(this.buildDisplayKeyStoreKey(session.id), displayKey, displayTtlSeconds);
 
     const appBaseUrl = this.configService.get<string>('APP_BASE_URL', 'http://localhost:3000');
     const base = appBaseUrl.replace(/\/$/, '');
@@ -164,12 +198,13 @@ export class AttendanceService {
     };
   }
 
-  async stopSession(sessionId: string, lecturerId: string) {
-    const session = await this.prisma.attendanceSession.findFirst({
-      where: { id: sessionId, lecturerId },
+  async stopSession(sessionId: string, actorId: string, actorRole: Role) {
+    this.assertCanManageAttendance(actorRole);
+    const session = await this.prisma.attendanceSession.findUnique({
+      where: { id: sessionId },
     });
 
-    if (!session) {
+    if (!session || (!this.canManageAllAttendance(actorRole) && session.lecturerId !== actorId)) {
       throw new NotFoundException('Attendance session not found');
     }
 
@@ -215,7 +250,11 @@ export class AttendanceService {
       expiresAt: expiresAt.toISOString(),
     };
 
-    this.setValue(this.buildTokenKey(token), JSON.stringify(payload), this.tokenTtlSeconds);
+    await this.setStoreValue(
+      this.buildTokenKey(token),
+      JSON.stringify(payload),
+      this.tokenTtlSeconds,
+    );
 
     return {
       token,
@@ -237,10 +276,9 @@ export class AttendanceService {
     return this.renderLiveAttendanceHtml(sessionId, displayKey);
   }
 
-  async checkin(studentId: string | undefined, dto: CheckinAttendanceDto) {
-    const effectiveStudentId = await this.resolveCheckinStudentId(studentId);
-    await this.enforceCheckinRateLimit(effectiveStudentId);
-    const rawTokenPayload = this.getValue(this.buildTokenKey(dto.token));
+  async checkin(studentId: string, dto: CheckinAttendanceDto) {
+    await this.enforceCheckinRateLimit(studentId);
+    const rawTokenPayload = await this.getStoreValue(this.buildTokenKey(dto.token));
     if (!rawTokenPayload) {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
@@ -265,7 +303,7 @@ export class AttendanceService {
 
     const activeEnrollment = await this.prisma.classEnrollment.findFirst({
       where: {
-        studentId: effectiveStudentId,
+        studentId,
         classSectionId: activeSession.classSectionId,
         status: EnrollmentStatus.active,
       },
@@ -283,7 +321,7 @@ export class AttendanceService {
       const record = await this.prisma.attendanceRecord.create({
         data: {
           sessionId: activeSession.id,
-          studentId: effectiveStudentId,
+          studentId,
         },
       });
 
@@ -303,25 +341,13 @@ export class AttendanceService {
     }
   }
 
-  private async resolveCheckinStudentId(studentId?: string) {
-    if (studentId) {
-      return studentId;
-    }
-
-    const demoStudent = await this.prisma.user.findUnique({
-      where: { email: DEMO_ATTENDANCE_STUDENT_EMAIL },
-      select: { id: true },
-    });
-
-    if (!demoStudent) {
-      throw new NotFoundException('Demo attendance student not found');
-    }
-
-    return demoStudent.id;
-  }
-
-  async getSessionRecords(sessionId: string, lecturerId: string, query: GetSessionRecordsDto) {
-    await this.verifyLecturerOwnsSession(sessionId, lecturerId);
+  async getSessionRecords(
+    sessionId: string,
+    actorId: string,
+    actorRole: Role,
+    query: GetSessionRecordsDto,
+  ) {
+    await this.verifySessionAccessByRole(sessionId, actorId, actorRole);
 
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
     const limit = Math.min(
@@ -366,9 +392,11 @@ export class AttendanceService {
     };
   }
 
-  async exportSessionAttendance(sessionId: string, lecturerId: string) {
-    const session = await this.prisma.attendanceSession.findFirst({
-      where: { id: sessionId, lecturerId },
+  async exportSessionAttendance(sessionId: string, actorId: string, actorRole: Role) {
+    await this.verifySessionAccessByRole(sessionId, actorId, actorRole);
+
+    const session = await this.prisma.attendanceSession.findUnique({
+      where: { id: sessionId },
       include: {
         classSection: {
           select: {
@@ -431,7 +459,8 @@ export class AttendanceService {
     return this.buildAttendanceExportWorkbook(session, roster);
   }
 
-  async getHistory(lecturerId: string, query: GetAttendanceHistoryDto) {
+  async getHistory(actorId: string, actorRole: Role, query: GetAttendanceHistoryDto) {
+    this.assertCanManageAttendance(actorRole);
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
     const limit = Math.min(
       Math.max(query.limit ?? PAGINATION_DEFAULTS.LIMIT, 1),
@@ -440,8 +469,8 @@ export class AttendanceService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.AttendanceSessionWhereInput = {
-      lecturerId,
       classSectionId: query.classSectionId,
+      ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
     };
 
     if (query.date) {
@@ -496,10 +525,11 @@ export class AttendanceService {
     };
   }
 
-  async getLecturerClassSections(lecturerId: string) {
+  async getLecturerClassSections(actorId: string, actorRole: Role) {
+    this.assertCanManageAttendance(actorRole);
     const sections = await this.prisma.classSection.findMany({
       where: {
-        lecturerId,
+        ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
       },
       include: {
         course: {
@@ -619,9 +649,17 @@ export class AttendanceService {
     };
   }
 
-  private async verifyLecturerOwnsSession(sessionId: string, lecturerId: string) {
+  private async verifySessionAccessByRole(
+    sessionId: string,
+    actorId: string,
+    actorRole: Role,
+  ) {
+    this.assertCanManageAttendance(actorRole);
     const session = await this.prisma.attendanceSession.findFirst({
-      where: { id: sessionId, lecturerId },
+      where: {
+        id: sessionId,
+        ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
+      },
       select: { id: true },
     });
 
@@ -741,8 +779,22 @@ export class AttendanceService {
     };
   }
 
+  private canManageAllAttendance(role: Role) {
+    return role === Role.admin || role === Role.super_admin;
+  }
+
+  private assertCanManageAttendance(role: Role) {
+    if (role !== Role.lecturer && role !== Role.admin && role !== Role.super_admin) {
+      throw new ForbiddenException('You are not allowed to manage attendance');
+    }
+  }
+
   private buildTokenKey(token: string) {
     return `attendance:token:${token}`;
+  }
+
+  private buildDisplayKeyStoreKey(sessionId: string) {
+    return `attendance:display:${sessionId}`;
   }
 
   private buildCheckinRateLimitKey(studentId: string) {
@@ -750,14 +802,13 @@ export class AttendanceService {
   }
 
   private async enforceCheckinRateLimit(studentId: string) {
-    const result = this.setValue(
+    const allowed = await this.setStoreValueIfAbsent(
       this.buildCheckinRateLimitKey(studentId),
       '1',
       this.checkinRateLimitSeconds,
-      true,
     );
 
-    if (!result) {
+    if (!allowed) {
       throw new HttpException(
         {
           code: 'RATE_LIMITED',
@@ -807,10 +858,6 @@ export class AttendanceService {
     });
   }
 
-  private buildDisplayKeyKey(sessionId: string) {
-    return `attendance:display:${sessionId}`;
-  }
-
   private assertDisplayKeyPresent(displayKey: string | undefined): asserts displayKey is string {
     if (!displayKey || !String(displayKey).trim()) {
       throw new ForbiddenException('Invalid displayKey');
@@ -818,18 +865,20 @@ export class AttendanceService {
   }
 
   private async validateDisplayKeyOrThrow(sessionId: string, displayKey: string) {
-    const stored = this.getValue(this.buildDisplayKeyKey(sessionId));
+    const stored = await this.getStoreValue(this.buildDisplayKeyStoreKey(sessionId));
     if (!stored || stored !== displayKey) {
       throw new ForbiddenException('Invalid displayKey');
     }
   }
 
   private async revokeDisplayKeyForSession(sessionId: string) {
-    this.deleteValue(this.buildDisplayKeyKey(sessionId));
+    await this.deleteStoreValue(this.buildDisplayKeyStoreKey(sessionId));
   }
 
   private renderLiveAttendanceHtml(sessionId: string, displayKey: string) {
-    const appBaseUrl = this.configService.get<string>('APP_BASE_URL', 'http://localhost:3000').replace(/\/$/, '');
+    const appBaseUrl = this.configService
+      .get<string>('APP_BASE_URL', 'http://localhost:3000')
+      .replace(/\/$/, '');
     const clientConfig = {
       sessionId,
       displayKey,
@@ -860,7 +909,7 @@ export class AttendanceService {
   <h1 id="title">Attendance</h1>
   <p class="sub" id="subtitle"></p>
   <div id="qr-wrap"><canvas id="qr" width="280" height="280" aria-label="Attendance QR code"></canvas></div>
-  <p id="status">Loading…</p>
+  <p id="status">Loading...</p>
   <script>
     (function () {
       var cfg = ${configJson};
@@ -929,6 +978,64 @@ export class AttendanceService {
 </html>`;
   }
 
+  private async setStoreValue(key: string, value: string, ttlSeconds: number) {
+    if (this.redisEnabled) {
+      await this.redisClient.set(key, value, { EX: ttlSeconds });
+      return;
+    }
+
+    this.memoryStore.set(key, {
+      value,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+  }
+
+  private async setStoreValueIfAbsent(key: string, value: string, ttlSeconds: number) {
+    if (this.redisEnabled) {
+      const result = await this.redisClient.set(key, value, {
+        EX: ttlSeconds,
+        NX: true,
+      });
+      return result === 'OK';
+    }
+
+    this.cleanupExpiredKey(key);
+    if (this.memoryStore.has(key)) {
+      return false;
+    }
+
+    this.memoryStore.set(key, {
+      value,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+    return true;
+  }
+
+  private async getStoreValue(key: string) {
+    if (this.redisEnabled) {
+      return this.redisClient.get(key);
+    }
+
+    this.cleanupExpiredKey(key);
+    return this.memoryStore.get(key)?.value ?? null;
+  }
+
+  private async deleteStoreValue(key: string) {
+    if (this.redisEnabled) {
+      await this.redisClient.del(key);
+      return;
+    }
+
+    this.memoryStore.delete(key);
+  }
+
+  private cleanupExpiredKey(key: string) {
+    const entry = this.memoryStore.get(key);
+    if (entry && entry.expiresAt <= Date.now()) {
+      this.memoryStore.delete(key);
+    }
+  }
+
   private isUniqueConstraintError(error: unknown): boolean {
     return Boolean(
       error &&
@@ -937,33 +1044,5 @@ export class AttendanceService {
         typeof (error as { code?: unknown }).code === 'string' &&
         (error as { code: string }).code === 'P2002',
     );
-  }
-
-  private setValue(key: string, value: string, ttlSeconds: number, onlyIfAbsent = false) {
-    this.cleanupExpiredKey(key);
-    if (onlyIfAbsent && this.store.has(key)) {
-      return false;
-    }
-    this.store.set(key, {
-      value,
-      expiresAt: Date.now() + ttlSeconds * 1000,
-    });
-    return true;
-  }
-
-  private getValue(key: string) {
-    this.cleanupExpiredKey(key);
-    return this.store.get(key)?.value ?? null;
-  }
-
-  private deleteValue(key: string) {
-    this.store.delete(key);
-  }
-
-  private cleanupExpiredKey(key: string) {
-    const entry = this.store.get(key);
-    if (entry && entry.expiresAt <= Date.now()) {
-      this.store.delete(key);
-    }
   }
 }

@@ -34,15 +34,19 @@
 
 > Xem roadmap chi tiết, user stories và phân quyền tại [docs/FEATURES.md](docs/FEATURES.md)
 
-### Phân quyền (4 vai trò)
+### Phân quyền (5 vai trò)
 
 
 | Vai trò            | Mô tả                                                            |
 | ------------------ | ---------------------------------------------------------------- |
 | 🎓 **Student**     | Xem TKB, điểm, thông báo, ĐKMH, đặt phòng, chatbot, điểm danh QR |
 | 👨‍🏫 **Lecturer** | Quản lý lớp, nhập điểm, tạo QR điểm danh, gửi thông báo          |
+| 🍽️ **Canteen Admin** | Quản lý menu canteen, đơn hàng và hoàn tất đơn đã thanh toán     |
 | 🏫 **Admin**       | Quản lý users, courses, sự kiện, phòng, thư viện, bãi xe         |
 | 🔑 **Super Admin** | Toàn quyền hệ thống, cấu hình IoT                                |
+
+> Quy ước hiện tại: `admin/super_admin` có toàn quyền trên các tính năng đã live.
+> Các năng lực chưa hoàn thiện được hiển thị là `Sắp triển khai`/`unsupported`, không coi là đã live.
 
 
 ## Tech Stack

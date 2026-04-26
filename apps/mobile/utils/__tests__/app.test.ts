@@ -30,9 +30,12 @@ describe('app utils', () => {
   it('should route new live services by role', () => {
     const studentEntries = getServiceEntries('student');
     const canteenAdminEntries = getServiceEntries('canteen_admin');
+    const adminEntries = getServiceEntries('admin');
 
     const studentCanteen = studentEntries.find((item) => item.id === 'canteen');
     const adminCanteen = canteenAdminEntries.find((item) => item.id === 'canteen');
+    const operatorCanteen = adminEntries.find((item) => item.id === 'canteen');
+    const operatorAttendance = adminEntries.find((item) => item.id === 'attendance');
     const library = studentEntries.find((item) => item.id === 'library');
     const chatbot = studentEntries.find((item) => item.id === 'chatbot');
     const sos = studentEntries.find((item) => item.id === 'gps-sos');
@@ -40,8 +43,30 @@ describe('app utils', () => {
     expect(studentCanteen?.supportState).toBe('live');
     expect(studentCanteen?.route).toBe('/services/canteen');
     expect(adminCanteen?.route).toBe('/services/canteen/admin');
+    expect(operatorCanteen?.route).toBe('/services/canteen/admin');
+    expect(operatorAttendance?.route).toBe('/services/attendance');
     expect(library?.supportState).toBe('live');
     expect(chatbot?.supportState).toBe('live');
     expect(sos?.route).toBe('/services/gps-sos');
+  });
+
+  it('should keep grades live for student only', () => {
+    const studentGrades = getServiceEntries('student').find((item) => item.id === 'grades');
+    const lecturerGrades = getServiceEntries('lecturer').find((item) => item.id === 'grades');
+    const adminGrades = getServiceEntries('admin').find((item) => item.id === 'grades');
+    const superAdminGrades = getServiceEntries('super_admin').find((item) => item.id === 'grades');
+
+    expect(studentGrades?.supportState).toBe('live');
+    expect(studentGrades?.isInteractive).toBe(true);
+    expect(studentGrades?.route).toBe('/services/grades');
+
+    expect(lecturerGrades?.supportState).toBe('unsupported');
+    expect(lecturerGrades?.isInteractive).toBe(false);
+
+    expect(adminGrades?.supportState).toBe('unsupported');
+    expect(adminGrades?.isInteractive).toBe(false);
+
+    expect(superAdminGrades?.supportState).toBe('unsupported');
+    expect(superAdminGrades?.isInteractive).toBe(false);
   });
 });

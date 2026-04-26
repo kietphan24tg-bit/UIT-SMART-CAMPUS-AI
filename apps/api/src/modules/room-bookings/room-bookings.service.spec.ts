@@ -3,35 +3,85 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-
-import { PrismaService } from '../../database/prisma.service';
 
 import { RoomBookingsService } from './room-bookings.service';
 
+const slot1 = {
+  id: 'slot-1',
+  slotNumber: 1,
+  label: 'Tiết 1',
+  startTime: '07:30',
+  endTime: '08:15',
+};
+
+const slot2 = {
+  id: 'slot-2',
+  slotNumber: 2,
+  label: 'Tiết 2',
+  startTime: '08:15',
+  endTime: '09:00',
+};
+
+const slot4 = {
+  id: 'slot-4',
+  slotNumber: 4,
+  label: 'Tiết 4',
+  startTime: '10:00',
+  endTime: '10:45',
+};
+
 describe('RoomBookingsService', () => {
   let service: RoomBookingsService;
-  let prisma: jest.Mocked<PrismaService>;
+  let prisma: {
+    timeSlot: {
+      findMany: jest.Mock;
+    };
+    room: {
+      findFirst: jest.Mock;
+      findMany: jest.Mock;
+    };
+    roomBooking: {
+      findUnique: jest.Mock;
+      update: jest.Mock;
+    };
+    roomBookingSlot: {
+      findFirst: jest.Mock;
+      findMany: jest.Mock;
+      create: jest.Mock;
+    };
+    building: {
+      findMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
+  };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.useFakeTimers();
 
-    const module = await Test.createTestingModule({
-      providers: [
-        RoomBookingsService,
-        {
-          provide: PrismaService,
-          useValue: {
-            timeSlot: { findMany: jest.fn(), findUnique: jest.fn() },
-            room: { findMany: jest.fn(), findFirst: jest.fn() },
-            roomBooking: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
-          },
-        },
-      ],
-    }).compile();
+    prisma = {
+      timeSlot: {
+        findMany: jest.fn(),
+      },
+      room: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
+      roomBooking: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      roomBookingSlot: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+      },
+      building: {
+        findMany: jest.fn(),
+      },
+      $transaction: jest.fn(),
+    };
 
-    service = module.get(RoomBookingsService);
-    prisma = module.get(PrismaService);
+    service = new RoomBookingsService(prisma as never);
   });
 
   afterEach(() => {
@@ -43,198 +93,222 @@ describe('RoomBookingsService', () => {
       jest.setSystemTime(new Date('2026-04-22T10:00:00.000Z'));
     });
 
-    it('should create a room booking with pending status', async () => {
-      (prisma.room.findFirst as jest.Mock)
-        .mockResolvedValueOnce({ id: 'room-1', roomCode: 'B1.02' });
-      (prisma.timeSlot.findUnique as jest.Mock).mockResolvedValue({
-        id: 'slot-1',
-        startTime: '07:30',
-        endTime: '08:15',
-      });
-      (prisma.roomBooking.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.roomBooking.create as jest.Mock).mockResolvedValue({
+    it('creates a multi-slot booking and returns the mapped booking payload', async () => {
+      const tx = {
+        roomBooking: {
+          create: jest.fn().mockResolvedValue({ id: 'booking-1' }),
+        },
+        roomBookingSlot: {
+          create: jest.fn().mockResolvedValue(undefined),
+        },
+      };
+      const expectedBooking = {
         id: 'booking-1',
-        bookingDate: new Date('2026-04-29T00:00:00.000Z'),
-        timeSlotId: 'slot-1',
+        roomCode: 'B1.02',
+        roomName: null,
+        buildingCode: 'B',
+        buildingName: 'Tòa B',
+        bookingDate: '2026-04-29',
+        timeSlotIds: ['slot-1', 'slot-2'],
+        timeSlots: [slot1, slot2],
+        slotCount: 2,
+        startTime: '07:30',
+        endTime: '09:00',
         title: 'SE346 Team Meeting',
-        purpose: 'Hoc nhom',
+        purpose: 'Học nhóm',
         attendeeCount: 5,
         contactName: 'Nguyen Van A',
         contactPhone: '0901234567',
-        departmentName: 'Khoa Cong nghe phan mem',
+        departmentName: 'Khoa Công nghệ phần mềm',
+        notes: null,
+        approvedAt: null,
         status: 'pending',
-        createdAt: new Date('2026-04-23T10:00:00.000Z'),
-      });
+        createdAt: '2026-04-23T10:00:00.000Z',
+      };
+
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.roomBookingSlot.findFirst.mockResolvedValue(null);
+      prisma.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      );
+      jest
+        .spyOn(service as never, 'getBookingById' as never)
+        .mockResolvedValue(expectedBooking);
 
       const result = await service.createRoomBooking('user-1', {
         roomCode: 'b1.02',
         bookingDate: '2026-04-29',
-        timeSlotId: 'slot-1',
+        timeSlotIds: ['slot-1', 'slot-2'],
         title: 'SE346 Team Meeting',
-        purpose: 'Hoc nhom',
+        purpose: 'Học nhóm',
         contactName: 'Nguyen Van A',
         attendeeCount: 5,
         contactPhone: '0901234567',
-        departmentName: 'Khoa Cong nghe phan mem',
+        departmentName: 'Khoa Công nghệ phần mềm',
       });
 
-      expect(prisma.roomBooking.create).toHaveBeenCalledWith({
+      expect(tx.roomBooking.create).toHaveBeenCalledWith({
         data: {
           roomId: 'room-1',
           userId: 'user-1',
           bookingDate: new Date('2026-04-29T00:00:00.000Z'),
           timeSlotId: 'slot-1',
           startTime: '07:30',
-          endTime: '08:15',
+          endTime: '09:00',
           title: 'SE346 Team Meeting',
-          purpose: 'Hoc nhom',
+          purpose: 'Học nhóm',
           attendeeCount: 5,
           contactName: 'Nguyen Van A',
           contactPhone: '0901234567',
-          departmentName: 'Khoa Cong nghe phan mem',
+          departmentName: 'Khoa Công nghệ phần mềm',
           status: 'pending',
         },
-        select: {
-          id: true,
-          bookingDate: true,
-          timeSlotId: true,
-          title: true,
-          purpose: true,
-          attendeeCount: true,
-          contactName: true,
-          contactPhone: true,
-          departmentName: true,
-          status: true,
-          createdAt: true,
+        select: { id: true },
+      });
+      expect(tx.roomBookingSlot.create).toHaveBeenNthCalledWith(1, {
+        data: {
+          bookingId: 'booking-1',
+          roomId: 'room-1',
+          bookingDate: new Date('2026-04-29T00:00:00.000Z'),
+          timeSlotId: 'slot-1',
+          slotOrder: 1,
         },
       });
-      expect(result).toEqual({
-        id: 'booking-1',
-        roomCode: 'B1.02',
-        bookingDate: '2026-04-29',
-        timeSlotId: 'slot-1',
-        title: 'SE346 Team Meeting',
-        purpose: 'Hoc nhom',
-        attendeeCount: 5,
-        contactName: 'Nguyen Van A',
-        contactPhone: '0901234567',
-        departmentName: 'Khoa Cong nghe phan mem',
-        status: 'pending',
-        createdAt: '2026-04-23T10:00:00.000Z',
+      expect(tx.roomBookingSlot.create).toHaveBeenNthCalledWith(2, {
+        data: {
+          bookingId: 'booking-1',
+          roomId: 'room-1',
+          bookingDate: new Date('2026-04-29T00:00:00.000Z'),
+          timeSlotId: 'slot-2',
+          slotOrder: 2,
+        },
       });
+      expect(result).toEqual(expectedBooking);
     });
 
-    it('should reject invalid bookingDate format', async () => {
+    it('rejects invalid bookingDate format', async () => {
       await expect(
         service.createRoomBooking('user-1', {
           roomCode: 'B1.02',
           bookingDate: '2026-04-24T00:00:00.000Z',
-          timeSlotId: 'slot-1',
-          purpose: 'Hoc nhom',
+          timeSlotIds: ['slot-1'],
+          purpose: 'Học nhóm',
           contactName: 'Nguyen Van A',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should reject when room is not found', async () => {
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.timeSlot.findUnique as jest.Mock).mockResolvedValue({
-        id: 'slot-1',
-        startTime: '07:30',
-        endTime: '08:15',
-      });
-
-      await expect(
-        service.createRoomBooking('user-1', {
-          roomCode: 'B1.02',
-          bookingDate: '2026-04-29',
-          timeSlotId: 'slot-1',
-          purpose: 'Hoc nhom',
-          contactName: 'Nguyen Van A',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should reject when time slot is not found', async () => {
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue({
-        id: 'room-1',
-        roomCode: 'B1.02',
-      });
-      (prisma.timeSlot.findUnique as jest.Mock).mockResolvedValue(null);
-
-      await expect(
-        service.createRoomBooking('user-1', {
-          roomCode: 'B1.02',
-          bookingDate: '2026-04-29',
-          timeSlotId: 'slot-1',
-          purpose: 'Hoc nhom',
-          contactName: 'Nguyen Van A',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should reject when bookingDate is before the first bookable week', async () => {
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue({
-        id: 'room-1',
-        roomCode: 'B1.02',
-      });
-      (prisma.timeSlot.findUnique as jest.Mock).mockResolvedValue({
-        id: 'slot-1',
-        startTime: '07:30',
-        endTime: '08:15',
-      });
+    it('rejects booking dates before the first bookable week', async () => {
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1]);
 
       await expect(
         service.createRoomBooking('user-1', {
           roomCode: 'B1.02',
           bookingDate: '2026-04-24',
-          timeSlotId: 'slot-1',
-          purpose: 'Hoc nhom',
+          timeSlotIds: ['slot-1'],
+          purpose: 'Học nhóm',
           contactName: 'Nguyen Van A',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should reject when the room slot already has a booking', async () => {
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue({
-        id: 'room-1',
-        roomCode: 'B1.02',
-      });
-      (prisma.timeSlot.findUnique as jest.Mock).mockResolvedValue({
-        id: 'slot-1',
-        startTime: '07:30',
-        endTime: '08:15',
-      });
-      (prisma.roomBooking.findFirst as jest.Mock).mockResolvedValue({ id: 'booking-1' });
+    it('rejects time slots submitted out of order', async () => {
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
 
       await expect(
         service.createRoomBooking('user-1', {
           roomCode: 'B1.02',
           bookingDate: '2026-04-29',
-          timeSlotId: 'slot-1',
-          purpose: 'Hoc nhom',
+          timeSlotIds: ['slot-2', 'slot-1'],
+          purpose: 'Học nhóm',
           contactName: 'Nguyen Van A',
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects non-contiguous time slots', async () => {
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot4]);
+
+      await expect(
+        service.createRoomBooking('user-1', {
+          roomCode: 'B1.02',
+          bookingDate: '2026-04-29',
+          timeSlotIds: ['slot-1', 'slot-4'],
+          purpose: 'Học nhóm',
+          contactName: 'Nguyen Van A',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects when one of the selected slots is already booked', async () => {
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.roomBookingSlot.findFirst.mockResolvedValue({
+        timeSlot: { label: 'Tiết 2' },
+      });
+
+      await expect(
+        service.createRoomBooking('user-1', {
+          roomCode: 'B1.02',
+          bookingDate: '2026-04-29',
+          timeSlotIds: ['slot-1', 'slot-2'],
+          purpose: 'Học nhóm',
+          contactName: 'Nguyen Van A',
+        }),
+      ).rejects.toThrow(new ConflictException('Khung giờ Tiết 2 đã có yêu cầu đặt phòng.'));
+    });
+
+    it('maps unique-constraint races to ConflictException', async () => {
+      const tx = {
+        roomBooking: {
+          create: jest.fn().mockResolvedValue({ id: 'booking-1' }),
+        },
+        roomBookingSlot: {
+          create: jest.fn(),
+        },
+      };
+
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.roomBookingSlot.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          timeSlot: { label: 'Tiết 1' },
+        });
+      prisma.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) => {
+        await callback(tx);
+        throw { code: 'P2002' };
+      });
+
+      await expect(
+        service.createRoomBooking('user-1', {
+          roomCode: 'B1.02',
+          bookingDate: '2026-04-29',
+          timeSlotIds: ['slot-1', 'slot-2'],
+          purpose: 'Học nhóm',
+          contactName: 'Nguyen Van A',
+        }),
+      ).rejects.toThrow(new ConflictException('Khung giờ Tiết 1 đã có yêu cầu đặt phòng.'));
     });
   });
 
-  it('should return rooms in a building sorted by natural room code order', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-      { id: 'slot-2', slotNumber: 2, startTime: '08:15', endTime: '09:00' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B1.10', capacity: 70, roomBookings: [] },
-      { roomCode: 'B1.02', capacity: 60, roomBookings: [{ id: 'booking-1' }] },
-      { roomCode: 'B1.01', capacity: 60, roomBookings: [] },
-    ]);
+  describe('getBuildingRooms', () => {
+    it('uses roomBookingSlots for the current time slot and sorts room codes naturally', async () => {
+      jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.room.findMany.mockResolvedValue([
+        { roomCode: 'B1.10', capacity: 70, roomBookingSlots: [] },
+        { roomCode: 'B1.02', capacity: 60, roomBookingSlots: [{ id: 'booking-slot-1' }] },
+        { roomCode: 'B1.01', capacity: 60, roomBookingSlots: [] },
+      ]);
 
-    const result = await service.getBuildingRooms('b');
+      const result = await service.getBuildingRooms('b');
 
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expect(prisma.room.findMany).toHaveBeenCalledWith({
         where: {
           status: 'active',
           floor: {
@@ -246,362 +320,155 @@ describe('RoomBookingsService', () => {
         select: {
           roomCode: true,
           capacity: true,
-          roomBookings: {
+          roomBookingSlots: {
             where: {
               bookingDate: new Date('2026-04-22T00:00:00.000Z'),
-              status: { in: ['approved', 'booked', 'maintenance'] },
               timeSlotId: 'slot-1',
+              booking: {
+                status: { in: ['approved', 'booked', 'maintenance'] },
+              },
             },
             select: { id: true },
           },
         },
-      }),
-    );
-    expect(result).toEqual([
-      { roomCode: 'B1.01', capacity: 60, status: 'Trống hiện tại' },
-      { roomCode: 'B1.02', capacity: 60, status: 'Đang được sử dụng' },
-      { roomCode: 'B1.10', capacity: 70, status: 'Trống hiện tại' },
-    ]);
-  });
-
-  it('should return available when there is no occupying booking in the current time slot', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B1.02', capacity: 60, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B');
-
-    expect(result).toEqual([
-      { roomCode: 'B1.02', capacity: 60, status: 'Trống hiện tại' },
-    ]);
-  });
-
-  it('should query only occupying statuses for the current time slot', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-      { id: 'slot-2', slotNumber: 2, startTime: '08:15', endTime: '09:00' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B1.02', capacity: 60, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B');
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({
-          roomBookings: expect.objectContaining({
-            where: expect.objectContaining({
-              timeSlotId: 'slot-1',
-            }),
-          }),
-        }),
-      }),
-    );
-    expect(result[0]?.status).toBe('Trống hiện tại');
-  });
-
-  it('should return available when a booking has no time slot id', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B1.02', capacity: 60, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B');
-
-    expect(result[0]).toEqual({
-      roomCode: 'B1.02',
-      capacity: 60,
-      status: 'Trống hiện tại',
+      });
+      expect(result).toEqual([
+        { roomCode: 'B1.01', capacity: 60, status: 'Trống hiện tại' },
+        { roomCode: 'B1.02', capacity: 60, status: 'Đang được sử dụng' },
+        { roomCode: 'B1.10', capacity: 70, status: 'Trống hiện tại' },
+      ]);
     });
   });
 
-  it('should return available for all rooms when the current time does not match any time slot', async () => {
-    jest.setSystemTime(new Date('2026-04-22T02:50:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-      { id: 'slot-2', slotNumber: 2, startTime: '08:15', endTime: '09:00' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B1.02', capacity: 60, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B');
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: {
-          roomCode: true,
-          capacity: true,
-          roomBookings: false,
-        },
-      }),
-    );
-    expect(result).toEqual([
-      { roomCode: 'B1.02', capacity: 60, status: 'Trống hiện tại' },
-    ]);
-  });
-
-  it('should query only active rooms', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([]);
-
-    await service.getBuildingRooms('B');
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: 'active',
-        }),
-      }),
-    );
-  });
-
-  it('should filter rooms by floor number', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B3.10', capacity: 80, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B', { floorNumber: 3 });
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          floor: expect.objectContaining({
-            floorNumber: 3,
-          }),
-        }),
-      }),
-    );
-    expect(result).toEqual([
-      { roomCode: 'B3.10', capacity: 80, status: 'Trống hiện tại' },
-    ]);
-  });
-
-  it('should filter rooms by minimum capacity', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B3.14', capacity: 140, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B', { minCapacity: 80 });
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          capacity: { gte: 80 },
-        }),
-      }),
-    );
-    expect(result).toEqual([
-      { roomCode: 'B3.14', capacity: 140, status: 'Trống hiện tại' },
-    ]);
-  });
-
-  it('should combine floor and minimum capacity filters', async () => {
-    jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-    (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-      { id: 'slot-1', slotNumber: 1, startTime: '07:30', endTime: '08:15' },
-    ]);
-    (prisma.room.findMany as jest.Mock).mockResolvedValue([
-      { roomCode: 'B3.14', capacity: 140, roomBookings: [] },
-    ]);
-
-    const result = await service.getBuildingRooms('B', {
-      floorNumber: 3,
-      minCapacity: 80,
-    });
-
-    expect(prisma.room.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          status: 'active',
-          floor: {
-            building: {
-              code: 'B',
-            },
-            floorNumber: 3,
-          },
-          capacity: { gte: 80 },
-        },
-      }),
-    );
-    expect(result).toEqual([
-      { roomCode: 'B3.14', capacity: 140, status: 'Trống hiện tại' },
-    ]);
-  });
   describe('getRoomSchedule', () => {
-    it('should return a fixed Monday-to-Saturday grid with all time slots', async () => {
+    it('returns schedule data with weekStart and building fields', async () => {
       jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue({
+      prisma.room.findFirst.mockResolvedValue({
         id: 'room-1',
         roomCode: 'B1.02',
         name: null,
         capacity: 60,
+        floor: {
+          building: {
+            code: 'B',
+            name: 'Tòa B',
+          },
+        },
       });
-      (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-        { id: 'slot-1', slotNumber: 1, label: 'Tiet 1', startTime: '07:30', endTime: '08:15' },
-        { id: 'slot-2', slotNumber: 2, label: 'Tiet 2', startTime: '08:15', endTime: '09:00' },
-      ]);
-      (prisma.roomBooking.findMany as jest.Mock).mockResolvedValue([
+      prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.roomBookingSlot.findMany.mockResolvedValue([
         {
-          bookingDate: new Date('2026-04-27T00:00:00.000Z'),
+          bookingDate: new Date('2026-05-04T00:00:00.000Z'),
           timeSlotId: 'slot-1',
-          title: 'SE346.Q22',
+          booking: {
+            title: 'SE346.Q22',
+          },
         },
         {
-          bookingDate: new Date('2026-04-28T00:00:00.000Z'),
+          bookingDate: new Date('2026-05-05T00:00:00.000Z'),
           timeSlotId: 'slot-2',
-          title: null,
-        },
-        {
-          bookingDate: new Date('2026-05-10T00:00:00.000Z'),
-          timeSlotId: 'slot-1',
-          title: 'Outside displayed week',
+          booking: {
+            title: null,
+          },
         },
       ]);
 
-      const result = await service.getRoomSchedule('b1.02');
+      const result = await service.getRoomSchedule('b1.02', '2026-05-04');
 
-      expect(prisma.room.findFirst).toHaveBeenCalledWith({
-        where: {
-          roomCode: 'B1.02',
-          status: 'active',
-        },
-        select: {
-          id: true,
-          roomCode: true,
-          name: true,
-          capacity: true,
-        },
-      });
-      expect(prisma.roomBooking.findMany).toHaveBeenCalledWith({
+      expect(prisma.roomBookingSlot.findMany).toHaveBeenCalledWith({
         where: {
           roomId: 'room-1',
           bookingDate: {
-            gte: new Date('2026-04-27T00:00:00.000Z'),
-            lte: new Date('2026-05-02T00:00:00.000Z'),
+            gte: new Date('2026-05-04T00:00:00.000Z'),
+            lte: new Date('2026-05-09T00:00:00.000Z'),
           },
-          status: { in: ['approved', 'booked', 'maintenance'] },
-          timeSlotId: { not: null },
+          booking: {
+            status: { in: ['approved', 'booked', 'maintenance'] },
+          },
         },
         select: {
           bookingDate: true,
           timeSlotId: true,
-          title: true,
+          booking: {
+            select: {
+              title: true,
+            },
+          },
         },
-        orderBy: { bookingDate: 'desc' },
       });
       expect(result).toMatchObject({
         roomCode: 'B1.02',
         capacity: 60,
         name: null,
-        weekStart: '2026-04-27',
+        buildingCode: 'B',
+        buildingName: 'Tòa B',
+        weekStart: '2026-05-04',
       });
-      expect(result.days).toHaveLength(6);
-      expect(result.days.map((day) => day.dayOfWeek)).toEqual([2, 3, 4, 5, 6, 7]);
-      expect(result.days[0]?.slots).toEqual([
-        {
-          timeSlotId: 'slot-1',
-          slotNumber: 1,
-          label: 'Tiet 1',
-          startTime: '07:30',
-          endTime: '08:15',
-          bookingTitle: 'SE346.Q22',
-          displayText: 'SE346.Q22',
-        },
-        {
-          timeSlotId: 'slot-2',
-          slotNumber: 2,
-          label: 'Tiet 2',
-          startTime: '08:15',
-          endTime: '09:00',
-          bookingTitle: null,
-          displayText: 'Trống',
-        },
-      ]);
-      expect(result.days[1]?.slots[1]).toEqual({
-        timeSlotId: 'slot-2',
-        slotNumber: 2,
-        label: 'Tiet 2',
-        startTime: '08:15',
-        endTime: '09:00',
-        bookingTitle: null,
-        displayText: 'Trống',
+      expect(result.days[0]?.slots[0]).toEqual({
+        timeSlotId: 'slot-1',
+        slotNumber: 1,
+        label: 'Tiết 1',
+        startTime: '07:30',
+        endTime: '08:15',
+        bookingTitle: 'SE346.Q22',
+        displayText: 'SE346.Q22',
       });
+      expect(result.days[1]?.slots[1]?.displayText).toBe('Trống');
     });
 
-    it('should ignore bookings outside the loaded bookable week', async () => {
-      jest.setSystemTime(new Date('2026-04-22T01:00:00.000Z'));
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue({
-        id: 'room-1',
-        roomCode: 'B1.02',
-        name: 'Phong hoc',
-        capacity: 60,
-      });
-      (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([
-        { id: 'slot-1', slotNumber: 1, label: 'Tiet 1', startTime: '07:30', endTime: '08:15' },
-      ]);
-      (prisma.roomBooking.findMany as jest.Mock).mockResolvedValue([
-        {
-          bookingDate: new Date('2026-04-27T00:00:00.000Z'),
-          timeSlotId: 'slot-1',
-          title: 'First bookable Monday',
-        },
-        {
-          bookingDate: new Date('2026-05-04T00:00:00.000Z'),
-          timeSlotId: 'slot-1',
-          title: 'Following week Monday',
-        },
-      ]);
-
-      const result = await service.getRoomSchedule('B1.02');
-
-      expect(prisma.roomBooking.findMany).toHaveBeenCalledWith({
-        where: {
-          roomId: 'room-1',
-          bookingDate: {
-            gte: new Date('2026-04-27T00:00:00.000Z'),
-            lte: new Date('2026-05-02T00:00:00.000Z'),
-          },
-          status: { in: ['approved', 'booked', 'maintenance'] },
-          timeSlotId: { not: null },
-        },
-        select: {
-          bookingDate: true,
-          timeSlotId: true,
-          title: true,
-        },
-        orderBy: { bookingDate: 'desc' },
-      });
-      expect(result.days[0]?.slots[0]).toMatchObject({
-        bookingTitle: 'First bookable Monday',
-        displayText: 'First bookable Monday',
-      });
-    });
-
-    it('should throw NotFoundException when room does not exist', async () => {
-      (prisma.room.findFirst as jest.Mock).mockResolvedValue(null);
+    it('throws NotFoundException when room does not exist', async () => {
+      prisma.room.findFirst.mockResolvedValue(null);
 
       await expect(service.getRoomSchedule('missing-room')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('approveBooking', () => {
+    it('rechecks all selected slots before approving a booking', async () => {
+      prisma.roomBooking.findUnique.mockResolvedValue({
+        id: 'booking-1',
+        roomId: 'room-1',
+        bookingDate: new Date('2026-04-29T00:00:00.000Z'),
+        status: 'pending',
+        bookingSlots: [{ timeSlotId: 'slot-1' }, { timeSlotId: 'slot-2' }],
+      });
+      prisma.roomBookingSlot.findFirst.mockResolvedValue(null);
+      prisma.roomBooking.update.mockResolvedValue(undefined);
+      jest
+        .spyOn(service as never, 'getBookingById' as never)
+        .mockResolvedValue({ id: 'booking-1', status: 'approved' });
+
+      const result = await service.approveBooking('booking-1', 'admin-1');
+
+      expect(prisma.roomBookingSlot.findFirst).toHaveBeenCalledWith({
+        where: {
+          bookingId: { not: 'booking-1' },
+          roomId: 'room-1',
+          bookingDate: new Date('2026-04-29T00:00:00.000Z'),
+          timeSlotId: { in: ['slot-1', 'slot-2'] },
+          booking: {
+            status: {
+              in: ['approved', 'booked', 'maintenance'],
+            },
+          },
+        },
+        select: {
+          timeSlot: {
+            select: {
+              label: true,
+            },
+          },
+        },
+      });
+      expect(prisma.roomBooking.update).toHaveBeenCalledWith({
+        where: { id: 'booking-1' },
+        data: {
+          status: 'approved',
+          approvedById: 'admin-1',
+          approvedAt: expect.any(Date),
+        },
+      });
+      expect(result).toEqual({ id: 'booking-1', status: 'approved' });
     });
   });
 });

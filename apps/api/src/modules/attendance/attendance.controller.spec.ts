@@ -1,7 +1,19 @@
+import 'reflect-metadata';
+
 import { Test } from '@nestjs/testing';
+import { USER_ROLES } from '@smart-campus/shared';
+
+import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
+
+function getMethodRoles(methodName: keyof AttendanceController) {
+  return Reflect.getMetadata(
+    ROLES_KEY,
+    AttendanceController.prototype[methodName as string],
+  ) as string[] | undefined;
+}
 
 describe('AttendanceController', () => {
   let controller: AttendanceController;
@@ -32,6 +44,22 @@ describe('AttendanceController', () => {
     service = module.get(AttendanceService);
   });
 
+  it('opens attendance management endpoints for lecturer/admin/super_admin', () => {
+    const managerRoles = [USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN];
+
+    expect(getMethodRoles('startSession')).toEqual(managerRoles);
+    expect(getMethodRoles('stopSession')).toEqual(managerRoles);
+    expect(getMethodRoles('getSessionRecords')).toEqual(managerRoles);
+    expect(getMethodRoles('exportSessionAttendance')).toEqual(managerRoles);
+    expect(getMethodRoles('getHistory')).toEqual(managerRoles);
+    expect(getMethodRoles('getLecturerClassSections')).toEqual(managerRoles);
+  });
+
+  it('keeps student-only checkin and personal history endpoints', () => {
+    expect(getMethodRoles('checkin')).toEqual([USER_ROLES.STUDENT]);
+    expect(getMethodRoles('getStudentHistory')).toEqual([USER_ROLES.STUDENT]);
+  });
+
   it('sets Excel download headers when exporting a session', async () => {
     const response = {
       setHeader: jest.fn(),
@@ -42,9 +70,18 @@ describe('AttendanceController', () => {
       buffer: Buffer.from('excel'),
     } as never);
 
-    await controller.exportSessionAttendance('session-1', 'lecturer-1', response as never);
+    await controller.exportSessionAttendance(
+      'session-1',
+      'lecturer-1',
+      'lecturer' as never,
+      response as never,
+    );
 
-    expect(service.exportSessionAttendance).toHaveBeenCalledWith('session-1', 'lecturer-1');
+    expect(service.exportSessionAttendance).toHaveBeenCalledWith(
+      'session-1',
+      'lecturer-1',
+      'lecturer',
+    );
     expect(response.setHeader).toHaveBeenCalledWith(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

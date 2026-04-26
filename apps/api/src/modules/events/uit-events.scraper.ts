@@ -158,17 +158,15 @@ export class UitEventsScraper {
     const excerpt =
       normalizeText(content.find('p').first().text()) ||
       normalizeText($('meta[name="description"]').attr('content') ?? '');
-    const thumbnailUrl = resolveUrl(
-      UIT_ORIGIN,
-      $('meta[property="og:image"]').attr('content') ?? '',
-    );
+    const rawThumbnailUrl = normalizeText($('meta[property="og:image"]').attr('content') ?? '');
+    const thumbnailUrl = rawThumbnailUrl ? resolveUrl(UIT_ORIGIN, rawThumbnailUrl) : '';
 
     return {
       slug,
       title,
       publishedAtLabel,
       excerpt,
-      thumbnailUrl: thumbnailUrl === UIT_ORIGIN ? '' : thumbnailUrl,
+      thumbnailUrl,
       contentHtml: content.html() ?? '',
       sourceUrl: resolveUrl(UIT_ORIGIN, `/bai-viet/${slug}`),
     };

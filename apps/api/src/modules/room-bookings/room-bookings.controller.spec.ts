@@ -54,6 +54,8 @@ describe('RoomBookingsController', () => {
             }),
             getRoomSchedule: jest.fn().mockResolvedValue({
               roomCode: 'B1.02',
+              buildingCode: 'B',
+              buildingName: 'Tòa B',
               capacity: 60,
               name: null,
               weekStart: '2026-04-27',
@@ -106,6 +108,8 @@ describe('RoomBookingsController', () => {
     expect(service.getRoomSchedule).toHaveBeenCalledWith('B1.02', undefined);
     expect(result).toEqual({
       roomCode: 'B1.02',
+      buildingCode: 'B',
+      buildingName: 'Tòa B',
       capacity: 60,
       name: null,
       weekStart: '2026-04-27',

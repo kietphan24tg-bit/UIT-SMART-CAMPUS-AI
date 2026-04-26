@@ -18,7 +18,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useEffectiveRole } from '@/hooks/use-effective-role';
 import { logAttendanceCheckinAnalytics } from '@/services/analytics/attendance';
 import {
   attendanceCheckinWithNetworkRetry,
@@ -100,12 +99,7 @@ export default function AttendanceScanScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  // const TEST_SKIP_GUARDS = false;
-  // const TEST_SKIP_AUTH_GUARDS = false;
-  const TEST_SKIP_GUARDS = true;
-  const TEST_SKIP_AUTH_GUARDS = true;
-  // const role = useAuthStore((s) => s.user?.role);
-  const role = useEffectiveRole();
+  const role = useAuthStore((state) => state.user?.role ?? USER_ROLES.STUDENT);
   const [permission, setPermission] = useState<PermissionResponse | null>(null);
   const [sessionResolved, setSessionResolved] = useState(false);
   const [hasSessionToken, setHasSessionToken] = useState(false);
@@ -199,19 +193,11 @@ export default function AttendanceScanScreen() {
     }, [clearProcessingDelayTimer, refreshCameraPermission, resolveSession]),
   );
 
-  // useEffect(() => {
-  //   if (role !== USER_ROLES.STUDENT) {
-  //     router.replace('/services/attendance' as never);
-  //   }
-  // }, [role, router]);
-  // if (role !== USER_ROLES.STUDENT) {
-  //   return null;
-  // }
   useEffect(() => {
-    if (!TEST_SKIP_GUARDS && role !== USER_ROLES.STUDENT) {
+    if (role !== USER_ROLES.STUDENT) {
       router.replace('/services/attendance' as never);
     }
-  }, [role, router, TEST_SKIP_GUARDS]);
+  }, [role, router]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -351,11 +337,11 @@ export default function AttendanceScanScreen() {
     return <ScanLoadingFallback label="Đang kiểm tra phiên đăng nhập" accentColor={theme.colors.primary} />;
   }
 
-  if (!TEST_SKIP_GUARDS && role !== USER_ROLES.STUDENT) {
+  if (role !== USER_ROLES.STUDENT) {
     return null;
   }
 
-  if (!TEST_SKIP_AUTH_GUARDS && !hasSessionToken) {
+  if (!hasSessionToken) {
     return (
       <View style={[styles.fill, { paddingTop: insets.top + 12, paddingHorizontal: 24 }]}>
         <Pressable

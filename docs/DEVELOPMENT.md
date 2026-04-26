@@ -50,6 +50,7 @@ Chỉnh sửa `apps/api/.env.local`:
 ```env
 # Database
 DATABASE_URL="postgresql://smartcampus:smartcampus_dev@localhost:5432/smart_campus"
+REDIS_URL="redis://localhost:6379"
 
 # JWT
 JWT_SECRET="your-super-secret-key-change-in-production"
@@ -72,7 +73,7 @@ cd ../..
 Kiểm tra database chạy:
 ```bash
 docker ps
-# Phải thấy smart-campus-db đang chạy
+# Phải thấy smart-campus-db và smart-campus-redis đang chạy
 ```
 
 ### 5. Chạy migration và seed
