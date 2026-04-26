@@ -41,13 +41,17 @@ describe('RoomBookingsService', () => {
       findMany: jest.Mock;
     };
     roomBooking: {
+      findMany: jest.Mock;
       findUnique: jest.Mock;
+      deleteMany: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     roomBookingSlot: {
       findFirst: jest.Mock;
       findMany: jest.Mock;
       create: jest.Mock;
+      deleteMany: jest.Mock;
     };
     building: {
       findMany: jest.Mock;
@@ -67,13 +71,17 @@ describe('RoomBookingsService', () => {
         findMany: jest.fn(),
       },
       roomBooking: {
+        findMany: jest.fn(),
         findUnique: jest.fn(),
+        deleteMany: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       roomBookingSlot: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
+        deleteMany: jest.fn(),
       },
       building: {
         findMany: jest.fn(),
@@ -274,6 +282,7 @@ describe('RoomBookingsService', () => {
 
       prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
       prisma.timeSlot.findMany.mockResolvedValue([slot1, slot2]);
+      prisma.roomBooking.findMany.mockResolvedValue([]);
       prisma.roomBookingSlot.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({

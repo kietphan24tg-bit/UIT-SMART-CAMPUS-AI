@@ -6,6 +6,7 @@ import request from 'supertest';
 
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
+import { PrismaService } from '../src/database/prisma.service';
 
 jest.setTimeout(180_000);
 
@@ -30,6 +31,7 @@ const seedAccounts: Record<SeedRole, { email: string; password: string }> = {
 
 describe('API RBAC & Integrity (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let server: any;
   const accessTokens: Partial<Record<SeedRole, string>> = {};
 
@@ -54,6 +56,7 @@ describe('API RBAC & Integrity (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
     await app.init();
+    prisma = app.get(PrismaService);
     server = app.getHttpServer();
 
     for (const [role, credentials] of Object.entries(seedAccounts) as Array<
@@ -151,7 +154,7 @@ describe('API RBAC & Integrity (e2e)', () => {
     const samplePayload = {
       name: `QC Category ${Date.now()}`,
       slug: `qc-category-${Date.now()}`,
-      description: 'Danh mục tạo từ e2e role matrix.',
+      description: 'Role matrix category created from e2e test.',
     };
 
     const managerRoles: SeedRole[] = ['canteen_admin', 'admin', 'super_admin'];
@@ -175,6 +178,9 @@ describe('API RBAC & Integrity (e2e)', () => {
   });
 
   it('prevents double-booking in concurrent room booking requests', async () => {
+    const qcBookingTitle = 'Concurrent booking test';
+    const qcContactName = 'QC E2E';
+
     const buildingsRes = await request(server)
       .get('/api/v1/room-bookings/buildings')
       .expect(200);
@@ -190,17 +196,96 @@ describe('API RBAC & Integrity (e2e)', () => {
     const scheduleRes = await request(server)
       .get(`/api/v1/room-bookings/rooms/${encodeURIComponent(roomCode as string)}/schedule`)
       .expect(200);
-    const timeSlotId = scheduleRes.body?.data?.days?.[0]?.slots?.[0]?.timeSlotId as string | undefined;
-    expect(timeSlotId).toBeTruthy();
 
-    const bookingDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const room = await prisma.room.findFirst({
+      where: { roomCode: roomCode as string },
+      select: { id: true },
+    });
+    expect(room?.id).toBeTruthy();
+
+    const staleBookings = await prisma.roomBooking.findMany({
+      where: {
+        roomId: room?.id as string,
+        title: qcBookingTitle,
+        contactName: qcContactName,
+        status: 'pending',
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const stalePendingBookingIds = staleBookings.map((booking) => booking.id);
+
+    if (stalePendingBookingIds.length > 0) {
+      await prisma.roomBookingSlot.deleteMany({
+        where: {
+          bookingId: {
+            in: stalePendingBookingIds,
+          },
+        },
+      });
+      await prisma.roomBooking.deleteMany({
+        where: {
+          id: {
+            in: stalePendingBookingIds,
+          },
+        },
+      });
+    }
+
+    const scheduleDateKeys = (scheduleRes.body?.data?.days ?? [])
+      .map((day: { dateKey?: string }) => day.dateKey)
+      .filter((dateKey: string | undefined): dateKey is string => Boolean(dateKey));
+
+    const conflictingSlots = await prisma.roomBookingSlot.findMany({
+      where: {
+        roomId: room?.id as string,
+        bookingDate: {
+          in: scheduleDateKeys.map((dateKey) => new Date(`${dateKey}T00:00:00.000Z`)),
+        },
+        booking: {
+          status: {
+            in: ['pending', 'approved', 'booked', 'maintenance'],
+          },
+        },
+      },
+      select: {
+        bookingDate: true,
+        timeSlotId: true,
+      },
+    });
+
+    const conflictingSlotKeys = new Set(
+      conflictingSlots.map(
+        (slot) => `${slot.bookingDate.toISOString().slice(0, 10)}:${slot.timeSlotId}`,
+      ),
+    );
+
+    const conflictFreeSlot = (scheduleRes.body?.data?.days ?? [])
+      .flatMap((day: { dateKey?: string; slots?: Array<{ timeSlotId?: string }> }) =>
+        (day.slots ?? []).map((slot) => ({
+          bookingDate: day.dateKey,
+          timeSlotId: slot.timeSlotId,
+        })),
+      )
+      .find(
+        (slot: { bookingDate?: string; timeSlotId?: string }) =>
+          Boolean(slot.bookingDate) &&
+          Boolean(slot.timeSlotId) &&
+          !conflictingSlotKeys.has(`${slot.bookingDate}:${slot.timeSlotId}`),
+      );
+
+    expect(conflictFreeSlot?.bookingDate).toBeTruthy();
+    expect(conflictFreeSlot?.timeSlotId).toBeTruthy();
+
     const payload = {
       roomCode,
-      bookingDate,
-      timeSlotIds: [timeSlotId],
-      purpose: 'Kiểm thử đồng thời QC',
-      contactName: 'QC E2E',
-      title: 'Concurrent booking test',
+      bookingDate: conflictFreeSlot?.bookingDate as string,
+      timeSlotIds: [conflictFreeSlot?.timeSlotId as string],
+      purpose: 'Concurrent booking QC',
+      contactName: qcContactName,
+      title: qcBookingTitle,
     };
 
     const [first, second] = await Promise.all([
@@ -216,5 +301,15 @@ describe('API RBAC & Integrity (e2e)', () => {
 
     const statuses = [first.status, second.status].sort((a, b) => a - b);
     expect(statuses).toEqual([201, 409]);
+
+    const successfulResponse = [first, second].find((response) => response.status === 201);
+    const createdBookingId = successfulResponse?.body?.data?.id ?? successfulResponse?.body?.id;
+
+    if (createdBookingId) {
+      await request(server)
+        .patch(`/api/v1/room-bookings/${encodeURIComponent(createdBookingId)}/cancel`)
+        .set('Authorization', `Bearer ${accessTokens.student as string}`)
+        .expect(200);
+    }
   });
 });

@@ -108,8 +108,19 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     this.tokenTtlSeconds = Number(
       this.configService.get<number>('ATTENDANCE_TOKEN_TTL_SECONDS', 90),
     );
+    const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6379');
+    const isTestEnvironment = process.env.NODE_ENV === 'test';
+
     this.redisClient = createClient({
-      url: this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
+      url: redisUrl,
+      ...(isTestEnvironment
+        ? {
+            socket: {
+              connectTimeout: 1000,
+              reconnectStrategy: false,
+            },
+          }
+        : {}),
     });
   }
 
@@ -125,8 +136,12 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    if (this.redisClient.isOpen) {
-      await this.redisClient.quit();
+    try {
+      if (this.redisClient.isOpen) {
+        await this.redisClient.close();
+      }
+    } catch {
+      // Best effort cleanup for local/test environments without Redis.
     }
   }
 

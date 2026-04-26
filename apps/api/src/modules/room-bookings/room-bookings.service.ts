@@ -48,6 +48,7 @@ const CONFLICT_BOOKING_STATUSES: RoomBookingStatus[] = [
   'booked',
   'maintenance',
 ];
+const INACTIVE_BOOKING_STATUSES: RoomBookingStatus[] = ['rejected', 'cancelled'];
 const CREATED_BOOKING_STATUS: RoomBookingStatus = 'pending';
 const EMPTY_ROOM_SCHEDULE_TEXT = 'Trống';
 const ROOM_AVAILABLE_STATUS: RoomAvailabilityStatus = 'Trống hiện tại';
@@ -316,49 +317,43 @@ export class RoomBookingsService {
       );
     }
 
-    const firstTimeSlot = selectedTimeSlots[0]!;
-    const lastTimeSlot = selectedTimeSlots[selectedTimeSlots.length - 1]!;
-
     let booking: { id: string } | null = null;
     try {
-      booking = await this.prisma.$transaction(async (tx) => {
-        const createdBooking = await tx.roomBooking.create({
-          data: {
-            roomId: room.id,
-            userId,
-            bookingDate,
-            timeSlotId: firstTimeSlot.id,
-            startTime: firstTimeSlot.startTime,
-            endTime: lastTimeSlot.endTime,
-            title: dto.title?.trim() || null,
-            purpose: dto.purpose.trim(),
-            attendeeCount: dto.attendeeCount ?? null,
-            contactName: dto.contactName.trim(),
-            contactPhone: dto.contactPhone?.trim() || null,
-            departmentName: dto.departmentName?.trim() || null,
-            status: CREATED_BOOKING_STATUS,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        for (const [index, timeSlot] of selectedTimeSlots.entries()) {
-          await tx.roomBookingSlot.create({
-            data: {
-              bookingId: createdBooking.id,
-              roomId: room.id,
-              bookingDate,
-              timeSlotId: timeSlot.id,
-              slotOrder: index + 1,
-            },
-          });
-        }
-
-        return createdBooking;
-      });
+      booking = await this.createPendingBooking(
+        room.id,
+        userId,
+        bookingDate,
+        selectedTimeSlots,
+        dto,
+      );
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
+        const releasedInactiveSlots = await this.releaseInactiveSlotConstraints(
+          room.id,
+          bookingDate,
+          selectedTimeSlotIds,
+        );
+
+        if (releasedInactiveSlots) {
+          try {
+            booking = await this.createPendingBooking(
+              room.id,
+              userId,
+              bookingDate,
+              selectedTimeSlots,
+              dto,
+            );
+          } catch (retryError) {
+            if (!this.isUniqueConstraintError(retryError)) {
+              throw retryError;
+            }
+          }
+        }
+
+        if (booking) {
+          return this.getBookingById(booking.id);
+        }
+
         const raceConflictingSlot = await this.findConflictingSlot(
           room.id,
           bookingDate,
@@ -796,6 +791,54 @@ export class RoomBookingsService {
     return timeSlots as SelectedTimeSlot[];
   }
 
+  private async createPendingBooking(
+    roomId: string,
+    userId: string,
+    bookingDate: Date,
+    selectedTimeSlots: SelectedTimeSlot[],
+    dto: CreateRoomBookingDto,
+  ) {
+    const firstTimeSlot = selectedTimeSlots[0]!;
+    const lastTimeSlot = selectedTimeSlots[selectedTimeSlots.length - 1]!;
+
+    return this.prisma.$transaction(async (tx) => {
+      const createdBooking = await tx.roomBooking.create({
+        data: {
+          roomId,
+          userId,
+          bookingDate,
+          timeSlotId: firstTimeSlot.id,
+          startTime: firstTimeSlot.startTime,
+          endTime: lastTimeSlot.endTime,
+          title: dto.title?.trim() || null,
+          purpose: dto.purpose.trim(),
+          attendeeCount: dto.attendeeCount ?? null,
+          contactName: dto.contactName.trim(),
+          contactPhone: dto.contactPhone?.trim() || null,
+          departmentName: dto.departmentName?.trim() || null,
+          status: CREATED_BOOKING_STATUS,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      for (const [index, timeSlot] of selectedTimeSlots.entries()) {
+        await tx.roomBookingSlot.create({
+          data: {
+            bookingId: createdBooking.id,
+            roomId,
+            bookingDate,
+            timeSlotId: timeSlot.id,
+            slotOrder: index + 1,
+          },
+        });
+      }
+
+      return createdBooking;
+    });
+  }
+
   private mapBooking(booking: RoomBookingWithRelations) {
     const timeSlots = booking.bookingSlots
       .map((slot) => slot.timeSlot)
@@ -866,6 +909,75 @@ export class RoomBookingsService {
         },
       },
     });
+  }
+
+  private async releaseInactiveSlotConstraints(
+    roomId: string,
+    bookingDate: Date,
+    timeSlotIds: string[],
+  ) {
+    const inactiveBookings = await this.prisma.roomBooking.findMany({
+      where: {
+        roomId,
+        bookingDate,
+        status: {
+          in: INACTIVE_BOOKING_STATUSES,
+        },
+        OR: [
+          {
+            timeSlotId: {
+              in: timeSlotIds,
+            },
+          },
+          {
+            bookingSlots: {
+              some: {
+                timeSlotId: {
+                  in: timeSlotIds,
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (inactiveBookings.length === 0) {
+      return false;
+    }
+
+    const inactiveBookingIds = inactiveBookings.map((booking) => booking.id);
+
+    await this.prisma.$transaction([
+      this.prisma.roomBookingSlot.deleteMany({
+        where: {
+          bookingId: {
+            in: inactiveBookingIds,
+          },
+          timeSlotId: {
+            in: timeSlotIds,
+          },
+        },
+      }),
+      this.prisma.roomBooking.updateMany({
+        where: {
+          id: {
+            in: inactiveBookingIds,
+          },
+          timeSlotId: {
+            in: timeSlotIds,
+          },
+        },
+        data: {
+          timeSlotId: null,
+        },
+      }),
+    ]);
+
+    return true;
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
