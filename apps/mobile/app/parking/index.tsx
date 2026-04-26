@@ -56,6 +56,9 @@ export default function ParkingScreen() {
           : 'success';
   const shouldShowGatewayCallout = gatewayState !== 'online' && gatewayState !== 'no-data';
   const cardGap = layout.isCompact ? 10 : 12;
+  const sectionContentWidth = getSectionContentWidth(layout);
+  const gridColumns = getTwoByTwoColumns(sectionContentWidth);
+  const gridCardWidth = getTwoByTwoCardWidth(sectionContentWidth, gridColumns, cardGap);
   const climateState = getClimateState(
     parkingStatus?.sensors.temperature ?? null,
     parkingStatus?.sensors.humidity ?? null,
@@ -128,8 +131,9 @@ export default function ParkingScreen() {
         <SectionCard title="Cảm biến" subtitle="Theo phần cứng đang có." variant="glass" tone="neutral">
           {parkingStatus ? (
             <View style={styles.sectionStack}>
-              <View style={[styles.sensorRow, { gap: cardGap }]}>
+              <View style={[styles.sensorGrid, { gap: cardGap }]}>
                 <SensorStatusCard
+                  width={gridCardWidth}
                   label="Chỗ trống"
                   value={`${parkingStatus.availableSlots}/${parkingStatus.totalSlots}`}
                   caption="IR A1-A2"
@@ -140,6 +144,7 @@ export default function ParkingScreen() {
                   active
                 />
                 <SensorStatusCard
+                  width={gridCardWidth}
                   label="Mưa"
                   value={parkingStatus.sensors.rainDetected ? 'Có mưa' : 'Không mưa'}
                   caption="Cảm biến mưa"
@@ -149,9 +154,8 @@ export default function ParkingScreen() {
                   motion={parkingStatus.sensors.rainDetected ? 'rain' : 'calm'}
                   active
                 />
-              </View>
-              <View style={[styles.sensorRow, { gap: cardGap }]}>
                 <SensorStatusCard
+                  width={gridCardWidth}
                   label="Nhiệt ẩm"
                   value={climateState.value}
                   caption={climateState.caption}
@@ -162,6 +166,7 @@ export default function ParkingScreen() {
                   active={climateState.active}
                 />
                 <SensorStatusCard
+                  width={gridCardWidth}
                   label="Cháy"
                   value={parkingStatus.sensors.fireDetected ? 'Có cháy' : 'Không cháy'}
                   caption="Cảm biến cháy"
@@ -180,13 +185,10 @@ export default function ParkingScreen() {
 
         <SectionCard title="2 cảm biến hồng ngoại" subtitle="Slot A1-A2." variant="list" tone="academic">
           {parkingStatus ? (
-            <View style={styles.sectionStack}>
-              <View style={[styles.slotRow, { gap: cardGap }]}>
-                {boardSlots.map((slot, index) => (
-                  <SlotTile key={slot?.slotNumber ?? `slot-${index}`} slot={slot} />
-                ))}
-                {boardSlots.length < 2 ? <View style={{ flex: 1 }} /> : null}
-              </View>
+            <View style={[styles.board, { gap: cardGap }]}>
+              {boardSlots.map((slot, index) => (
+                <SlotTile key={slot?.slotNumber ?? `slot-${index}`} slot={slot} width={gridCardWidth} />
+              ))}
             </View>
           ) : (
             <EmptyState icon="car-sport-outline" title="Chưa có dữ liệu" description="Sơ đồ sẽ hiện sau khi tải xong." />
@@ -298,16 +300,32 @@ function getBoardSlots(slots: ParkingSlotState[]) {
   const picked = hasAllDefault
     ? defaultOrder
     : [...slots]
-      .slice()
-      .sort((a, b) => a.slotNumber.localeCompare(b.slotNumber))
-      .slice(0, 2)
-      .map((slot) => slot.slotNumber);
+        .slice()
+        .sort((a, b) => a.slotNumber.localeCompare(b.slotNumber))
+        .slice(0, 2)
+        .map((slot) => slot.slotNumber);
 
   const numbers = picked.length > 0 ? picked : defaultOrder;
   return numbers.map((slotNumber) => slotByNumber.get(slotNumber) ?? null);
 }
 
+function getSectionContentWidth(layout: ReturnType<typeof useResponsiveLayout>) {
+  const sectionPadding = layout.isTablet ? 22 : layout.isCompact ? 16 : 18;
+  const sectionBorder = 1;
+  return Math.max(layout.availableWidth - sectionPadding * 2 - sectionBorder * 2, 0);
+}
 
+function getTwoByTwoColumns(contentWidth: number) {
+  return contentWidth >= 220 ? 2 : 1;
+}
+
+function getTwoByTwoCardWidth(contentWidth: number, columns: number, gap: number) {
+  if (columns <= 1) {
+    return contentWidth;
+  }
+
+  return Math.max((contentWidth - gap) / 2, 0);
+}
 
 type SensorTone =
   | 'infrared'
@@ -397,6 +415,7 @@ function getClimateState(temperature: number | null, humidity: number | null) {
 }
 
 function SensorStatusCard({
+  width,
   label,
   value,
   caption,
@@ -406,6 +425,7 @@ function SensorStatusCard({
   motion,
   active,
 }: {
+  width: number;
   label: string;
   value: string;
   caption: string;
@@ -507,7 +527,8 @@ function SensorStatusCard({
         {
           backgroundColor: toneStyle.surface,
           borderColor: toneStyle.border,
-          flex: 1,
+          width,
+          maxWidth: '100%',
         },
       ]}
     >
@@ -622,7 +643,7 @@ function getSensorToneStyle(theme: ReturnType<typeof useAppTheme>, tone: SensorT
   }
 }
 
-function SlotTile({ slot }: { slot: ParkingSlotState | null }) {
+function SlotTile({ slot, width }: { slot: ParkingSlotState | null; width: number }) {
   const theme = useAppTheme();
   const state = slot ? (slot.isOccupied ? 'occupied' : 'available') : 'unknown';
   const tileStyle = getSlotToneStyle(theme, state);
@@ -635,7 +656,8 @@ function SlotTile({ slot }: { slot: ParkingSlotState | null }) {
         {
           backgroundColor: tileStyle.surface,
           borderColor: tileStyle.border,
-          flex: 1,
+          width,
+          maxWidth: '100%',
         },
       ]}
     >
@@ -775,55 +797,55 @@ function RainParticleLayer({
     >
       {reduceMotion
         ? RAIN_DROPLETS.slice(0, 4).map((droplet, index) => (
-          <View
-            key={`rain-static-${droplet.left}`}
-            style={[
-              styles.rainDropWrap,
-              {
-                left: droplet.left,
-                top: 20 + index * 13,
-                width: droplet.size,
-                height: droplet.size * 1.28,
-                opacity: 0.22 + index * 0.04,
-              },
-            ]}
-          >
-            <RainDropGlyph accentColor={dropColor} size={droplet.size} />
-          </View>
-        ))
-        : RAIN_DROPLETS.map((droplet, index) => {
-          const progress = particles[index];
-          const translateY = progress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [-30, 126],
-          });
-          const translateX = progress.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0, droplet.drift, droplet.drift - 1],
-          });
-          const opacity = progress.interpolate({
-            inputRange: [0, 0.14, 0.84, 1],
-            outputRange: [0, 0.56, 0.4, 0],
-          });
-
-          return (
-            <Animated.View
-              key={`rain-drop-${droplet.left}`}
+            <View
+              key={`rain-static-${droplet.left}`}
               style={[
                 styles.rainDropWrap,
                 {
                   left: droplet.left,
+                  top: 20 + index * 13,
                   width: droplet.size,
                   height: droplet.size * 1.28,
-                  opacity,
-                  transform: [{ translateX }, { translateY }],
+                  opacity: 0.22 + index * 0.04,
                 },
               ]}
             >
               <RainDropGlyph accentColor={dropColor} size={droplet.size} />
-            </Animated.View>
-          );
-        })}
+            </View>
+          ))
+        : RAIN_DROPLETS.map((droplet, index) => {
+            const progress = particles[index];
+            const translateY = progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-30, 126],
+            });
+            const translateX = progress.interpolate({
+              inputRange: [0, 0.5, 1],
+              outputRange: [0, droplet.drift, droplet.drift - 1],
+            });
+            const opacity = progress.interpolate({
+              inputRange: [0, 0.14, 0.84, 1],
+              outputRange: [0, 0.56, 0.4, 0],
+            });
+
+            return (
+              <Animated.View
+                key={`rain-drop-${droplet.left}`}
+                style={[
+                  styles.rainDropWrap,
+                  {
+                    left: droplet.left,
+                    width: droplet.size,
+                    height: droplet.size * 1.28,
+                    opacity,
+                    transform: [{ translateX }, { translateY }],
+                  },
+                ]}
+              >
+                <RainDropGlyph accentColor={dropColor} size={droplet.size} />
+              </Animated.View>
+            );
+          })}
     </View>
   );
 }
@@ -879,10 +901,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sensorGrid: {
-    gap: 12,
-  },
-  sensorRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   sensorCard: {
     minHeight: 142,
@@ -959,8 +979,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.48)',
     transform: [{ rotate: '18deg' }],
   },
-  slotRow: {
+  board: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   slotTile: {
     minHeight: 108,

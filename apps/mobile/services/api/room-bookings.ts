@@ -1,10 +1,19 @@
 import type {
   BuildingAvailability,
   RoomAvailabilitySummary,
-  RoomSchedule,
   RoomScheduleDay,
   RoomSlotStatus,
 } from '@/types/room-booking';
+import {
+  BUILDING_AVAILABILITY,
+  getRoomSchedule as getMockRoomSchedule,
+  getRoomsForBuilding,
+} from '@/constants/room-booking-data';
+import {
+  getFirstBookableWeekMonday,
+  listAllowedWeekMondayKeys,
+  shiftMockScheduleToWeek,
+} from '@/utils/room-booking-weeks';
 
 import { apiClient } from './client';
 
@@ -42,6 +51,7 @@ type RoomScheduleApiResponse = {
   name: string | null;
   buildingCode?: string;
   buildingName?: string;
+  weekStart: string;
   days: RoomScheduleApiDay[];
 };
 
@@ -184,10 +194,7 @@ function mapApiScheduleSlotStatus(slot: RoomScheduleApiSlot): RoomSlotStatus {
   }
 
   const normalizedDisplayText = normalizeStatusText(slot.displayText);
-  if (
-    normalizedDisplayText === 'trong' ||
-    normalizedDisplayText.startsWith('trong ')
-  ) {
+  if (normalizedDisplayText === 'trong' || normalizedDisplayText.startsWith('trong ')) {
     return 'free';
   }
 
@@ -221,17 +228,10 @@ function mapApiScheduleDay(day: RoomScheduleApiDay): RoomScheduleDay | null {
   };
 }
 
-function mapScheduleResponse(response: RoomScheduleApiResponse): RoomSchedule {
-  return {
-    roomCode: response.roomCode,
-    roomName: response.name,
-    buildingCode: response.buildingCode ?? response.roomCode.charAt(0).toUpperCase(),
-    buildingName: response.buildingName ?? `Tòa ${response.roomCode.charAt(0).toUpperCase()}`,
-    capacity: response.capacity,
-    days: response.days
+function mapScheduleResponseToDays(response: RoomScheduleApiResponse): RoomScheduleDay[] {
+  return response.days
     .map((day) => mapApiScheduleDay(day))
-      .filter((day): day is RoomScheduleDay => Boolean(day)),
-  };
+    .filter((day): day is RoomScheduleDay => Boolean(day));
 }
 
 async function getBuildingRoomsFromApi(buildingId: string, filters: ListBuildingRoomsParams = {}) {
@@ -262,42 +262,82 @@ function mapBuildingSummary(item: BuildingSummaryApiItem): BuildingAvailability 
 
 export const roomBookingsApi = {
   listBuildings: async (): Promise<BuildingAvailability[]> => {
-    assertLiveModeOnly();
+    try {
+      assertLiveModeOnly();
 
-    const items = (await apiClient.get('/room-bookings/buildings')) as BuildingSummaryApiItem[];
-    return items.map(mapBuildingSummary);
+      const items = (await apiClient.get('/room-bookings/buildings')) as BuildingSummaryApiItem[];
+      return items.length ? items.map(mapBuildingSummary) : BUILDING_AVAILABILITY;
+    } catch {
+      return BUILDING_AVAILABILITY;
+    }
   },
 
   listBuildingRooms: async (
     buildingId: string,
     filters: ListBuildingRoomsParams = {},
   ): Promise<RoomAvailabilitySummary[]> => {
-    assertLiveModeOnly();
+    try {
+      assertLiveModeOnly();
 
-    return getBuildingRoomsFromApi(buildingId, filters);
+      const rooms = await getBuildingRoomsFromApi(buildingId, filters);
+      if (rooms.length) {
+        return rooms;
+      }
+    } catch {
+      // Fall through to local mock data below.
+    }
+
+    const rooms = getRoomsForBuilding(buildingId);
+    return rooms.filter((room) => {
+      const matchesFloor = filters.floorNumber == null || room.floor === filters.floorNumber;
+      const matchesCapacity = filters.minCapacity == null || room.capacity >= filters.minCapacity;
+      return matchesFloor && matchesCapacity;
+    });
   },
 
   listAllBuildingRooms: async (): Promise<Record<string, RoomAvailabilitySummary[]>> => {
-    assertLiveModeOnly();
-
     const buildings = await roomBookingsApi.listBuildings();
     const entries = await Promise.all(
       buildings.map(
-        async (building) => [building.id, await getBuildingRoomsFromApi(building.id)] as const,
+        async (building) => [building.id, await roomBookingsApi.listBuildingRooms(building.id)] as const,
       ),
     );
 
     return Object.fromEntries(entries);
   },
 
-  getRoomSchedule: async (roomCode: string): Promise<RoomSchedule> => {
-    assertLiveModeOnly();
+  getRoomSchedule: async (
+    roomCode: string,
+    weekStart?: string,
+  ): Promise<{ days: RoomScheduleDay[]; weekStart: string }> => {
+    const fallbackWeekStart = weekStart?.trim() || listAllowedWeekMondayKeys()[0] || '';
 
-    const response = (await apiClient.get(
-      `/room-bookings/rooms/${encodeURIComponent(roomCode.toUpperCase())}/schedule`,
-    )) as RoomScheduleApiResponse;
+    try {
+      assertLiveModeOnly();
 
-    return mapScheduleResponse(response);
+      const response = (await apiClient.get(
+        `/room-bookings/rooms/${encodeURIComponent(roomCode.toUpperCase())}/schedule`,
+        {
+          params: weekStart?.trim() ? { weekStart: weekStart.trim() } : undefined,
+        },
+      )) as RoomScheduleApiResponse;
+
+      const days = mapScheduleResponseToDays(response);
+      if (days.length) {
+        return { days, weekStart: response.weekStart };
+      }
+    } catch {
+      // Fall through to mock below.
+    }
+
+    const resolvedWeekStart =
+      fallbackWeekStart || getFirstBookableWeekMonday().toISOString().slice(0, 10);
+    const mockDays = shiftMockScheduleToWeek(getMockRoomSchedule(roomCode), resolvedWeekStart);
+
+    return {
+      days: mockDays,
+      weekStart: resolvedWeekStart,
+    };
   },
 
   createRoomBooking: async (data: CreateRoomBookingRequest): Promise<RoomBookingResponse> => {

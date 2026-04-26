@@ -11,7 +11,7 @@ export interface RegisterPushTokenRequest {
 export interface RemovePushTokenRequest {
   expoPushToken: string;
 }
-
+  
 export const notificationsApi = {
   getNotifications: async (page = 1, limit = 20): Promise<NotificationsPayload> => {
     return apiClient.get('/notifications', {

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
