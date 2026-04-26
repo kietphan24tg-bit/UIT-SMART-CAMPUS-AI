@@ -34,6 +34,8 @@ export function getRoleLabel(role?: string | null) {
   switch (role) {
     case USER_ROLES.LECTURER:
       return 'Giảng viên';
+    case USER_ROLES.CANTEEN_ADMIN:
+      return 'Quản trị canteen';
     case USER_ROLES.ADMIN:
       return 'Quản trị viên';
     case USER_ROLES.SUPER_ADMIN:
@@ -57,6 +59,10 @@ export function isSuperAdminRole(role?: string | null) {
 
 export function isLecturerRole(role?: string | null) {
   return role === USER_ROLES.LECTURER;
+}
+
+export function isCanteenAdminRole(role?: string | null) {
+  return role === USER_ROLES.CANTEEN_ADMIN;
 }
 
 export function getGreetingName(
@@ -288,6 +294,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const teachingCategory = 'Công cụ giảng dạy' as const;
   const adminCategory = 'Công cụ quản trị' as const;
   const isStudentRole = role === USER_ROLES.STUDENT;
+  const isCanteenAdmin = role === USER_ROLES.CANTEEN_ADMIN;
 
   const entries: ServiceEntry[] = [
     {
@@ -376,18 +383,47 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       description: 'Đặt phòng học, xem yêu cầu của tôi và queue phê duyệt.',
     },
     {
+      id: 'canteen',
+      title: 'Canteen',
+      summary: isCanteenAdmin
+        ? 'Quản lý menu, đơn hàng và trạng thái phục vụ.'
+        : 'Đặt món, thanh toán online và theo dõi hóa đơn.',
+      category: 'Đời sống campus',
+      icon: 'restaurant-outline',
+      supportState: 'live',
+      isInteractive: true,
+      lastVerifiedSource: 'payments',
+      primaryAction: isCanteenAdmin ? 'Mở quản trị canteen' : 'Mở menu canteen',
+      route: isCanteenAdmin ? '/services/canteen/admin' : '/services/canteen',
+      description: isCanteenAdmin
+        ? 'Quản trị canteen cập nhật món ăn, xem đơn và hoàn thành đơn đã thanh toán.'
+        : 'Sinh viên và giảng viên có thể đặt món, thanh toán và xem lịch sử hóa đơn.',
+    },
+    {
+      id: 'gps-sos',
+      title: 'GPS/SOS',
+      summary: 'Gửi yêu cầu SOS theo vị trí snapshot và theo dõi hỗ trợ gần bạn.',
+      category: 'Tiện ích campus',
+      icon: 'locate-outline',
+      supportState: 'live',
+      isInteractive: true,
+      lastVerifiedSource: 'manual',
+      primaryAction: 'Mở GPS/SOS',
+      route: '/services/gps-sos',
+      description: 'Vị trí chỉ được ghi nhận khi bấm SOS, không theo dõi realtime liên tục.',
+    },
+    {
       id: 'library',
       title: 'Thư viện',
-      summary: 'Sắp triển khai dịch vụ thư viện.',
+      summary: 'Tra cứu sách, giữ chỗ và theo dõi lịch sử mượn trả.',
       category: 'Đời sống campus',
       icon: 'book-outline',
-      supportState: 'unsupported',
-      isInteractive: false,
-      disabledReason: 'Sắp triển khai tra cứu và mượn trả.',
+      supportState: 'live',
+      isInteractive: true,
       lastVerifiedSource: 'manual',
-      primaryAction: 'Theo dõi cập nhật',
+      primaryAction: 'Mở thư viện',
       route: '/services/library',
-      description: 'Sắp triển khai tra cứu sách và lịch sử mượn trả.',
+      description: 'Theo dõi bản sao còn sẵn, giữ chỗ và gia hạn theo chính sách vai trò.',
     },
     {
       id: 'campus-map',
@@ -405,16 +441,15 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'chatbot',
       title: 'AI Chatbot',
-      summary: 'Sắp triển khai trợ lý hỏi đáp cho campus.',
+      summary: 'Trợ lý nội bộ trả lời từ dữ liệu thật trong ứng dụng.',
       category: 'Tiện ích campus',
       icon: 'chatbubble-ellipses-outline',
-      supportState: 'unsupported',
-      isInteractive: false,
-      disabledReason: 'Sắp triển khai trợ lý hỏi đáp.',
+      supportState: 'live',
+      isInteractive: true,
       lastVerifiedSource: 'manual',
-      primaryAction: 'Theo dõi cập nhật',
+      primaryAction: 'Mở AI Chatbot',
       route: '/services/chatbot',
-      description: 'Hiển thị phạm vi dự kiến và lưu ý quyền riêng tư.',
+      description: 'Không gọi AI ngoài; truy vấn theo quyền và trả lời kèm nguồn/citation.',
     },
     {
       id: 'smart-classroom',

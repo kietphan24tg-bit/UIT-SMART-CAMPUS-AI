@@ -1,0 +1,124 @@
+{
+  "books": [
+    {
+      "openLibraryId": "OL7353617M",
+      "isbn13": "9780131101630",
+      "title": "The C Programming Language",
+      "authors": "Brian W. Kernighan, Dennis M. Ritchie",
+      "subjects": ["software engineering", "programming", "c language"],
+      "publisher": "Prentice Hall",
+      "publishedAt": "1988",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780131101630-L.jpg",
+      "shelfCode": "SE-A1"
+    },
+    {
+      "openLibraryId": "OL27448W",
+      "isbn13": "9780262033848",
+      "title": "Introduction to Algorithms",
+      "authors": "Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein",
+      "subjects": ["algorithms", "data structures", "computer science"],
+      "publisher": "MIT Press",
+      "publishedAt": "2009",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780262033848-L.jpg",
+      "shelfCode": "CS-B2"
+    },
+    {
+      "openLibraryId": "OL2432665M",
+      "isbn13": "9780132350884",
+      "title": "Clean Code",
+      "authors": "Robert C. Martin",
+      "subjects": ["software engineering", "clean code", "craftsmanship"],
+      "publisher": "Prentice Hall",
+      "publishedAt": "2008",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780132350884-L.jpg",
+      "shelfCode": "SE-A2"
+    },
+    {
+      "openLibraryId": "OL2721226M",
+      "isbn13": "9780201633610",
+      "title": "Design Patterns",
+      "authors": "Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides",
+      "subjects": ["software engineering", "design patterns", "oop"],
+      "publisher": "Addison-Wesley",
+      "publishedAt": "1994",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780201633610-L.jpg",
+      "shelfCode": "SE-A3"
+    },
+    {
+      "openLibraryId": "OL22511396M",
+      "isbn13": "9780262046305",
+      "title": "Artificial Intelligence: A Modern Approach",
+      "authors": "Stuart Russell, Peter Norvig",
+      "subjects": ["artificial intelligence", "machine learning", "ai"],
+      "publisher": "Pearson",
+      "publishedAt": "2021",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780262046305-L.jpg",
+      "shelfCode": "AI-C1"
+    },
+    {
+      "openLibraryId": "OL26436295M",
+      "isbn13": "9781491912058",
+      "title": "Designing Data-Intensive Applications",
+      "authors": "Martin Kleppmann",
+      "subjects": ["data engineering", "distributed systems", "databases"],
+      "publisher": "O'Reilly Media",
+      "publishedAt": "2017",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9781491912058-L.jpg",
+      "shelfCode": "DS-C2"
+    },
+    {
+      "openLibraryId": "OL45883W",
+      "isbn13": "9780134685991",
+      "title": "Effective Java",
+      "authors": "Joshua Bloch",
+      "subjects": ["java", "software engineering", "best practices"],
+      "publisher": "Addison-Wesley",
+      "publishedAt": "2018",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780134685991-L.jpg",
+      "shelfCode": "SE-A4"
+    },
+    {
+      "openLibraryId": "OL16825035M",
+      "isbn13": "9780596517748",
+      "title": "JavaScript: The Good Parts",
+      "authors": "Douglas Crockford",
+      "subjects": ["javascript", "web development", "software engineering"],
+      "publisher": "O'Reilly Media",
+      "publishedAt": "2008",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780596517748-L.jpg",
+      "shelfCode": "SE-A5"
+    },
+    {
+      "openLibraryId": "OL24884974M",
+      "isbn13": "9780321751041",
+      "title": "Computer Networking: A Top-Down Approach",
+      "authors": "James F. Kurose, Keith W. Ross",
+      "subjects": ["networking", "internet", "communication"],
+      "publisher": "Pearson",
+      "publishedAt": "2012",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780321751041-L.jpg",
+      "shelfCode": "NT-D1"
+    },
+    {
+      "openLibraryId": "OL26394367M",
+      "isbn13": "9781491957660",
+      "title": "Fluent Python",
+      "authors": "Luciano Ramalho",
+      "subjects": ["python", "software engineering", "programming"],
+      "publisher": "O'Reilly Media",
+      "publishedAt": "2015",
+      "language": "en",
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9781491957660-L.jpg",
+      "shelfCode": "SE-A6"
+    }
+  ]
+}

@@ -92,6 +92,11 @@ function RootNavigator() {
         <Stack.Screen name="services/attendance/result" />
         <Stack.Screen name="services/attendance/history" />
         <Stack.Screen name="services/campus-map/view" />
+        <Stack.Screen name="services/library/index" />
+        <Stack.Screen name="services/canteen/index" />
+        <Stack.Screen name="services/canteen/admin" />
+        <Stack.Screen name="services/gps-sos/index" />
+        <Stack.Screen name="services/chatbot/index" />
         <Stack.Screen name="services/events/index" />
         <Stack.Screen name="services/events/[slug]" />
         <Stack.Screen name="alerts/[id]" />

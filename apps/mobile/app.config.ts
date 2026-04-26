@@ -32,6 +32,13 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-notifications',
     [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'Ứng dụng cần quyền vị trí để gửi SOS snapshot và mở lộ trình hỗ trợ khẩn cấp.',
+      },
+    ],
+    [
       'expo-camera',
       {
         cameraPermission:
@@ -48,12 +55,16 @@ const config: ExpoConfig = {
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+const trackAsiaMapKey = process.env.EXPO_PUBLIC_TRACK_ASIA_MAP_KEY;
+const trackAsiaStyleUrl = process.env.EXPO_PUBLIC_TRACK_ASIA_STYLE_URL;
 
 export default (): ExpoConfig => ({
   ...config,
   extra: {
     ...config.extra,
     ...(apiUrl ? { apiUrl } : {}),
+    ...(trackAsiaMapKey ? { trackAsiaMapKey } : {}),
+    ...(trackAsiaStyleUrl ? { trackAsiaStyleUrl } : {}),
     ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
   },
 });

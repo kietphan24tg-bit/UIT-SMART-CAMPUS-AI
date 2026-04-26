@@ -1,13 +1,17 @@
 export { apiClient } from './client';
 export { attendanceApi } from './attendance';
 export { authApi } from './auth';
+export { canteenApi } from './canteen';
+export { chatbotApi } from './chatbot';
 export { catalogApi } from './catalog';
 export { eventsApi } from './events';
 export { gradesApi } from './grades';
+export { libraryApi } from './library';
 export { notificationsApi } from './notifications';
 export { parkingApi } from './parking';
 export { registrationsApi } from './registrations';
 export { roomBookingsApi } from './room-bookings';
 export { safetyApi } from './safety';
 export { scheduleApi } from './schedule';
+export { sosApi } from './sos';
 export { usersApi } from './users';

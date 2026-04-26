@@ -1,9 +1,8 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
-import ServicesScreen, { getServiceGridWidth } from '../index';
+import ServicesScreen from '../index';
 
-import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 
 const mockRouter = {
@@ -16,10 +15,9 @@ jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
 }));
 jest.mock('@/stores/auth-store');
-jest.mock('@/hooks/use-responsive-layout');
 
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
-const mockUseResponsiveLayout = useResponsiveLayout as unknown as jest.Mock;
+
 
 describe('ServicesScreen', () => {
   beforeEach(() => {
@@ -27,13 +25,6 @@ describe('ServicesScreen', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
-    });
-    mockUseResponsiveLayout.mockReturnValue({
-      isCompact: false,
-      isTablet: false,
-      availableWidth: 320,
-      getGridColumns: () => 1,
-      getGridItemWidth: () => 320,
     });
   });
 
@@ -65,30 +56,11 @@ describe('ServicesScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/services/room-booking');
   });
 
-  it('renders live and upcoming service groups on tablet widths', () => {
-    mockUseResponsiveLayout.mockReturnValue({
-      isCompact: false,
-      isTablet: true,
-      availableWidth: 600,
-      getGridColumns: () => 2,
-      getGridItemWidth: () => 280,
-    });
-
+  it('renders live and upcoming service groups', () => {
     const { getByText } = render(<ServicesScreen />);
 
     expect(getByText('Nổi bật')).toBeTruthy();
     expect(getByText('Đang hỗ trợ')).toBeTruthy();
     expect(getByText('Sắp tới')).toBeTruthy();
-  });
-
-  it('keeps service cards inside the section content width', () => {
-    expect(
-      getServiceGridWidth({
-        isCompact: false,
-        isTablet: false,
-        availableWidth: 320,
-        getGridItemWidth: jest.fn(),
-      } as never),
-    ).toBe(284);
   });
 });

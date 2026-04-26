@@ -125,6 +125,18 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   UIT_EVENTS_REQUEST_TIMEOUT_MS = 20_000;
+
+  @IsString()
+  @IsOptional()
+  TRACK_ASIA_SERVER_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  TRACK_ASIA_STYLE_URL = '';
+
+  @IsString()
+  @IsOptional()
+  OPEN_LIBRARY_USER_AGENT = 'smart-campus-demo/1.0';
 }
 
 export function validate(config: Record<string, unknown>) {

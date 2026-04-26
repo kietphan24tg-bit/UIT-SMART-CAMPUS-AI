@@ -159,6 +159,23 @@ interface RoomSnapshotFile {
   bookings: RoomBookingSeed[];
 }
 
+interface OpenLibraryBooksSnapshotFile {
+  books: Array<{
+    openLibraryId?: string;
+    isbn13?: string;
+    title: string;
+    subtitle?: string;
+    authors: string;
+    subjects?: string[];
+    publisher?: string;
+    publishedAt?: string;
+    language?: string;
+    coverUrl?: string;
+    description?: string;
+    shelfCode?: string;
+  }>;
+}
+
 function loadRoomSnapshot(): RoomSnapshotFile | null {
   const snapshotPath = resolve(process.cwd(), 'prisma', 'fixtures', 'uit-room-schedule.snapshot.json');
 
@@ -168,6 +185,34 @@ function loadRoomSnapshot(): RoomSnapshotFile | null {
 
   return JSON.parse(readFileSync(snapshotPath, 'utf8')) as RoomSnapshotFile;
 }
+
+function loadOpenLibraryBooksSnapshot(): OpenLibraryBooksSnapshotFile | null {
+  const snapshotPath = resolve(process.cwd(), 'prisma', 'fixtures', 'open-library-books.snapshot.json');
+
+  if (!existsSync(snapshotPath)) {
+    return null;
+  }
+
+  return JSON.parse(readFileSync(snapshotPath, 'utf8')) as OpenLibraryBooksSnapshotFile;
+}
+
+const canteenCategorySeeds = [
+  { slug: 'com-phan', name: 'Cơm phần', description: 'Cơm trưa và cơm tối theo suất.', sortOrder: 1 },
+  { slug: 'bun-pho', name: 'Bún/Phở', description: 'Món nước phục vụ cả ngày.', sortOrder: 2 },
+  { slug: 'an-vat', name: 'Ăn vặt', description: 'Đồ ăn nhanh cho giờ nghỉ.', sortOrder: 3 },
+  { slug: 'do-uong', name: 'Đồ uống', description: 'Nước giải khát và cà phê.', sortOrder: 4 },
+] as const;
+
+const canteenProductSeeds = [
+  { categorySlug: 'com-phan', slug: 'com-ga-nuong', name: 'Cơm gà nướng', price: 35000, stock: 40, sortOrder: 1 },
+  { categorySlug: 'com-phan', slug: 'com-suon-bi-cha', name: 'Cơm sườn bì chả', price: 38000, stock: 30, sortOrder: 2 },
+  { categorySlug: 'bun-pho', slug: 'bun-bo-hue', name: 'Bún bò Huế', price: 32000, stock: 35, sortOrder: 1 },
+  { categorySlug: 'bun-pho', slug: 'pho-bo', name: 'Phở bò', price: 36000, stock: 28, sortOrder: 2 },
+  { categorySlug: 'an-vat', slug: 'banh-mi-thit', name: 'Bánh mì thịt', price: 22000, stock: 45, sortOrder: 1 },
+  { categorySlug: 'an-vat', slug: 'xuc-xich-chien', name: 'Xúc xích chiên', price: 18000, stock: 60, sortOrder: 2 },
+  { categorySlug: 'do-uong', slug: 'ca-phe-sua-da', name: 'Cà phê sữa đá', price: 20000, stock: 80, sortOrder: 1 },
+  { categorySlug: 'do-uong', slug: 'tra-dao-cam-sa', name: 'Trà đào cam sả', price: 28000, stock: 50, sortOrder: 2 },
+] as const;
 
 const buildingSeeds = [
   { id: 'building-a', code: 'A', name: 'Tòa A' },
@@ -1713,7 +1758,7 @@ function timeRangesOverlap(startA: string, endA: string, startB: string, endB: s
 async function main() {
   const passwordHash = await bcrypt.hash('Password123', 10);
 
-  const [superAdmin, admin, lecturer, student] = await Promise.all([
+  const [superAdmin, admin, canteenAdmin, lecturer, student] = await Promise.all([
     prisma.user.upsert({
       where: { email: 'superadmin@uit.edu.vn' },
       update: {
@@ -1741,6 +1786,25 @@ async function main() {
         firstName: 'Admin',
         lastName: 'System',
         role: Role.admin,
+        isActive: true,
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: 'canteen.admin@uit.edu.vn' },
+      update: {
+        passwordHash,
+        firstName: 'Minh',
+        lastName: 'Canteen',
+        role: Role.canteen_admin,
+        isActive: true,
+      },
+      create: {
+        email: 'canteen.admin@uit.edu.vn',
+        passwordHash,
+        firstName: 'Minh',
+        lastName: 'Canteen',
+        role: Role.canteen_admin,
+        faculty: 'Dịch vụ căn tin',
         isActive: true,
       },
     }),
@@ -2383,23 +2447,258 @@ async function main() {
     });
   }
 
+  await prisma.chatMessage.deleteMany();
+  await prisma.chatSession.deleteMany();
+  await prisma.knowledgeChunk.deleteMany();
+  await prisma.knowledgeDocument.deleteMany();
+  await prisma.sosRequest.deleteMany();
+  await prisma.canteenPaymentTransaction.deleteMany();
+  await prisma.canteenOrderItem.deleteMany();
+  await prisma.canteenOrder.deleteMany();
+  await prisma.canteenProduct.deleteMany();
+  await prisma.canteenCategory.deleteMany();
+  await prisma.libraryLoan.deleteMany();
+  await prisma.libraryReservation.deleteMany();
+  await prisma.libraryBookCopy.deleteMany();
+  await prisma.libraryBook.deleteMany();
+
+  const librarySnapshot = loadOpenLibraryBooksSnapshot();
+  const libraryBookSeeds = librarySnapshot?.books ?? [];
+  const seededLibraryBooks: Array<{ id: string; title: string }> = [];
+
+  for (const [index, bookSeed] of libraryBookSeeds.entries()) {
+    const createdBook = await prisma.libraryBook.create({
+      data: {
+        openLibraryId: bookSeed.openLibraryId?.trim() || null,
+        isbn13: bookSeed.isbn13?.trim() || null,
+        title: bookSeed.title.trim(),
+        subtitle: bookSeed.subtitle?.trim() || null,
+        authors: bookSeed.authors.trim(),
+        subjects: bookSeed.subjects ?? [],
+        publisher: bookSeed.publisher?.trim() || null,
+        publishedAt: bookSeed.publishedAt?.trim() || null,
+        language: bookSeed.language?.trim() || null,
+        coverUrl: bookSeed.coverUrl?.trim() || null,
+        description: bookSeed.description?.trim() || null,
+        shelfCode: bookSeed.shelfCode?.trim() || null,
+      },
+      select: { id: true, title: true },
+    });
+    seededLibraryBooks.push(createdBook);
+
+    for (let copyIndex = 1; copyIndex <= 2; copyIndex += 1) {
+      await prisma.libraryBookCopy.create({
+        data: {
+          bookId: createdBook.id,
+          copyCode: `LIB-${String(index + 1).padStart(3, '0')}-${copyIndex}`,
+        },
+      });
+    }
+  }
+
+  if (seededLibraryBooks[0]) {
+    const firstBookCopy = await prisma.libraryBookCopy.findFirst({
+      where: {
+        bookId: seededLibraryBooks[0].id,
+      },
+      orderBy: [{ copyCode: 'asc' }],
+    });
+    if (firstBookCopy) {
+      await prisma.libraryLoan.create({
+        data: {
+          copyId: firstBookCopy.id,
+          borrowerId: student.id,
+          dueAt: new Date('2026-05-05T00:00:00.000Z'),
+          renewedCount: 0,
+        },
+      });
+      await prisma.libraryBookCopy.update({
+        where: { id: firstBookCopy.id },
+        data: { status: 'borrowed' },
+      });
+    }
+  }
+
+  if (seededLibraryBooks[1]) {
+    await prisma.libraryReservation.create({
+      data: {
+        bookId: seededLibraryBooks[1].id,
+        requesterId: student.id,
+        expiresAt: new Date('2026-05-01T00:00:00.000Z'),
+        note: 'Giữ chỗ để mượn tuần sau',
+      },
+    });
+  }
+
+  const categoryBySlug = new Map<string, { id: string }>();
+  for (const categorySeed of canteenCategorySeeds) {
+    const category = await prisma.canteenCategory.create({
+      data: {
+        name: categorySeed.name,
+        slug: categorySeed.slug,
+        description: categorySeed.description,
+        sortOrder: categorySeed.sortOrder,
+      },
+      select: { id: true },
+    });
+    categoryBySlug.set(categorySeed.slug, category);
+  }
+
+  const productBySlug = new Map<string, { id: string; price: number; name: string }>();
+  for (const productSeed of canteenProductSeeds) {
+    const category = categoryBySlug.get(productSeed.categorySlug);
+    if (!category) {
+      continue;
+    }
+
+    const product = await prisma.canteenProduct.create({
+      data: {
+        categoryId: category.id,
+        name: productSeed.name,
+        slug: productSeed.slug,
+        price: productSeed.price,
+        stock: productSeed.stock,
+        sortOrder: productSeed.sortOrder,
+      },
+      select: { id: true, price: true, name: true },
+    });
+    productBySlug.set(productSeed.slug, product);
+  }
+
+  const seededOrderItems = ['com-ga-nuong', 'ca-phe-sua-da']
+    .map((slug) => productBySlug.get(slug))
+    .filter((item): item is { id: string; price: number; name: string } => Boolean(item));
+  if (seededOrderItems.length) {
+    const totalAmount = seededOrderItems.reduce((sum, item) => sum + item.price, 0);
+    const canteenOrder = await prisma.canteenOrder.create({
+      data: {
+        orderCode: 'CTN-DEMO-0001',
+        createdById: student.id,
+        status: 'paid',
+        totalAmount,
+        note: 'Đơn demo đã thanh toán',
+      },
+      select: { id: true },
+    });
+
+    for (const item of seededOrderItems) {
+      await prisma.canteenOrderItem.create({
+        data: {
+          orderId: canteenOrder.id,
+          productId: item.id,
+          productName: item.name,
+          unitPrice: item.price,
+          quantity: 1,
+          lineTotal: item.price,
+        },
+      });
+    }
+
+    await prisma.canteenPaymentTransaction.create({
+      data: {
+        orderId: canteenOrder.id,
+        provider: 'momo',
+        providerOrderId: 'MOMO-CANTEEN-DEMO-0001',
+        requestId: 'REQ-CANTEEN-DEMO-0001',
+        amount: totalAmount,
+        status: 'paid',
+        paidAt: new Date('2026-04-25T10:00:00.000Z'),
+      },
+    });
+  }
+
+  await prisma.sosRequest.create({
+    data: {
+      requesterId: student.id,
+      resolverId: admin.id,
+      status: 'resolved',
+      latitude: 10.870051,
+      longitude: 106.803291,
+      accuracyMeters: 18,
+      addressSnapshot: 'Đại học Công nghệ Thông tin, TP. Thủ Đức',
+      contactSnapshot: {
+        name: 'Nguyen Van A',
+        email: student.email,
+      },
+      note: 'Đã được hỗ trợ an toàn',
+      createdAt: new Date('2026-04-23T09:30:00.000Z'),
+      resolvedAt: new Date('2026-04-23T09:45:00.000Z'),
+      expiresAt: new Date('2026-04-23T15:30:00.000Z'),
+    },
+  });
+
+  const knowledgeDocs = [
+    {
+      slug: 'library-service',
+      title: 'Dịch vụ thư viện',
+      source: 'service',
+      contentText:
+        'Thư viện hỗ trợ tra cứu sách, giữ chỗ, theo dõi lịch sử mượn và gia hạn theo chính sách vai trò.',
+    },
+    {
+      slug: 'canteen-service',
+      title: 'Dịch vụ canteen',
+      source: 'service',
+      contentText:
+        'Sinh viên và giảng viên có thể đặt món, thanh toán online và theo dõi lịch sử hóa đơn canteen.',
+    },
+    {
+      slug: 'sos-service',
+      title: 'Dịch vụ GPS SOS',
+      source: 'service',
+      contentText:
+        'SOS chỉ lưu snapshot vị trí tại thời điểm bấm nút, không theo dõi realtime, và người tạo có thể tự hủy.',
+    },
+  ] as const;
+
+  for (const [index, doc] of knowledgeDocs.entries()) {
+    const document = await prisma.knowledgeDocument.create({
+      data: {
+        slug: doc.slug,
+        title: doc.title,
+        source: doc.source,
+        contentText: doc.contentText,
+      },
+      select: { id: true },
+    });
+    await prisma.knowledgeChunk.create({
+      data: {
+        documentId: document.id,
+        chunkIndex: index,
+        contentText: doc.contentText,
+        keywordTokens: doc.contentText
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter((token) => token.length >= 3),
+      },
+    });
+  }
+
   const [
     seededRoomBookingCount,
     seededMeetingCount,
     seededEnrollmentCount,
     seededEventCount,
     seededEventRegistrationCount,
+    seededLibraryBookCount,
+    seededCanteenOrderCount,
+    seededSosCount,
   ] = await Promise.all([
     prisma.roomBooking.count(),
     prisma.classMeeting.count(),
     prisma.classEnrollment.count(),
     prisma.event.count(),
     prisma.eventRegistration.count(),
+    prisma.libraryBook.count(),
+    prisma.canteenOrder.count(),
+    prisma.sosRequest.count(),
   ]);
 
   console.warn('Seed completed:', {
     superAdmin: superAdmin.email,
     admin: admin.email,
+    canteenAdmin: canteenAdmin.email,
     lecturer: lecturer.email,
     student: student.email,
     buildings: buildingSeeds.length,
@@ -2415,6 +2714,9 @@ async function main() {
     grades: gradeSeedsBySemester.reduce((total, semester) => total + semester.items.length, 0),
     events: seededEventCount,
     eventRegistrations: seededEventRegistrationCount,
+    libraryBooks: seededLibraryBookCount,
+    canteenOrders: seededCanteenOrderCount,
+    sosRequests: seededSosCount,
     vehicle: vehicle.plateNumber,
   });
 }

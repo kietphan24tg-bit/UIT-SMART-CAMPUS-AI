@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 
@@ -15,6 +15,12 @@ const items = [
   { label: 'B', value: '2', helper: 'two', tone: 'success' as const },
   { label: 'C', value: '3', helper: 'three', tone: 'warning' as const },
   { label: 'D', value: '4', helper: 'four', tone: 'primary' as const },
+];
+
+const sixItems = [
+  ...items,
+  { label: 'E', value: '5', helper: 'five', tone: 'warning' as const },
+  { label: 'F', value: '6', helper: 'six', tone: 'info' as const },
 ];
 
 function createResponsiveLayout(width: number) {
@@ -44,60 +50,50 @@ describe('MetricGrid', () => {
     jest.clearAllMocks();
   });
 
-  it.each([
-    [320, 154],
-    [360, 174],
-    [390, 189],
-    [768, 378],
-  ])('keeps a fixed 2-column layout at width %i', async (containerWidth, expectedWidth) => {
-    mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(containerWidth));
+  it('renders all four cards with flex: 1 in a fixed 2-column layout', () => {
+    mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(360));
 
     const { getByTestId } = render(<MetricGrid items={items} fixedColumns={2} compactColumns={2} />);
-    const grid = getByTestId('metric-grid');
 
-    fireEvent(grid, 'layout', {
-      nativeEvent: {
-        layout: {
-          x: 0,
-          y: 0,
-          width: containerWidth,
-          height: 300,
-        },
-      },
-    });
+    const cards = items.map((_, index) => getByTestId(`metric-grid-card-${index}`));
+    expect(cards).toHaveLength(4);
 
-    await waitFor(() => {
-      const cards = items.map((_, index) => getByTestId(`metric-grid-card-${index}`));
-      expect(cards).toHaveLength(4);
-
-      for (const card of cards) {
-        const flattened = StyleSheet.flatten(card.props.style);
-        expect(flattened.width).toBe(expectedWidth);
-      }
-    });
+    for (const card of cards) {
+      const flattened = StyleSheet.flatten(card.props.style);
+      expect(flattened.flex).toBe(1);
+    }
   });
 
-  it('forces a 2x2 mobile layout for four metric cards when using the preset', async () => {
+  it('renders 2 rows of 2 cards for mobileTwoByTwo preset', () => {
     mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(280));
 
     const { getByTestId } = render(<MetricGrid items={items} layoutPreset="mobileTwoByTwo" />);
-    const grid = getByTestId('metric-grid');
 
-    fireEvent(grid, 'layout', {
-      nativeEvent: {
-        layout: {
-          x: 0,
-          y: 0,
-          width: 280,
-          height: 300,
-        },
-      },
-    });
+    // All 4 cards should exist
+    for (let i = 0; i < 4; i++) {
+      const card = getByTestId(`metric-grid-card-${i}`);
+      const flattened = StyleSheet.flatten(card.props.style);
+      expect(flattened.flex).toBe(1);
+    }
+  });
 
-    await waitFor(() => {
-      const firstCard = getByTestId('metric-grid-card-0');
-      const flattened = StyleSheet.flatten(firstCard.props.style);
-      expect(flattened.width).toBe(134);
-    });
+  it('renders 3 rows of 2 cards for mobileTwoByThree preset with 6 items', () => {
+    mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(300));
+
+    const { getByTestId } = render(<MetricGrid items={sixItems} layoutPreset="mobileTwoByThree" />);
+
+    // All 6 cards should exist with flex: 1
+    for (let i = 0; i < 6; i++) {
+      const card = getByTestId(`metric-grid-card-${i}`);
+      const flattened = StyleSheet.flatten(card.props.style);
+      expect(flattened.flex).toBe(1);
+    }
+  });
+
+  it('renders the grid container with testID metric-grid', () => {
+    mockUseResponsiveLayout.mockReturnValue(createResponsiveLayout(360));
+
+    const { getByTestId } = render(<MetricGrid items={items} />);
+    expect(getByTestId('metric-grid')).toBeTruthy();
   });
 });

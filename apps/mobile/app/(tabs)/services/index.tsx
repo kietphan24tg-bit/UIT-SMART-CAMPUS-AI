@@ -9,16 +9,13 @@ import {
   StatusBadge,
   TopHero,
 } from '@/components/ui';
-import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { getRoleLabel, getServiceEntries, isAdminRole } from '@/utils/app';
 
 const SERVICE_CARD_GAP = 12;
-const SERVICE_MIN_CARD_WIDTH = 220;
 
 export default function ServicesScreen() {
-  const layout = useResponsiveLayout();
   const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const services = getServiceEntries(role);
@@ -27,32 +24,9 @@ export default function ServicesScreen() {
     (service) => service.supportState === 'live' && service.id !== featuredService.id,
   );
   const upcomingServices = services.filter((service) => service.supportState !== 'live');
-  const serviceGridWidth = getServiceGridWidth(layout);
-  const maxServiceColumns = layout.isTablet ? 2 : 1;
-  const liveColumns = getGridColumnsForWidth({
-    width: serviceGridWidth,
-    minItemWidth: SERVICE_MIN_CARD_WIDTH,
-    gap: SERVICE_CARD_GAP,
-    maxColumns: maxServiceColumns,
-  });
-  const liveCardWidth = getGridItemWidthForWidth({
-    width: serviceGridWidth,
-    columns: liveColumns,
-    gap: SERVICE_CARD_GAP,
-  });
-  const upcomingColumns = getGridColumnsForWidth({
-    width: serviceGridWidth,
-    minItemWidth: SERVICE_MIN_CARD_WIDTH,
-    gap: SERVICE_CARD_GAP,
-    maxColumns: maxServiceColumns,
-  });
-  const upcomingCardWidth = getGridItemWidthForWidth({
-    width: serviceGridWidth,
-    columns: upcomingColumns,
-    gap: SERVICE_CARD_GAP,
-  });
-  const featuredCardWidth = serviceGridWidth;
   const showLiveSection = liveServices.length > 0;
+  const liveRows = buildGridRows(liveServices, 2);
+  const upcomingRows = buildGridRows(upcomingServices, 2);
 
   return (
     <Screen>
@@ -72,18 +46,15 @@ export default function ServicesScreen() {
           variant="highlight"
           tone="campus"
         >
-          <View style={[styles.grid, { gap: SERVICE_CARD_GAP }]}>
-            <ServiceTile
-              service={featuredService}
-              width={featuredCardWidth}
-              featured
-              onPress={
-                featuredService.isInteractive
-                  ? () => router.push(featuredService.route as never)
-                  : undefined
-              }
-            />
-          </View>
+          <ServiceTile
+            service={featuredService}
+            featured
+            onPress={
+              featuredService.isInteractive
+                ? () => router.push(featuredService.route as never)
+                : undefined
+            }
+          />
         </SectionCard>
 
         {showLiveSection ? (
@@ -93,14 +64,18 @@ export default function ServicesScreen() {
             variant="glass"
             tone="academic"
           >
-            <View style={[styles.grid, { gap: SERVICE_CARD_GAP }]}>
-              {liveServices.map((service) => (
-                <ServiceTile
-                  key={service.id}
-                  service={service}
-                  width={liveCardWidth}
-                  onPress={() => router.push(service.route as never)}
-                />
+            <View style={styles.gridRows}>
+              {liveRows.map((row, rowIndex) => (
+                <View key={`live-row-${rowIndex}`} style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}>
+                  {row.map((service) => (
+                    <ServiceTile
+                      key={service.id}
+                      service={service}
+                      onPress={() => router.push(service.route as never)}
+                    />
+                  ))}
+                  {row.length < 2 ? <View style={{ flex: 1 }} /> : null}
+                </View>
               ))}
             </View>
           </SectionCard>
@@ -113,14 +88,18 @@ export default function ServicesScreen() {
             variant="outlined"
             tone="neutral"
           >
-            <View style={[styles.grid, { gap: SERVICE_CARD_GAP }]}>
-              {upcomingServices.map((service) => (
-                <ServiceTile
-                  key={service.id}
-                  service={service}
-                  width={upcomingCardWidth}
-                  onPress={service.isInteractive ? () => router.push(service.route as never) : undefined}
-                />
+            <View style={styles.gridRows}>
+              {upcomingRows.map((row, rowIndex) => (
+                <View key={`upcoming-row-${rowIndex}`} style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}>
+                  {row.map((service) => (
+                    <ServiceTile
+                      key={service.id}
+                      service={service}
+                      onPress={service.isInteractive ? () => router.push(service.route as never) : undefined}
+                    />
+                  ))}
+                  {row.length < 2 ? <View style={{ flex: 1 }} /> : null}
+                </View>
               ))}
             </View>
           </SectionCard>
@@ -130,14 +109,20 @@ export default function ServicesScreen() {
   );
 }
 
+function buildGridRows<T>(items: T[], columns: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += columns) {
+    rows.push(items.slice(i, i + columns));
+  }
+  return rows;
+}
+
 function ServiceTile({
   service,
-  width,
   featured = false,
   onPress,
 }: {
   service: ReturnType<typeof getServiceEntries>[number];
-  width: number;
   featured?: boolean;
   onPress?: () => void;
 }) {
@@ -154,7 +139,7 @@ function ServiceTile({
         styles.card,
         featured ? styles.cardFeatured : null,
         {
-          width,
+          flex: featured ? undefined : 1,
           backgroundColor: interactive ? theme.colors.surfaceElevated : theme.colors.surfaceSubtle,
           borderColor: theme.colors.border,
           opacity: interactive ? (pressed ? 0.88 : 1) : 0.92,
@@ -217,46 +202,7 @@ function getFeaturedService(
   return services.find((service) => service.id === 'campus-map') ?? services[0];
 }
 
-export function getServiceGridWidth(layout: ReturnType<typeof useResponsiveLayout>) {
-  const sectionPadding = layout.isTablet ? 22 : layout.isCompact ? 16 : 18;
-  const availableWidth =
-    typeof layout.availableWidth === 'number'
-      ? layout.availableWidth
-      : layout.getGridItemWidth({ columns: 1, gap: SERVICE_CARD_GAP });
 
-  return Math.max(availableWidth - sectionPadding * 2, 0);
-}
-
-function getGridColumnsForWidth({
-  width,
-  minItemWidth,
-  gap,
-  maxColumns,
-}: {
-  width: number;
-  minItemWidth: number;
-  gap: number;
-  maxColumns: number;
-}) {
-  const estimatedColumns = Math.floor((width + gap) / (minItemWidth + gap));
-  return Math.max(1, Math.min(maxColumns, estimatedColumns || 1));
-}
-
-function getGridItemWidthForWidth({
-  width,
-  columns,
-  gap,
-}: {
-  width: number;
-  columns: number;
-  gap: number;
-}) {
-  if (columns <= 1) {
-    return width;
-  }
-
-  return Math.max((width - gap * (columns - 1)) / columns, 0);
-}
 
 function getSupportLabel(state: 'live' | 'partial' | 'unsupported') {
   switch (state) {
@@ -328,10 +274,11 @@ function getServiceSurface(
 }
 
 const styles = StyleSheet.create({
-  grid: {
+  gridRows: {
+    gap: SERVICE_CARD_GAP,
+  },
+  gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'stretch',
   },
   card: {
     borderWidth: 1,
