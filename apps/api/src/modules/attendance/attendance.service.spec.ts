@@ -7,32 +7,54 @@ import { PrismaService } from '../../database/prisma.service';
 
 import { AttendanceService } from './attendance.service';
 
-const redisGetMock = jest.fn();
-const redisSetMock = jest.fn();
-const redisDelMock = jest.fn();
-const redisConnectMock = jest.fn();
-
-jest.mock('redis', () => ({
-  createClient: jest.fn(() => ({
-    isOpen: true,
-    connect: redisConnectMock,
-    get: redisGetMock,
-    set: redisSetMock,
-    del: redisDelMock,
-  })),
-}));
-
 describe('AttendanceService', () => {
   let service: AttendanceService;
   let prisma: jest.Mocked<PrismaService>;
 
-  beforeEach(async () => {
-    redisGetMock.mockReset();
-    redisSetMock.mockReset();
-    redisDelMock.mockReset();
-    redisConnectMock.mockReset();
-    redisSetMock.mockResolvedValue('OK');
+  async function createSessionAndToken(overrides?: {
+    sessionId?: string;
+    classSectionId?: string;
+    sessionStatus?: AttendanceSessionStatus;
+    sessionExpiresAt?: Date;
+  }) {
+    const sessionId = overrides?.sessionId ?? 'session-1';
+    const classSectionId = overrides?.classSectionId ?? 'section-1';
 
+    (prisma.classSection.findUnique as jest.Mock).mockResolvedValue({
+      id: classSectionId,
+      lecturerId: 'lecturer-1',
+    });
+    (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.attendanceSession.create as jest.Mock).mockResolvedValue({
+      id: sessionId,
+      startedAt: new Date(),
+      expiresAt: new Date(Date.now() + 600_000),
+      status: AttendanceSessionStatus.active,
+    });
+
+    const sessionStart = await service.startSession('lecturer-1', {
+      classSectionId,
+      durationMinutes: 10,
+    });
+
+    (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
+      id: sessionId,
+      status: overrides?.sessionStatus ?? AttendanceSessionStatus.active,
+      expiresAt: overrides?.sessionExpiresAt ?? new Date(Date.now() + 60_000),
+      classSectionId,
+      classSection: {
+        classCode: 'SE346',
+        sectionCode: '01',
+        course: { name: 'Software Engineering' },
+      },
+    });
+
+    const qr = await service.issueQrToken(sessionId, sessionStart.displayKey);
+
+    return { sessionId, classSectionId, qr };
+  }
+
+  beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         AttendanceService,
@@ -66,9 +88,6 @@ describe('AttendanceService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string, defaultValue?: unknown) => {
-              if (key === 'REDIS_URL') {
-                return 'redis://localhost:6379';
-              }
               if (key === 'ATTENDANCE_TOKEN_TTL_SECONDS') {
                 return 90;
               }
@@ -90,18 +109,8 @@ describe('AttendanceService', () => {
     it('creates attendance record when token and session are valid', async () => {
       const session = {
         id: 'session-1',
-        status: AttendanceSessionStatus.active,
-        expiresAt: new Date(Date.now() + 60_000),
         classSectionId: 'section-1',
       };
-      redisGetMock.mockResolvedValue(
-        JSON.stringify({
-          sessionId: session.id,
-          issuedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 90_000).toISOString(),
-        }),
-      );
-      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue(session);
       (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue({
         id: 'enrollment-1',
       });
@@ -112,7 +121,8 @@ describe('AttendanceService', () => {
         checkinTime: new Date(),
       });
 
-      const result = await service.checkin('student-1', { token: 'valid-token' });
+      const { qr } = await createSessionAndToken();
+      const result = await service.checkin('student-1', { token: qr.token });
 
       expect(result.studentId).toBe('student-1');
       expect(prisma.attendanceRecord.create).toHaveBeenCalledWith({
@@ -131,77 +141,48 @@ describe('AttendanceService', () => {
       });
     });
 
-    it('throws TOKEN_INVALID when token does not exist in Redis', async () => {
-      redisGetMock.mockResolvedValue(null);
-
+    it('throws TOKEN_INVALID when token does not exist', async () => {
       await expect(service.checkin('student-1', { token: 'expired-token' })).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('throws SESSION_CLOSED when attendance session is expired', async () => {
-      redisGetMock.mockResolvedValue(
-        JSON.stringify({
-          sessionId: 'session-expired',
-          issuedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 90_000).toISOString(),
-        }),
-      );
+      const { qr } = await createSessionAndToken({
+        sessionId: 'session-expired',
+      });
       (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
         id: 'session-expired',
         status: AttendanceSessionStatus.expired,
         expiresAt: new Date(Date.now() - 1_000),
+        classSectionId: 'section-1',
       });
 
-      await expect(service.checkin('student-1', { token: 'token' })).rejects.toThrow(
+      await expect(service.checkin('student-1', { token: qr.token })).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('throws ForbiddenException when student is not enrolled', async () => {
-      redisGetMock.mockResolvedValue(
-        JSON.stringify({
-          sessionId: 'session-1',
-          issuedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 90_000).toISOString(),
-        }),
-      );
-      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
-        id: 'session-1',
-        status: AttendanceSessionStatus.active,
-        expiresAt: new Date(Date.now() + 60_000),
-        classSectionId: 'section-1',
-      });
       (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue(null);
+      const { qr } = await createSessionAndToken();
 
-      await expect(service.checkin('student-1', { token: 'token' })).rejects.toThrow(
+      await expect(service.checkin('student-1', { token: qr.token })).rejects.toThrow(
         ForbiddenException,
       );
       expect(prisma.attendanceRecord.create).not.toHaveBeenCalled();
     });
 
     it('throws ALREADY_CHECKED_IN when unique constraint is violated', async () => {
-      redisGetMock.mockResolvedValue(
-        JSON.stringify({
-          sessionId: 'session-1',
-          issuedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 90_000).toISOString(),
-        }),
-      );
-      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
-        id: 'session-1',
-        status: AttendanceSessionStatus.active,
-        expiresAt: new Date(Date.now() + 60_000),
-        classSectionId: 'section-1',
-      });
       (prisma.classEnrollment.findFirst as jest.Mock).mockResolvedValue({
         id: 'enrollment-1',
       });
       (prisma.attendanceRecord.create as jest.Mock).mockRejectedValue({
         code: 'P2002',
       });
+      const { qr } = await createSessionAndToken();
 
-      await expect(service.checkin('student-1', { token: 'token' })).rejects.toThrow(
+      await expect(service.checkin('student-1', { token: qr.token })).rejects.toThrow(
         ConflictException,
       );
     });
@@ -229,38 +210,22 @@ describe('AttendanceService', () => {
       await expect(service.issueQrToken('session-1', '')).rejects.toThrow(ForbiddenException);
     });
 
-    it('throws ForbiddenException when displayKey does not match Redis', async () => {
-      redisGetMock.mockResolvedValue(null);
-
+    it('throws ForbiddenException when displayKey does not match', async () => {
       await expect(service.issueQrToken('session-1', 'wrong-key')).rejects.toThrow(
         ForbiddenException,
       );
     });
 
     it('returns token and session meta when displayKey is valid', async () => {
-      redisGetMock.mockResolvedValueOnce('good-key');
-      (prisma.attendanceSession.findUnique as jest.Mock).mockResolvedValue({
-        id: 'session-1',
-        status: AttendanceSessionStatus.active,
-        expiresAt: new Date(Date.now() + 60_000),
-        classSection: {
-          classCode: 'SE346',
-          sectionCode: '01',
-          course: { name: 'Software Engineering' },
-        },
-      });
-      redisSetMock.mockResolvedValue('OK');
+      const { qr } = await createSessionAndToken();
 
-      const result = await service.issueQrToken('session-1', 'good-key');
-
-      expect(result.token).toMatch(/^att_/);
-      expect(result.session).toEqual({
+      expect(qr.token).toMatch(/^att_/);
+      expect(qr.session).toEqual({
         classCode: 'SE346',
         sectionCode: '01',
         courseName: 'Software Engineering',
         status: AttendanceSessionStatus.active,
       });
-      expect(redisSetMock).toHaveBeenCalled();
     });
   });
 

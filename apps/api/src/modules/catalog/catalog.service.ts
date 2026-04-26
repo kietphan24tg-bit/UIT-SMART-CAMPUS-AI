@@ -3,13 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, ScheduleSessionType } from '@prisma/client';
+import { Role, type ScheduleSessionType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CreateClassSectionDto } from './dto/create-class-section.dto';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { ReplaceClassMeetingsDto } from './dto/replace-class-meetings.dto';
 import { UpdateClassSectionDto } from './dto/update-class-section.dto';
+
+const DEFAULT_SCHEDULE_SESSION_TYPE: ScheduleSessionType = 'daytime';
 
 function toFullName(firstName: string, lastName: string) {
   return [lastName, firstName].filter(Boolean).join(' ').trim();
@@ -269,7 +271,7 @@ export class CatalogService {
             startPeriod: meeting.startPeriod ?? null,
             endPeriod: meeting.endPeriod ?? null,
             room: meeting.room?.trim() || null,
-            sessionType: meeting.sessionType ?? ScheduleSessionType.daytime,
+            sessionType: meeting.sessionType ?? DEFAULT_SCHEDULE_SESSION_TYPE,
             note: meeting.note?.trim() || null,
           })),
         });

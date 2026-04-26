@@ -1,4 +1,4 @@
-import { plainToInstance } from 'class-transformer';
+import { Transform, plainToInstance } from 'class-transformer';
 import {
   IsBoolean,
   IsNumber,
@@ -7,7 +7,51 @@ import {
   validateSync,
 } from 'class-validator';
 
+function toOptionalNumber(defaultValue?: number) {
+  return Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return defaultValue;
+    }
+
+    const normalized = typeof value === 'string' ? value.trim() : value;
+    if (normalized === '') {
+      return defaultValue;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? value : parsed;
+  });
+}
+
+function toOptionalBoolean(defaultValue?: boolean) {
+  return Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return defaultValue;
+    }
+
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === '') {
+        return defaultValue;
+      }
+      if (normalized === 'true') {
+        return true;
+      }
+      if (normalized === 'false') {
+        return false;
+      }
+    }
+
+    return value;
+  });
+}
+
 class EnvironmentVariables {
+  @toOptionalNumber(3000)
   @IsNumber()
   @IsOptional()
   PORT = 3000;
@@ -34,10 +78,7 @@ class EnvironmentVariables {
   @IsOptional()
   APP_BASE_URL = 'http://localhost:3000';
 
-  @IsString()
-  @IsOptional()
-  REDIS_URL = 'redis://localhost:6379';
-
+  @toOptionalNumber(90)
   @IsNumber()
   @IsOptional()
   ATTENDANCE_TOKEN_TTL_SECONDS = 90;
@@ -50,10 +91,12 @@ class EnvironmentVariables {
   @IsOptional()
   SMTP_HOST = '';
 
+  @toOptionalNumber(587)
   @IsNumber()
   @IsOptional()
   SMTP_PORT = 587;
 
+  @toOptionalBoolean(false)
   @IsBoolean()
   @IsOptional()
   SMTP_SECURE = false;
@@ -114,14 +157,17 @@ class EnvironmentVariables {
   @IsOptional()
   AVATAR_STORAGE_PUBLIC_BASE_URL = '';
 
+  @toOptionalNumber(10)
   @IsNumber()
   @IsOptional()
   UIT_EVENTS_MAX_PAGES = 10;
 
+  @toOptionalNumber(900_000)
   @IsNumber()
   @IsOptional()
   UIT_EVENTS_CACHE_TTL_MS = 900_000;
 
+  @toOptionalNumber(20_000)
   @IsNumber()
   @IsOptional()
   UIT_EVENTS_REQUEST_TIMEOUT_MS = 20_000;

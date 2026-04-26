@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ScheduleSessionType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -11,6 +10,9 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+
+const scheduleSessionTypeValues = ['daytime', 'evening'] as const;
+type ScheduleSessionTypeValue = (typeof scheduleSessionTypeValues)[number];
 
 class ClassMeetingInputDto {
   @ApiProperty({ example: 2, description: '2 = Monday, 7 = Saturday' })
@@ -45,10 +47,10 @@ class ClassMeetingInputDto {
   @IsString()
   room?: string;
 
-  @ApiPropertyOptional({ enum: ScheduleSessionType, default: ScheduleSessionType.daytime })
+  @ApiPropertyOptional({ enum: scheduleSessionTypeValues, default: 'daytime' })
   @IsOptional()
-  @IsEnum(ScheduleSessionType)
-  sessionType?: ScheduleSessionType;
+  @IsEnum(scheduleSessionTypeValues)
+  sessionType?: ScheduleSessionTypeValue;
 
   @ApiPropertyOptional({ example: 'Thuc hanh phong lab' })
   @IsOptional()

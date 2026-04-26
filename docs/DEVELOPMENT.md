@@ -72,7 +72,7 @@ cd ../..
 Kiểm tra database chạy:
 ```bash
 docker ps
-# Phải thấy smart-campus-db và smart-campus-redis đang chạy
+# Phải thấy smart-campus-db đang chạy
 ```
 
 ### 5. Chạy migration và seed

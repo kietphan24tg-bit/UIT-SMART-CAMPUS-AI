@@ -9,14 +9,11 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
-  OnModuleDestroy,
-  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AttendanceSession, Prisma } from '@prisma/client';
 import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
 import { API_PREFIX, PAGINATION_DEFAULTS } from '@smart-campus/shared';
-import { createClient } from 'redis';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -31,6 +28,11 @@ interface AttendanceTokenPayload {
   sessionId: string;
   issuedAt: string;
   expiresAt: string;
+}
+
+interface MemoryValue {
+  value: string;
+  expiresAt: number;
 }
 
 type ExportableAttendanceSession = Prisma.AttendanceSessionGetPayload<{
@@ -88,33 +90,19 @@ function sanitizeFileName(value: string) {
 }
 
 @Injectable()
-export class AttendanceService implements OnModuleInit, OnModuleDestroy {
+export class AttendanceService {
   private readonly qrRefreshSeconds = 30;
-
   private readonly tokenTtlSeconds: number;
   private readonly checkinRateLimitSeconds = 2;
-
-  private redisClient = createClient({
-    url: this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
-  });
+  private readonly store = new Map<string, MemoryValue>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {
-    this.tokenTtlSeconds = Number(this.configService.get<number>('ATTENDANCE_TOKEN_TTL_SECONDS', 90));
-  }
-
-  async onModuleInit() {
-    if (!this.redisClient.isOpen) {
-      await this.redisClient.connect();
-    }
-  }
-
-  async onModuleDestroy() {
-    if (this.redisClient.isOpen) {
-      await this.redisClient.quit();
-    }
+    this.tokenTtlSeconds = Number(
+      this.configService.get<number>('ATTENDANCE_TOKEN_TTL_SECONDS', 90),
+    );
   }
 
   async startSession(lecturerId: string, dto: StartAttendanceSessionDto) {
@@ -141,7 +129,9 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existingActiveSession) {
-      throw new ConflictException('This class section already has an active attendance session');
+      throw new ConflictException(
+        'This class section already has an active attendance session',
+      );
     }
 
     const startedAt = new Date();
@@ -160,9 +150,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       1,
       Math.ceil((expiresAt.getTime() - startedAt.getTime()) / 1000),
     );
-    await this.redisClient.set(this.buildDisplayKeyRedisKey(session.id), displayKey, {
-      EX: displayTtlSeconds,
-    });
+    this.setValue(this.buildDisplayKeyKey(session.id), displayKey, displayTtlSeconds);
 
     const appBaseUrl = this.configService.get<string>('APP_BASE_URL', 'http://localhost:3000');
     const base = appBaseUrl.replace(/\/$/, '');
@@ -227,9 +215,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       expiresAt: expiresAt.toISOString(),
     };
 
-    await this.redisClient.set(this.buildTokenKey(token), JSON.stringify(payload), {
-      EX: this.tokenTtlSeconds,
-    });
+    this.setValue(this.buildTokenKey(token), JSON.stringify(payload), this.tokenTtlSeconds);
 
     return {
       token,
@@ -253,9 +239,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
   async checkin(studentId: string | undefined, dto: CheckinAttendanceDto) {
     const effectiveStudentId = await this.resolveCheckinStudentId(studentId);
-    // await this.enforceCheckinRateLimit(studentId);
     await this.enforceCheckinRateLimit(effectiveStudentId);
-    const rawTokenPayload = await this.redisClient.get(this.buildTokenKey(dto.token));
+    const rawTokenPayload = this.getValue(this.buildTokenKey(dto.token));
     if (!rawTokenPayload) {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
@@ -765,20 +750,27 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async enforceCheckinRateLimit(studentId: string) {
-    const result = await this.redisClient.set(this.buildCheckinRateLimitKey(studentId), '1', {
-      EX: this.checkinRateLimitSeconds,
-      NX: true,
-    });
+    const result = this.setValue(
+      this.buildCheckinRateLimitKey(studentId),
+      '1',
+      this.checkinRateLimitSeconds,
+      true,
+    );
 
-    if (result !== 'OK') {
-      throw new HttpException({
-        code: 'RATE_LIMITED',
-        message: 'Too many check-in requests. Please try again shortly.',
-      }, HttpStatus.TOO_MANY_REQUESTS);
+    if (!result) {
+      throw new HttpException(
+        {
+          code: 'RATE_LIMITED',
+          message: 'Too many check-in requests. Please try again shortly.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
   }
 
-  private async ensureSessionActive<T extends AttendanceSession | null>(session: T): Promise<NonNullable<T>> {
+  private async ensureSessionActive<T extends AttendanceSession | null>(
+    session: T,
+  ): Promise<NonNullable<T>> {
     if (!session) {
       throw new NotFoundException('Attendance session not found');
     }
@@ -815,7 +807,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private buildDisplayKeyRedisKey(sessionId: string) {
+  private buildDisplayKeyKey(sessionId: string) {
     return `attendance:display:${sessionId}`;
   }
 
@@ -826,14 +818,14 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async validateDisplayKeyOrThrow(sessionId: string, displayKey: string) {
-    const stored = await this.redisClient.get(this.buildDisplayKeyRedisKey(sessionId));
+    const stored = this.getValue(this.buildDisplayKeyKey(sessionId));
     if (!stored || stored !== displayKey) {
       throw new ForbiddenException('Invalid displayKey');
     }
   }
 
   private async revokeDisplayKeyForSession(sessionId: string) {
-    await this.redisClient.del(this.buildDisplayKeyRedisKey(sessionId));
+    this.deleteValue(this.buildDisplayKeyKey(sessionId));
   }
 
   private renderLiveAttendanceHtml(sessionId: string, displayKey: string) {
@@ -945,5 +937,33 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         typeof (error as { code?: unknown }).code === 'string' &&
         (error as { code: string }).code === 'P2002',
     );
+  }
+
+  private setValue(key: string, value: string, ttlSeconds: number, onlyIfAbsent = false) {
+    this.cleanupExpiredKey(key);
+    if (onlyIfAbsent && this.store.has(key)) {
+      return false;
+    }
+    this.store.set(key, {
+      value,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+    return true;
+  }
+
+  private getValue(key: string) {
+    this.cleanupExpiredKey(key);
+    return this.store.get(key)?.value ?? null;
+  }
+
+  private deleteValue(key: string) {
+    this.store.delete(key);
+  }
+
+  private cleanupExpiredKey(key: string) {
+    const entry = this.store.get(key);
+    if (entry && entry.expiresAt <= Date.now()) {
+      this.store.delete(key);
+    }
   }
 }
