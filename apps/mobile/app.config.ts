@@ -57,10 +57,6 @@ const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 const trackAsiaMapKey = process.env.EXPO_PUBLIC_TRACK_ASIA_MAP_KEY;
 const trackAsiaStyleUrl = process.env.EXPO_PUBLIC_TRACK_ASIA_STYLE_URL;
-const uiRolePreviewEnv = process.env.EXPO_PUBLIC_UI_ROLE_PREVIEW;
-const uiRolePreview =
-  uiRolePreviewEnv === '1' || uiRolePreviewEnv === 'true' || uiRolePreviewEnv === 'yes';
-const uiPreviewRole = process.env.EXPO_PUBLIC_UI_PREVIEW_ROLE ?? 'lecturer';
 
 export default (): ExpoConfig => ({
   ...config,
@@ -70,7 +66,5 @@ export default (): ExpoConfig => ({
     ...(trackAsiaMapKey ? { trackAsiaMapKey } : {}),
     ...(trackAsiaStyleUrl ? { trackAsiaStyleUrl } : {}),
     ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
-    uiRolePreview,
-    uiPreviewRole,
   },
 });

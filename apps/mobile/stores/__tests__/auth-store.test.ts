@@ -45,7 +45,6 @@ describe('useAuthStore', () => {
       isAuthenticated: false,
       user: null,
       accessToken: null,
-      devRoleOverride: null,
     });
     jest.clearAllMocks();
   });
@@ -108,7 +107,6 @@ describe('useAuthStore', () => {
         isAuthenticated: true,
         user: mockUser,
         accessToken: 'token',
-        devRoleOverride: null,
       });
 
       await useAuthStore.getState().logout();

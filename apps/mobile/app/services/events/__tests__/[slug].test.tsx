@@ -1,4 +1,3 @@
-import { USER_ROLES } from '@smart-campus/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';

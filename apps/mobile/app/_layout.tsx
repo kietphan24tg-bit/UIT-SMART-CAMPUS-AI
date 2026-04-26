@@ -77,7 +77,6 @@ function RootNavigator() {
         <Stack.Screen name="schedule/semester/[id]" />
         <Stack.Screen name="schedule/[task]" />
         <Stack.Screen name="operations/[task]" />
-        <Stack.Screen name="parking/index" />
         <Stack.Screen name="parking/[task]" />
         <Stack.Screen name="services/room-booking/index" />
         <Stack.Screen name="services/room-booking/my" />
@@ -89,7 +88,6 @@ function RootNavigator() {
         <Stack.Screen name="services/admin-catalog/index" />
         <Stack.Screen name="services/attendance/index" />
         <Stack.Screen name="services/attendance/lecturer" />
-        <Stack.Screen name="services/attendance/class/[scheduleId]" />
         <Stack.Screen name="services/attendance/scan" />
         <Stack.Screen name="services/attendance/result" />
         <Stack.Screen name="services/attendance/history" />
@@ -126,11 +124,10 @@ function AuthNavigationGate() {
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    // Bypass login gate for local demo/testing. Uncomment this block to require login again.
-    // if (!isAuthenticated && !inAuthGroup) {
-    //   router.replace('/login');
-    //   return;
-    // }
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/login');
+      return;
+    }
 
     if (isAuthenticated && inAuthGroup) {
       router.replace('/home');

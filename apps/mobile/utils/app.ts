@@ -372,7 +372,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'room-booking',
       title: 'Đặt phòng',
-      summary: 'Tra cứu phòng trống, đặt phòng và theo dõi trạng thái phê duyệt.',
+      summary: 'Đặt phòng và theo dõi trạng thái phê duyệt.',
       category: 'Tiện ích campus',
       icon: 'business-outline',
       supportState: 'live',
@@ -380,7 +380,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       lastVerifiedSource: 'manual',
       primaryAction: 'Mở đặt phòng',
       route: '/services/room-booking',
-      description: 'Chọn tòa nhà, lọc phòng trống, tạo yêu cầu đặt phòng và theo dõi queue phê duyệt.',
+      description: 'Đặt phòng học, xem yêu cầu của tôi và queue phê duyệt.',
     },
     {
       id: 'canteen',
