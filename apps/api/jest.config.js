@@ -27,5 +27,6 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@smart-campus/shared$': '<rootDir>/../../packages/shared/src',
+    '^exceljs$': '<rootDir>/test/mocks/exceljs.ts',
   },
 };
