@@ -1,93 +1,139 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SkeletonBlock } from '@/components/ui';
-import { attendanceApi, type AttendanceSessionStartResponse } from '@/services/api/attendance';
-import { useAuthStore } from '@/stores/auth-store';
+import { ContentStack, EmptyState, Screen, SkeletonBlock } from '@/components/ui';
+import {
+  LecturerAttendanceScheduleCard,
+  groupAttendanceCardsByDay,
+  mapScheduleToAttendanceCards,
+  resolveScheduleCardToClassSection,
+} from '@/app/services/attendance/lecturer-data';
+import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
+import { attendanceApi } from '@/services/api/attendance';
 import { useAppTheme } from '@/theme';
-import { formatDateTime, getDayLabel, isLecturerRole } from '@/utils/app';
+import { getDayLabel } from '@/utils/app';
+
+export {
+  groupAttendanceCardsByDay,
+  mapScheduleToAttendanceCards,
+  resolveScheduleCardToClassSection,
+};
+
+function getRoomLabel(room?: string | null) {
+  return room ? `Phòng ${room}` : 'Chưa cập nhật phòng';
+}
+
+function getScheduleAccentColor(courseCode: string) {
+  const palette = ['#8E8BFF', '#22A884', '#C08A6B', '#4A90E2', '#B96EFF', '#F59E0B'];
+  const total = Array.from(courseCode).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[total % palette.length];
+}
+
+function ScheduleCard({
+  card,
+  onPress,
+}: {
+  card: LecturerAttendanceScheduleCard;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  const isUnlinked = !card.attendanceSection;
+  const accentColor = getScheduleAccentColor(card.course.code);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: false }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.scheduleCard,
+        {
+          backgroundColor: theme.colors.surfaceElevated,
+          borderColor: theme.colors.border,
+          opacity: pressed ? 0.9 : 1,
+        },
+        theme.elevation.level1 as never,
+      ]}
+    >
+      <View
+        style={[
+          styles.scheduleIconWrap,
+          {
+            backgroundColor: theme.colors.surfaceSubtle,
+          },
+        ]}
+      >
+        <View style={styles.iconGrid}>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={[styles.iconGridSquare, { backgroundColor: accentColor }]} />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.scheduleBody}>
+        <Text
+          style={[
+            styles.cardEyebrow,
+            {
+              color: isUnlinked ? theme.colors.textSoft : theme.colors.warning,
+              fontFamily: theme.fonts.medium,
+            },
+          ]}
+        >
+          {card.course.code}
+          {card.classCode ? ` · ${card.classCode}` : ''}
+        </Text>
+        <Text
+          style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}
+          numberOfLines={2}
+        >
+          {card.course.name}
+        </Text>
+        <Text
+          style={[styles.cardMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}
+          numberOfLines={1}
+        >
+          {card.startTime} - {card.endTime} · {getRoomLabel(card.room)}
+        </Text>
+        {isUnlinked ? (
+          <Text
+            style={[styles.cardHint, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}
+          >
+            Chưa liên kết dữ liệu điểm danh
+          </Text>
+        ) : null}
+      </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={20}
+        color={theme.colors.textMuted}
+      />
+    </Pressable>
+  );
+}
 
 export default function LecturerAttendanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const role = useAuthStore((state) => state.user?.role);
-  const canManageAttendance = isLecturerRole(role);
+  const scheduleState = useScheduleScreenData();
+
   const classSectionsQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'class-sections'],
     queryFn: attendanceApi.getLecturerClassSections,
-    enabled: canManageAttendance,
   });
 
-  const [selectedSectionId, setSelectedSectionId] = React.useState<string>('');
-  const [activeSession, setActiveSession] = React.useState<AttendanceSessionStartResponse | null>(null);
+  const scheduleCards = React.useMemo(
+    () => mapScheduleToAttendanceCards(scheduleState.schedule, classSectionsQuery.data ?? []),
+    [classSectionsQuery.data, scheduleState.schedule],
+  );
+  const groupedCards = React.useMemo(() => groupAttendanceCardsByDay(scheduleCards), [scheduleCards]);
 
-  const selectedSection =
-    classSectionsQuery.data?.find((item) => item.id === selectedSectionId) ??
-    classSectionsQuery.data?.[0] ??
-    null;
-
-  React.useEffect(() => {
-    if (!classSectionsQuery.data?.length) {
-      setSelectedSectionId('');
-      return;
-    }
-
-    setSelectedSectionId((current) =>
-      classSectionsQuery.data?.some((item) => item.id === current)
-        ? current
-        : classSectionsQuery.data?.[0]?.id ?? '',
-    );
-  }, [classSectionsQuery.data]);
-
-  const startSessionMutation = useMutation({
-    mutationFn: (classSectionId: string) => attendanceApi.startSession(classSectionId, 15),
-    onSuccess: (result) => {
-      setActiveSession(result);
-      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'history'] });
-    },
-  });
-
-  const stopSessionMutation = useMutation({
-    mutationFn: (sessionId: string) => attendanceApi.stopSession(sessionId),
-    onSuccess: () => {
-      setActiveSession(null);
-      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'history'] });
-      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'records'] });
-    },
-  });
-
-  const recordsQuery = useQuery({
-    queryKey: ['attendance', 'lecturer', 'records', activeSession?.sessionId],
-    queryFn: () => attendanceApi.getSessionRecords(activeSession?.sessionId as string, 1, 100),
-    enabled: Boolean(activeSession?.sessionId),
-    refetchInterval: activeSession?.sessionId ? 5000 : false,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ['attendance', 'lecturer', 'history', selectedSection?.id],
-    queryFn: () => attendanceApi.getLecturerHistory(selectedSection?.id as string, 1, 10),
-    enabled: canManageAttendance && Boolean(selectedSection?.id),
-  });
-
-  if (!canManageAttendance) {
-    return (
-      <Screen>
-        <ContentStack narrow overlapHero={false}>
-          <EmptyState
-            icon="lock-closed-outline"
-            title="Bạn không có quyền truy cập"
-            description="Màn hình này chỉ dành cho tài khoản giảng viên."
-            actionLabel="Quay lại"
-            onActionPress={() => router.back()}
-          />
-        </ContentStack>
-      </Screen>
-    );
-  }
+  const showScheduleLoading = scheduleState.isLoading;
+  const showEmptySchedule = !showScheduleLoading && !scheduleState.isError && scheduleCards.length === 0;
 
   return (
     <Screen>
@@ -101,136 +147,84 @@ export default function LecturerAttendanceScreen() {
           <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-          Quản lý điểm danh QR
+          Chọn lớp điểm danh QR
         </Text>
         <View style={styles.backHit} />
       </View>
 
       <ContentStack narrow overlapHero={false}>
-        {classSectionsQuery.isLoading ? (
+        <View
+          style={[
+            styles.introPanel,
+            {
+              backgroundColor: theme.colors.primarySurface,
+              borderColor: theme.colors.primary,
+            },
+          ]}
+        >
+          <Text style={[styles.introTitle, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+            Danh sách lớp theo lịch học kỳ
+          </Text>
+          <Text style={[styles.introBody, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            Chọn một lớp để vào workspace điểm danh: tạo phiên QR, xem sinh viên, lịch sử và thống kê.
+          </Text>
+        </View>
+
+        {showScheduleLoading ? (
           <View style={styles.skeletonWrap}>
-            <SkeletonBlock height={96} />
-            <SkeletonBlock height={96} />
+            <SkeletonBlock height={108} />
+            <SkeletonBlock height={108} />
+            <SkeletonBlock height={108} />
           </View>
         ) : null}
 
-        {!classSectionsQuery.isLoading && classSectionsQuery.isError ? (
+        {!showScheduleLoading && scheduleState.isError ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="Không tải được danh sách lớp"
-            description="Vui lòng thử lại."
+            title="Không tải được lịch giảng dạy"
+            description="Vui lòng thử lại để đồng bộ danh sách lớp học."
             actionLabel="Thử lại"
-            onActionPress={() => void classSectionsQuery.refetch()}
+            onActionPress={() => void scheduleState.refetch()}
           />
         ) : null}
 
-        {!classSectionsQuery.isLoading && !classSectionsQuery.isError && (classSectionsQuery.data?.length ?? 0) === 0 ? (
+        {showEmptySchedule ? (
           <EmptyState
-            icon="albums-outline"
-            title="Chưa có lớp được phân công"
-            description="Bạn chưa được gán lớp học phần nào."
+            icon="calendar-clear-outline"
+            title="Chưa có lịch dạy trong học kỳ"
+            description="Danh sách lớp sẽ xuất hiện khi có lịch giảng dạy hiện tại."
           />
         ) : null}
 
-        {(classSectionsQuery.data?.length ?? 0) > 0 ? (
+        {scheduleCards.length > 0 ? (
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.sectionList}>
-              {classSectionsQuery.data?.map((section) => {
-                const selected = selectedSection?.id === section.id;
-                return (
-                  <Pressable
-                    key={section.id}
-                    accessibilityRole="button"
-                    onPress={() => setSelectedSectionId(section.id)}
-                    style={[
-                      styles.sectionCard,
-                      {
-                        backgroundColor: selected ? theme.colors.primarySurface : theme.colors.surfaceElevated,
-                        borderColor: selected ? theme.colors.primary : theme.colors.border,
-                      },
-                    ]}
+            <View style={styles.dayList}>
+              {groupedCards.map((group) => (
+                <View key={group.dayOfWeek} style={styles.dayGroup}>
+                  <Text
+                    style={[styles.dayHeading, { color: theme.colors.textSoft, fontFamily: theme.fonts.semibold }]}
                   >
-                    <Text style={[styles.sectionTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                      {section.course.code} · {section.classCode}
-                    </Text>
-                    <Text style={[styles.sectionMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
-                      {section.course.name} · {section.enrolledCount}/{section.capacity}
-                    </Text>
-                    <Text style={[styles.sectionMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
-                      {section.meetings
-                        .map((meeting) => `${getDayLabel(meeting.dayOfWeek)} ${meeting.startTime}-${meeting.endTime}`)
-                        .join(' | ')}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                    {getDayLabel(group.dayOfWeek)}
+                  </Text>
+
+                  <View style={styles.cardList}>
+                    {group.items.map((card) => (
+                      <ScheduleCard
+                        key={card.id}
+                        card={card}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/services/attendance/class/[scheduleId]',
+                            params: { scheduleId: card.id },
+                          } as never)
+                        }
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
           </ScrollView>
-        ) : null}
-
-        {selectedSection ? (
-          <View style={[styles.panel, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }]}>
-            <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-              Phiên điểm danh
-            </Text>
-
-            {activeSession ? (
-              <View style={styles.panelBlock}>
-                <Text style={[styles.panelMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                  Bắt đầu: {formatDateTime(activeSession.startedAt)}
-                </Text>
-                <Text style={[styles.panelMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                  Hết hạn: {formatDateTime(activeSession.expiresAt)}
-                </Text>
-                <PrimaryButton
-                  label="Mở màn hình QR"
-                  onPress={() => void Linking.openURL(activeSession.displayUrl)}
-                />
-                <SecondaryButton
-                  label={stopSessionMutation.isPending ? 'Đang dừng phiên...' : 'Dừng phiên'}
-                  onPress={() => {
-                    if (activeSession?.sessionId) {
-                      stopSessionMutation.mutate(activeSession.sessionId);
-                    }
-                  }}
-                />
-              </View>
-            ) : (
-              <PrimaryButton
-                label={startSessionMutation.isPending ? 'Đang mở phiên...' : 'Mở phiên QR mới'}
-                onPress={() => startSessionMutation.mutate(selectedSection.id)}
-              />
-            )}
-
-            {activeSession && recordsQuery.data ? (
-              <View style={styles.panelBlock}>
-                <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                  Đã điểm danh ({recordsQuery.data.meta.total})
-                </Text>
-                {recordsQuery.data.items.slice(0, 6).map((record) => (
-                  <Text
-                    key={record.id}
-                    style={[styles.panelMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}
-                  >
-                    {record.student.studentId ?? record.student.email} · {formatDateTime(record.checkinTime)}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-
-            {historyQuery.data && historyQuery.data.items.length > 0 ? (
-              <View style={styles.panelBlock}>
-                <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                  Lịch sử phiên gần nhất
-                </Text>
-                {historyQuery.data.items.slice(0, 5).map((item) => (
-                  <Text key={item.id} style={[styles.panelMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                    {formatDateTime(item.startedAt)} · {item.checkedInCount} lượt check-in
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-          </View>
         ) : null}
       </ContentStack>
     </Screen>
@@ -255,41 +249,86 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  skeletonWrap: {
-    gap: 10,
-  },
-  sectionList: {
-    gap: 10,
-    paddingBottom: 12,
-  },
-  sectionCard: {
+  introPanel: {
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 4,
-  },
-  sectionTitle: {
-    fontSize: 15,
-  },
-  sectionMeta: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  panel: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-    marginBottom: 12,
-  },
-  panelTitle: {
-    fontSize: 14,
-  },
-  panelBlock: {
+    borderRadius: 18,
+    padding: 14,
     gap: 6,
   },
-  panelMeta: {
-    fontSize: 12,
+  introTitle: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  introBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  skeletonWrap: {
+    gap: 12,
+  },
+  dayList: {
+    gap: 18,
+    paddingBottom: 16,
+  },
+  dayGroup: {
+    gap: 10,
+  },
+  dayHeading: {
+    fontSize: 13,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  cardList: {
+    gap: 10,
+  },
+  scheduleCard: {
+    minHeight: 102,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  scheduleIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGrid: {
+    width: 20,
+    height: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  iconGridSquare: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+  },
+  scheduleBody: {
+    flex: 1,
+    gap: 2,
+  },
+  cardEyebrow: {
+    fontSize: 13,
     lineHeight: 18,
+  },
+  cardTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  cardMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  cardHint: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

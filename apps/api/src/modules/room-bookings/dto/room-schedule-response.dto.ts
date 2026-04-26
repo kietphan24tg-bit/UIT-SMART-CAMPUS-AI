@@ -47,11 +47,11 @@ export class RoomScheduleResponseDto {
   @ApiPropertyOptional({ example: 'Phong hoc 1', nullable: true })
   name!: string | null;
 
-  @ApiProperty({ example: 'B' })
-  buildingCode!: string;
-
-  @ApiProperty({ example: 'Tòa B' })
-  buildingName!: string;
+  @ApiProperty({
+    example: '2026-04-27',
+    description: 'Monday (YYYY-MM-DD) of the week returned; first bookable week if omitted on request.',
+  })
+  weekStart!: string;
 
   @ApiProperty({ type: () => RoomScheduleDayDto, isArray: true })
   days!: RoomScheduleDayDto[];

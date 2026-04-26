@@ -1,31 +1,83 @@
 import { Ionicons } from '@expo/vector-icons';
+import { USER_ROLES } from '@smart-campus/shared';
 import { Camera, type PermissionResponse } from 'expo-camera';
 import { useFocusEffect, useRouter, Redirect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { USER_ROLES } from '@smart-campus/shared';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AttendanceCtaButton } from '@/components/attendance/attendance-cta-button';
 import { ContentStack, Screen } from '@/components/ui';
-import { useAuthStore } from '@/stores/auth-store';
+import { useEffectiveRole } from '@/hooks/use-effective-role';
 import { useAppTheme } from '@/theme';
 import { isLecturerRole } from '@/utils/app';
+
+const CAMERA_PERMISSION_FALLBACK = {
+  status: 'undetermined',
+  granted: false,
+  expires: 'never' as const,
+  canAskAgain: true,
+} as PermissionResponse;
 
 export default function AttendanceHubScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const role = useAuthStore((state) => state.user?.role);
+  // const role = useAuthStore((state) => state.user?.role);
+  const role = useEffectiveRole();
   const [cameraPerm, setCameraPerm] = useState<PermissionResponse | null>(null);
   const hubNavLockRef = useRef(false);
   // Dev-only: bật true để giả lập "chưa cấp quyền camera" khi test UI.
   const DEV_FORCE_CAMERA_PERMISSION_DENIED = false;
+  const refreshCameraPermission = useCallback(() => {
+    void Camera.getCameraPermissionsAsync()
+      .then(setCameraPerm)
+      .catch(() => setCameraPerm(CAMERA_PERMISSION_FALLBACK));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       hubNavLockRef.current = false;
-      void Camera.getCameraPermissionsAsync().then(setCameraPerm);
-    }, []),
+      refreshCameraPermission();
+    }, [refreshCameraPermission]),
   );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshCameraPermission();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [refreshCameraPermission]);
+
+  const handlePrimaryCta = useCallback(() => {
+    void (async () => {
+      if (hubNavLockRef.current) {
+        return;
+      }
+
+      let nextPermission = cameraPerm;
+      if (!nextPermission?.granted) {
+        try {
+          nextPermission = await Camera.requestCameraPermissionsAsync();
+          setCameraPerm(nextPermission);
+        } catch {
+          nextPermission = CAMERA_PERMISSION_FALLBACK;
+          setCameraPerm(nextPermission);
+        }
+      }
+
+      if (!nextPermission?.granted) {
+        if (nextPermission?.canAskAgain === false) {
+          void Linking.openSettings();
+        }
+        return;
+      }
+
+      hubNavLockRef.current = true;
+      router.push('/services/attendance/scan' as never);
+    })();
+  }, [cameraPerm, router]);
 
   const hasCameraPermission =
     !(__DEV__ && DEV_FORCE_CAMERA_PERMISSION_DENIED) && cameraPerm?.granted === true;
@@ -45,18 +97,6 @@ export default function AttendanceHubScreen() {
       </Screen>
     );
   }
-
-  const handlePrimaryCta = useCallback(() => {
-    if (hubNavLockRef.current) {
-      return;
-    }
-    if (!hasCameraPermission) {
-      void Linking.openSettings();
-      return;
-    }
-    hubNavLockRef.current = true;
-    router.push('/services/attendance/scan' as never);
-  }, [hasCameraPermission, router]);
 
   // Role guard placeholder (giữ lại trong comment theo yêu cầu):
   // if (!isStudent) {

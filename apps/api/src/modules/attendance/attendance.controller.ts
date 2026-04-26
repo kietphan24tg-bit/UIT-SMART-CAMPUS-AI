@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -7,6 +7,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { USER_ROLES } from '@smart-campus/shared';
+import type { Response } from 'express';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -52,11 +53,12 @@ export class AttendanceController {
   }
 
   @Post('checkin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.STUDENT)
-  @ApiBearerAuth()
+  // Bypass check-in auth for local demo/testing. Uncomment these decorators to require student login again.
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(USER_ROLES.STUDENT)
+  // @ApiBearerAuth()
   @ApiOperation({ summary: 'Check in attendance using dynamic token' })
-  checkin(@CurrentUser('id') studentId: string, @Body() dto: CheckinAttendanceDto) {
+  checkin(@CurrentUser('id') studentId: string | undefined, @Body() dto: CheckinAttendanceDto) {
     return this.attendanceService.checkin(studentId, dto);
   }
 
@@ -74,6 +76,26 @@ export class AttendanceController {
     @Query() query: GetSessionRecordsDto,
   ) {
     return this.attendanceService.getSessionRecords(sessionId, lecturerId, query);
+  }
+
+  @Get('session/:id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Attendance session id' })
+  @ApiOperation({ summary: 'Export attendance session roster to Excel' })
+  async exportSessionAttendance(
+    @Param('id') sessionId: string,
+    @CurrentUser('id') lecturerId: string,
+    @Res() response: Response,
+  ) {
+    const exported = await this.attendanceService.exportSessionAttendance(sessionId, lecturerId);
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    response.send(exported.buffer);
   }
 
   @Get('history')

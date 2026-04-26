@@ -14,7 +14,8 @@ import {
 } from '@/components/ui';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
-import { useAuthStore } from '@/stores/auth-store';
+// import { useAuthStore } from '@/stores/auth-store';
+import { useEffectiveRole } from '@/hooks/use-effective-role';
 import { useAppTheme } from '@/theme';
 import type { FireAlertRecord, ScheduleRecord, SemesterRecord } from '@/types/app-data';
 import {
@@ -29,6 +30,7 @@ import {
   isAdminRole,
   isLecturerRole,
 } from '@/utils/app';
+import { useEffectiveUser } from '@/hooks/use-effective-role';
 
 function getScheduleRoomLabel(room?: string | null) {
   return room ? `Phòng ${room}` : 'Chưa cập nhật';
@@ -176,6 +178,24 @@ function getSubjectKey(item: ScheduleRecord) {
   return item.course.code.trim() || item.classCode.trim() || item.course.name.trim();
 }
 
+function normalizePersonName(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function getCurrentUserFullName(
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null,
+) {
+  return [user?.lastName, user?.firstName].filter(Boolean).join(' ').trim();
+}
+
 export function buildSubjectColorIndex(schedule: ScheduleRecord[]) {
   const subjectCodes = Array.from(new Set(schedule.map(getSubjectKey))).sort((left, right) =>
     left.localeCompare(right),
@@ -218,9 +238,13 @@ export default function ScheduleScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const router = useRouter();
-  const role = useAuthStore((state) => state.user?.role);
+  // const role = useAuthStore((state) => state.user?.role);
+  const role = useEffectiveRole();
+  const user = useEffectiveUser();
 
-  const isOperationsRole = isAdminRole(role);
+  // Bypass role-scoped operations view for local demo/testing. Restore this line to show operations for admin roles again.
+  // const isOperationsRole = isAdminRole(role);
+  const isOperationsRole = false && isAdminRole(role);
   const isLecturer = isLecturerRole(role);
   const scheduleState = useScheduleScreenData();
   const operationsState = useOperationsScreenData();
@@ -291,7 +315,12 @@ export default function ScheduleScreen() {
             layoutPreset="mobileTwoByTwo"
           />
 
-          <SectionCard title="Lối vào vận hành" subtitle="Tác vụ chính." variant="highlight" tone="academic">
+          <SectionCard
+            title="Lối vào vận hành"
+            subtitle="Tác vụ chính."
+            variant="highlight"
+            tone="academic"
+          >
             <View style={styles.column}>
               <NavigationRow
                 icon="flame-outline"
@@ -330,14 +359,35 @@ export default function ScheduleScreen() {
             </View>
           </SectionCard>
 
-          <SectionCard title="Parking hiện tại" subtitle="Tóm tắt bãi xe." variant="glass" tone="telemetry">
+          <SectionCard
+            title="Parking hiện tại"
+            subtitle="Tóm tắt bãi xe."
+            variant="glass"
+            tone="telemetry"
+          >
             {parking ? (
               <View style={styles.column}>
-                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                <View
+                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
+                >
+                  <Text
+                    style={[
+                      styles.cardTitle,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
                     {parking.availableSlots}/{parking.totalSlots} chỗ trống
                   </Text>
-                  <StatusBadge label={getTelemetryHealthLabel(telemetry?.fireDetected ? 'fire-alert' : parking.lastUpdated ? 'online' : 'no-data')} tone={healthTone} />
+                  <StatusBadge
+                    label={getTelemetryHealthLabel(
+                      telemetry?.fireDetected
+                        ? 'fire-alert'
+                        : parking.lastUpdated
+                          ? 'online'
+                          : 'no-data',
+                    )}
+                    tone={healthTone}
+                  />
                 </View>
                 <View style={styles.infoGrid}>
                   <InfoRow label="Cổng" value={parking.gateId} />
@@ -355,11 +405,19 @@ export default function ScheduleScreen() {
                     size="sm"
                   />
                   <StatusBadge
-                    label={typeof parking.sensors.humidity === 'number' ? `Độ ẩm ${parking.sensors.humidity}%` : 'Độ ẩm --'}
+                    label={
+                      typeof parking.sensors.humidity === 'number'
+                        ? `Độ ẩm ${parking.sensors.humidity}%`
+                        : 'Độ ẩm --'
+                    }
                     tone="success"
                     size="sm"
                   />
-                  <StatusBadge label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" size="sm" />
+                  <StatusBadge
+                    label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                    tone="warning"
+                    size="sm"
+                  />
                   <StatusBadge
                     label={parking.sensors.fireDetected ? 'Cảnh báo cháy' : 'An toàn'}
                     tone={parking.sensors.fireDetected ? 'danger' : 'success'}
@@ -368,19 +426,34 @@ export default function ScheduleScreen() {
                 </View>
               </View>
             ) : (
-              <EmptyState icon="car-outline" title="Chưa có dữ liệu" description="Tải lại để cập nhật parking." />
+              <EmptyState
+                icon="car-outline"
+                title="Chưa có dữ liệu"
+                description="Tải lại để cập nhật parking."
+              />
             )}
           </SectionCard>
 
-          <SectionCard title="Telemetry mới nhất" subtitle="Dữ liệu cảm biến gần nhất." variant="outlined">
+          <SectionCard
+            title="Telemetry mới nhất"
+            subtitle="Dữ liệu cảm biến gần nhất."
+            variant="outlined"
+          >
             {telemetry ? (
               <View style={styles.column}>
-                <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
+                <View
+                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
+                >
                   <StatusBadge
                     label={telemetry.fireDetected ? 'Cảnh báo cháy' : 'Thiết bị đang gửi dữ liệu'}
                     tone={telemetry.fireDetected ? 'danger' : 'success'}
                   />
-                  <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                  <Text
+                    style={[
+                      styles.metaText,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                    ]}
+                  >
                     {formatDateTime(telemetry.reportedAt)}
                   </Text>
                 </View>
@@ -389,9 +462,21 @@ export default function ScheduleScreen() {
                   <InfoRow label="IP thiết bị" value={telemetry.deviceIp ?? '--'} />
                 </View>
                 <View style={styles.badgeRow}>
-                  <StatusBadge label={`Nhiệt độ ${telemetry.temperature ?? '--'}°C`} tone="info" size="sm" />
-                  <StatusBadge label={`Độ ẩm ${telemetry.humidity ?? '--'}%`} tone="success" size="sm" />
-                  <StatusBadge label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'} tone="warning" size="sm" />
+                  <StatusBadge
+                    label={`Nhiệt độ ${telemetry.temperature ?? '--'}°C`}
+                    tone="info"
+                    size="sm"
+                  />
+                  <StatusBadge
+                    label={`Độ ẩm ${telemetry.humidity ?? '--'}%`}
+                    tone="success"
+                    size="sm"
+                  />
+                  <StatusBadge
+                    label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'}
+                    tone="warning"
+                    size="sm"
+                  />
                   <StatusBadge
                     label={telemetry.fireDetected ? 'Cháy' : 'Không cháy'}
                     tone={telemetry.fireDetected ? 'danger' : 'success'}
@@ -400,11 +485,19 @@ export default function ScheduleScreen() {
                 </View>
               </View>
             ) : (
-              <EmptyState icon="hardware-chip-outline" title="Chưa có telemetry" description="Dữ liệu sẽ hiện khi gateway gửi bản mới." />
+              <EmptyState
+                icon="hardware-chip-outline"
+                title="Chưa có telemetry"
+                description="Dữ liệu sẽ hiện khi gateway gửi bản mới."
+              />
             )}
           </SectionCard>
 
-          <SectionCard title="Cảnh báo gần đây" subtitle="Các mục cần xử lý trước." variant="outlined">
+          <SectionCard
+            title="Cảnh báo gần đây"
+            subtitle="Các mục cần xử lý trước."
+            variant="outlined"
+          >
             {fireAlerts.length > 0 ? (
               <View style={styles.column}>
                 {fireAlerts.slice(0, 5).map((item) => (
@@ -426,12 +519,26 @@ export default function ScheduleScreen() {
                     ]}
                   >
                     <View style={[styles.rowBetween, styles.alertHeader]}>
-                      <Text style={[styles.inlineTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                      <Text
+                        style={[
+                          styles.inlineTitle,
+                          { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                        ]}
+                      >
                         {item.message || 'Cảnh báo cháy'}
                       </Text>
-                      <StatusBadge label={item.isResolved ? 'Đã xử lý' : 'Đang mở'} tone={item.isResolved ? 'info' : 'danger'} size="sm" />
+                      <StatusBadge
+                        label={item.isResolved ? 'Đã xử lý' : 'Đang mở'}
+                        tone={item.isResolved ? 'info' : 'danger'}
+                        size="sm"
+                      />
                     </View>
-                    <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                    <Text
+                      style={[
+                        styles.metaText,
+                        { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                      ]}
+                    >
                       Cổng {item.gateId} · {formatDateTime(item.reportedAt)}
                     </Text>
                     {item.telemetrySnapshot ? (
@@ -474,11 +581,20 @@ export default function ScheduleScreen() {
     );
   }
 
-  const selectedSemester = scheduleState.semesters.find((item) => item.id === scheduleState.resolvedSemesterId);
-  const groupedSchedule = groupScheduleByDay(scheduleState.schedule);
-  const subjectColorIndex = buildSubjectColorIndex(scheduleState.schedule);
-  const nextClass = getNextClass(scheduleState.schedule);
-  const todayScheduleCount = scheduleState.schedule.filter(
+  const selectedSemester = scheduleState.semesters.find(
+    (item) => item.id === scheduleState.resolvedSemesterId,
+  );
+  const currentLecturerName = getCurrentUserFullName(user);
+  const lecturerSchedule = isLecturer
+    ? scheduleState.schedule.filter(
+        (item) => normalizePersonName(item.instructor) === normalizePersonName(currentLecturerName),
+      )
+    : scheduleState.schedule;
+  const resolvedSchedule = isLecturer ? lecturerSchedule : scheduleState.schedule;
+  const groupedSchedule = groupScheduleByDay(resolvedSchedule);
+  const subjectColorIndex = buildSubjectColorIndex(resolvedSchedule);
+  const nextClass = getNextClass(resolvedSchedule);
+  const todayScheduleCount = resolvedSchedule.filter(
     (item: ScheduleRecord) => item.dayOfWeek === getTodayDayOfWeek(),
   ).length;
 
@@ -522,7 +638,9 @@ export default function ScheduleScreen() {
       <TopHero
         eyebrow={isLecturer ? 'Lịch giảng dạy' : 'Lịch học'}
         title={isLecturer ? 'Lịch dạy trong học kỳ' : 'Lịch học trong học kỳ'}
-        subtitle={isLecturer ? 'Lịch dạy và nhiệm vụ hiện tại.' : 'Buổi gần nhất và lịch theo ngày.'}
+        subtitle={
+          isLecturer ? 'Lịch dạy và nhiệm vụ hiện tại.' : 'Buổi gần nhất và lịch theo ngày.'
+        }
         badge={{ label: getRoleLabel(role), tone: 'info' }}
         showBrand
       />
@@ -535,60 +653,72 @@ export default function ScheduleScreen() {
           layoutPreset="mobileTwoByTwo"
         />
 
-        <SectionCard title="Học kỳ" subtitle="Chọn kỳ cần xem." variant="highlight" tone="academic">
-          <View style={styles.semesterGrid}>
-            {scheduleState.semesters.map((semester) => {
-              const semesterTone = getSemesterColorByStatus(theme, semester);
-              return (
-                <Pressable
-                  key={semester.id}
-                  accessibilityRole="button"
-                  onPress={() => router.push(`/schedule/semester/${semester.id}` as never)}
-                  style={[
-                    styles.semesterCard,
-                    layout.isCompact ? styles.semesterCardCompact : null,
-                    {
-                      backgroundColor: semesterTone.surface,
-                      borderColor: semesterTone.borderColor,
-                      borderStyle: semesterTone.borderStyle,
-                      opacity: semesterTone.opacity,
-                    },
-                  ]}
-                >
-                  <Text
+        {!isLecturer ? (
+          <SectionCard
+            title="Học kỳ"
+            subtitle="Chọn kỳ cần xem."
+            variant="highlight"
+            tone="academic"
+          >
+            <View style={styles.semesterGrid}>
+              {scheduleState.semesters.map((semester) => {
+                const semesterTone = getSemesterColorByStatus(theme, semester);
+                return (
+                  <Pressable
+                    key={semester.id}
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/schedule/semester/${semester.id}` as never)}
                     style={[
-                      styles.semesterTitle,
-                      layout.isCompact ? styles.semesterTitleCompact : null,
+                      styles.semesterCard,
+                      layout.isCompact ? styles.semesterCardCompact : null,
                       {
-                        color: semesterTone.titleColor,
-                        fontFamily: theme.fonts.semibold,
+                        backgroundColor: semesterTone.surface,
+                        borderColor: semesterTone.borderColor,
+                        borderStyle: semesterTone.borderStyle,
+                        opacity: semesterTone.opacity,
                       },
                     ]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.78}
                   >
-                    {semester.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.semesterStatus,
-                      {
-                        color: semesterTone.statusColor,
-                        fontFamily: theme.fonts.medium,
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {getSemesterStatusText(semester)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </SectionCard>
+                    <Text
+                      style={[
+                        styles.semesterTitle,
+                        layout.isCompact ? styles.semesterTitleCompact : null,
+                        {
+                          color: semesterTone.titleColor,
+                          fontFamily: theme.fonts.semibold,
+                        },
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                    >
+                      {semester.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.semesterStatus,
+                        {
+                          color: semesterTone.statusColor,
+                          fontFamily: theme.fonts.medium,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {getSemesterStatusText(semester)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SectionCard>
+        ) : null}
 
-        <SectionCard title={isLecturer ? 'Buổi dạy gần nhất' : 'Buổi học gần nhất'} subtitle="Ưu tiên đầu tiên." variant="glass" tone="primary">
+        <SectionCard
+          title={isLecturer ? 'Buổi dạy gần nhất' : 'Buổi học gần nhất'}
+          subtitle="Ưu tiên đầu tiên."
+          variant="glass"
+          tone="primary"
+        >
           {nextClass ? (
             <View
               style={[
@@ -607,31 +737,64 @@ export default function ScheduleScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.nextClassDateNumber, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+                <Text
+                  style={[
+                    styles.nextClassDateNumber,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
                   {getNextOccurrence(nextClass).getDate()}
                 </Text>
-                <Text style={[styles.nextClassDateLabel, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                <Text
+                  style={[
+                    styles.nextClassDateLabel,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                  ]}
+                >
                   {getDayLabelShort(nextClass.dayOfWeek)}
                 </Text>
               </View>
 
               <View style={styles.nextClassBody}>
-                <Text style={[styles.nextClassTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                <Text
+                  style={[
+                    styles.nextClassTitle,
+                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
                   {nextClass.course.name}
                 </Text>
 
                 <View style={styles.nextClassMetaRow}>
-                  <View style={[styles.nextClassMetaChip, { backgroundColor: theme.colors.primarySurface }]}>
+                  <View
+                    style={[
+                      styles.nextClassMetaChip,
+                      { backgroundColor: theme.colors.primarySurface },
+                    ]}
+                  >
                     <Ionicons name="time-outline" size={14} color={theme.colors.primary} />
-                    <Text style={[styles.nextClassMetaText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                    <Text
+                      style={[
+                        styles.nextClassMetaText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
                       {nextClass.startTime} - {nextClass.endTime}
                     </Text>
                   </View>
 
-                  <View style={[styles.nextClassMetaChip, { backgroundColor: theme.colors.primarySurface }]}>
+                  <View
+                    style={[
+                      styles.nextClassMetaChip,
+                      { backgroundColor: theme.colors.primarySurface },
+                    ]}
+                  >
                     <Ionicons name="location-outline" size={14} color={theme.colors.primary} />
                     <Text
-                      style={[styles.nextClassMetaText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}
+                      style={[
+                        styles.nextClassMetaText,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                      ]}
                       numberOfLines={1}
                     >
                       {getScheduleRoomLabel(nextClass.room)}
@@ -639,18 +802,37 @@ export default function ScheduleScreen() {
                   </View>
                 </View>
 
-                <View style={[styles.nextClassMetaChip, styles.nextClassInstructorChip, { backgroundColor: theme.colors.primarySurface }]}>
+                <View
+                  style={[
+                    styles.nextClassMetaChip,
+                    styles.nextClassInstructorChip,
+                    { backgroundColor: theme.colors.primarySurface },
+                  ]}
+                >
                   <Ionicons name="person-outline" size={14} color={theme.colors.primary} />
                   <Text
-                    style={[styles.nextClassMetaText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}
+                    style={[
+                      styles.nextClassMetaText,
+                      { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                    ]}
                     numberOfLines={1}
                   >
                     {getScheduleInstructorLabel(nextClass.instructor)}
                   </Text>
                 </View>
 
-                <View style={[styles.nextClassStatus, { backgroundColor: theme.colors.successSurface ?? theme.colors.primarySurface }]}>
-                  <View style={[styles.nextClassStatusDot, { backgroundColor: theme.colors.success ?? theme.colors.primary }]} />
+                <View
+                  style={[
+                    styles.nextClassStatus,
+                    { backgroundColor: theme.colors.successSurface ?? theme.colors.primarySurface },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.nextClassStatusDot,
+                      { backgroundColor: theme.colors.success ?? theme.colors.primary },
+                    ]}
+                  />
                   <Text
                     style={[
                       styles.nextClassStatusText,
@@ -710,12 +892,21 @@ export default function ScheduleScreen() {
             <View style={styles.column}>
               {Object.entries(groupedSchedule).map(([day, items]) => (
                 <View key={day} style={styles.daySection}>
-                  <Text style={[styles.dayHeading, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  <Text
+                    style={[
+                      styles.dayHeading,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
                     {getDayLabel(Number(day)).toUpperCase()}
                   </Text>
                   <View style={styles.sessionList}>
                     {items.map((item) => {
-                      const accent = getSubjectColorByCode(theme, item.course.code, subjectColorIndex);
+                      const accent = getSubjectColorByCode(
+                        theme,
+                        item.course.code,
+                        subjectColorIndex,
+                      );
                       return (
                         <View
                           key={item.id}
@@ -729,39 +920,86 @@ export default function ScheduleScreen() {
                         >
                           <View style={[styles.sessionBar, { backgroundColor: accent.accent }]} />
                           <View style={styles.sessionBody}>
-                          <View style={styles.sessionHeader}>
-                            <View style={styles.sessionHeaderMain}>
-                              <Text style={[styles.sessionTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                                {item.course.name}
-                              </Text>
-                              <Text style={[styles.sessionMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]} numberOfLines={1}>
-                                {item.course.code}
-                              </Text>
+                            <View style={styles.sessionHeader}>
+                              <View style={styles.sessionHeaderMain}>
+                                <Text
+                                  style={[
+                                    styles.sessionTitle,
+                                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                  ]}
+                                >
+                                  {item.course.name}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.sessionMeta,
+                                    {
+                                      color: theme.colors.textMuted,
+                                      fontFamily: theme.fonts.regular,
+                                    },
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {item.course.code}
+                                </Text>
+                              </View>
+
+                              <View style={styles.sessionTimeBlock}>
+                                <Text
+                                  style={[
+                                    styles.sessionTime,
+                                    { color: accent.accent, fontFamily: theme.fonts.semibold },
+                                  ]}
+                                >
+                                  {item.startTime} - {item.endTime}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.sessionPeriodText,
+                                    {
+                                      color: theme.colors.textMuted,
+                                      fontFamily: theme.fonts.medium,
+                                    },
+                                  ]}
+                                >
+                                  {getPeriodText(item)}
+                                </Text>
+                              </View>
                             </View>
 
-                            <View style={styles.sessionTimeBlock}>
-                              <Text style={[styles.sessionTime, { color: accent.accent, fontFamily: theme.fonts.semibold }]}>
-                                {item.startTime} - {item.endTime}
-                              </Text>
-                              <Text style={[styles.sessionPeriodText, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
-                                {getPeriodText(item)}
-                              </Text>
+                            <Text
+                              style={[
+                                styles.sessionMeta,
+                                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {getClassMetaText(item)}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.sessionMeta,
+                                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {getScheduleInstructorLabel(item.instructor)}
+                            </Text>
+
+                            <View style={styles.badgeRow}>
+                              <StatusBadge
+                                label={`Tiết ${item.startPeriod ?? '--'}-${item.endPeriod ?? '--'}`}
+                                tone="info"
+                                size="sm"
+                              />
+                              <StatusBadge
+                                label={item.sessionType === 'daytime' ? 'Ban ngày' : 'Buổi tối'}
+                                tone="primary"
+                                size="sm"
+                              />
                             </View>
-                          </View>
-
-                          <Text style={[styles.sessionMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]} numberOfLines={1}>
-                            {getClassMetaText(item)}
-                          </Text>
-                          <Text style={[styles.sessionMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]} numberOfLines={1}>
-                            {getScheduleInstructorLabel(item.instructor)}
-                          </Text>
-
-                          <View style={styles.badgeRow}>
-                            <StatusBadge label={`Tiết ${item.startPeriod ?? '--'}-${item.endPeriod ?? '--'}`} tone="info" size="sm" />
-                            <StatusBadge label={item.sessionType === 'daytime' ? 'Ban ngày' : 'Buổi tối'} tone="primary" size="sm" />
                           </View>
                         </View>
-                      </View>
                       );
                     })}
                   </View>
@@ -822,10 +1060,22 @@ function NavigationRow({
       </View>
       <View style={styles.rowContent}>
         <View style={styles.rowBetween}>
-          <Text style={[styles.inlineTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>{label}</Text>
+          <Text
+            style={[
+              styles.inlineTitle,
+              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+            ]}
+          >
+            {label}
+          </Text>
           <StatusBadge label={badgeLabel} tone={badgeTone} size="sm" />
         </View>
-        <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+        <Text
+          style={[
+            styles.metaText,
+            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+          ]}
+        >
           {description}
         </Text>
       </View>

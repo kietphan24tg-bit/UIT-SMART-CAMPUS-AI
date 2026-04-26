@@ -48,18 +48,30 @@ export class RoomBookingsController {
   }
 
   @Get('rooms/:roomCode/schedule')
-  @ApiOperation({ summary: 'Get the fixed weekly schedule grid for a room from Monday to Saturday' })
+  @ApiOperation({
+    summary:
+      'Get the fixed weekly schedule grid for a room from Monday to Saturday (bookable weeks only: from next week onward)',
+  })
   @ApiParam({
     name: 'roomCode',
     description: 'Room code.',
     example: 'B1.02',
   })
+  @ApiQuery({
+    name: 'weekStart',
+    required: false,
+    description: 'Monday (YYYY-MM-DD) of the week to load. Defaults to the first bookable week.',
+    example: '2026-04-27',
+  })
   @ApiOkResponse({
     description: 'Fixed room schedule with Monday to Saturday and all time slots.',
     type: RoomScheduleResponseDto,
   })
-  getRoomSchedule(@Param('roomCode') roomCode: string) {
-    return this.roomBookingsService.getRoomSchedule(roomCode);
+  getRoomSchedule(
+    @Param('roomCode') roomCode: string,
+    @Query('weekStart') weekStart?: string,
+  ) {
+    return this.roomBookingsService.getRoomSchedule(roomCode, weekStart);
   }
 
   @Get('buildings')

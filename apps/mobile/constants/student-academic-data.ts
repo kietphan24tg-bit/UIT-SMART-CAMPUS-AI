@@ -18,12 +18,20 @@ export const STUDENT_SEMESTER_SCHEDULES: SemesterScheduleRecord[] = [
     endDate: '2026-05-31T23:59:59.000Z',
     isCurrent: true,
     sessions: [
-      { id: '6a816c6d-8ba3-46b6-aa42-78daf9e2ed29', classCode: 'CS312.Q14', sectionCode: 'Q14', note: null, instructor: 'Pham Thu Ha', room: 'B1.203', dayOfWeek: 1, startTime: '09:00', endTime: '11:30', startPeriod: 3, endPeriod: 5, sessionType: 'daytime', course: { code: 'CS312', name: 'Trí tuệ nhân tạo - VN', credits: 3 } },
-      { id: 'c83c10f6-6b5f-43d1-a7b0-b60cddc3fbf8', classCode: 'SE334.Q12', sectionCode: 'Q12', note: null, instructor: 'Nguyen Hoang Phuc', room: 'A2.305', dayOfWeek: 2, startTime: '07:30', endTime: '10:00', startPeriod: 1, endPeriod: 4, sessionType: 'daytime', course: { code: 'SE334', name: 'Phân tích và thiết kế hệ thống thông tin - VN', credits: 4 } },
-      { id: 'e60b18c5-3b97-4be5-baf3-c48928b14881', classCode: 'AI301.Q11', sectionCode: 'Q11', note: null, instructor: 'Le Thanh Son', room: 'PM2.201', dayOfWeek: 3, startTime: '13:00', endTime: '15:15', startPeriod: 6, endPeriod: 8, sessionType: 'daytime', course: { code: 'AI301', name: 'Machine Learning cơ bản - VN', credits: 3 } },
-      { id: 'e2eb044a-4767-4461-8328-f20270de7e1b', classCode: 'DS302.Q21', sectionCode: 'Q21', note: null, instructor: 'Vo Ngoc Hung', room: 'E3.3', dayOfWeek: 4, startTime: '09:00', endTime: '11:30', startPeriod: 3, endPeriod: 5, sessionType: 'daytime', course: { code: 'DS302', name: 'Trực quan hóa dữ liệu - VN', credits: 3 } },
-      { id: '3fa11d1e-4f33-43de-9854-6bfa51248a1e', classCode: 'CS312.Q14.1', sectionCode: 'Q14.1', note: 'Lab thuật toán thông minh', instructor: 'Pham Thu Ha', room: 'LAB.AI-01', dayOfWeek: 5, startTime: '17:45', endTime: '20:45', startPeriod: null, endPeriod: null, sessionType: 'evening', course: { code: 'CS312', name: 'Trí tuệ nhân tạo - VN', credits: 3 } },
-      { id: '9c68c690-28b6-4603-9503-0a8950994875', classCode: 'AI301.Q11.1', sectionCode: 'Q11.1', note: 'Chuyên đề mô hình dự đoán', instructor: 'Le Thanh Son', room: 'LAB.DATA-02', dayOfWeek: 6, startTime: '17:45', endTime: '20:45', startPeriod: null, endPeriod: null, sessionType: 'evening', course: { code: 'AI301', name: 'Machine Learning cơ bản - VN', credits: 3 } },
+      { id: '6a816c6d-8ba3-46b6-aa42-78daf9e2ed29', classCode: 'SE104.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'B1.02', dayOfWeek: 1, startTime: '07:30', endTime: '09:45', startPeriod: 1, endPeriod: 3, sessionType: 'daytime', course: { code: 'SE104', name: 'Nhập môn Công nghệ phần mềm', credits: 4 } },
+      { id: 'c83c10f6-6b5f-43d1-a7b0-b60cddc3fbf8', classCode: 'CS312.Q21', sectionCode: 'Q21', note: null, instructor: 'Pham Thu Ha', room: 'B1.04', dayOfWeek: 1, startTime: '13:00', endTime: '13:45', startPeriod: 6, endPeriod: 6, sessionType: 'daytime', course: { code: 'CS312', name: 'Trí tuệ nhân tạo - VN', credits: 3 } },
+      { id: 'e60b18c5-3b97-4be5-baf3-c48928b14881', classCode: 'SE347.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'E03.2', dayOfWeek: 2, startTime: '07:30', endTime: '09:00', startPeriod: 1, endPeriod: 2, sessionType: 'daytime', course: { code: 'SE347', name: 'Công nghệ web và ứng dụng', credits: 4 } },
+      { id: 'e2eb044a-4767-4461-8328-f20270de7e1b', classCode: 'SE214.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'E02.3', dayOfWeek: 2, startTime: '10:00', endTime: '11:30', startPeriod: 4, endPeriod: 5, sessionType: 'daytime', course: { code: 'SE214', name: 'Công nghệ phần mềm chuyên sâu', credits: 4 } },
+      { id: '3fa11d1e-4f33-43de-9854-6bfa51248a1e', classCode: 'DS302.Q21', sectionCode: 'Q21', note: null, instructor: 'Vo Ngoc Hung', room: 'B1.06', dayOfWeek: 2, startTime: '15:30', endTime: '16:15', startPeriod: 9, endPeriod: 9, sessionType: 'daytime', course: { code: 'DS302', name: 'Trực quan hóa dữ liệu - VN', credits: 3 } },
+      { id: '9c68c690-28b6-4603-9503-0a8950994875', classCode: 'SE346.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'B1.04', dayOfWeek: 3, startTime: '07:30', endTime: '09:45', startPeriod: 1, endPeriod: 3, sessionType: 'daytime', course: { code: 'SE346', name: 'Lập trình trên thiết bị di động', credits: 4 } },
+      { id: 'a54c1062-6b7e-4b71-b5bb-c8d027dc13f1', classCode: 'IS401.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyen Bao Chau', room: 'B1.02', dayOfWeek: 3, startTime: '13:00', endTime: '14:30', startPeriod: 6, endPeriod: 7, sessionType: 'daytime', course: { code: 'IS401', name: 'Quản trị dự án hệ thống thông tin', credits: 3 } },
+      { id: 'a4f323a9-cf8b-437f-a0da-8c8d1c7d59b8', classCode: 'LAW200.Q21', sectionCode: 'Q21', note: null, instructor: 'Do Thi Nha', room: 'B1.02', dayOfWeek: 4, startTime: '08:15', endTime: '09:00', startPeriod: 2, endPeriod: 2, sessionType: 'daytime', course: { code: 'LAW200', name: 'Pháp luật đại cương - VN', credits: 2 } },
+      { id: 'f35456f8-4946-4908-8945-149dc64d2cb7', classCode: 'SE301.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'E03.2', dayOfWeek: 4, startTime: '10:00', endTime: '11:30', startPeriod: 4, endPeriod: 5, sessionType: 'daytime', course: { code: 'SE301', name: 'Phát triển phần mềm mã nguồn mở', credits: 3 } },
+      { id: 'cf0f88dd-bf84-4dbe-829b-8870dd572bd1', classCode: 'SE310.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'E02.3', dayOfWeek: 4, startTime: '13:00', endTime: '15:15', startPeriod: 6, endPeriod: 8, sessionType: 'daytime', course: { code: 'SE310', name: 'Công nghệ .NET', credits: 4 } },
+      { id: 'a9909f2b-9f77-4fa5-961d-7594c8a9d391', classCode: 'SE114.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'B1.04', dayOfWeek: 5, startTime: '07:30', endTime: '09:00', startPeriod: 1, endPeriod: 2, sessionType: 'daytime', course: { code: 'SE114', name: 'Nhập môn ứng dụng di động', credits: 3 } },
+      { id: 'c36f17c0-569a-4eee-9f18-f56f1d7d90b4', classCode: 'NT208.Q21', sectionCode: 'Q21', note: null, instructor: 'Tran Quoc Bao', room: 'B1.02', dayOfWeek: 5, startTime: '13:00', endTime: '15:15', startPeriod: 6, endPeriod: 8, sessionType: 'daytime', course: { code: 'NT208', name: 'Lập trình mạng căn bản - VN', credits: 4 } },
+      { id: 'b50cb62c-852f-47ec-b77b-921ba859cc1d', classCode: 'SE121.Q21', sectionCode: 'Q21', note: null, instructor: 'Nguyễn Hoàng Phúc', room: 'E03.2', dayOfWeek: 6, startTime: '07:30', endTime: '09:00', startPeriod: 1, endPeriod: 2, sessionType: 'daytime', course: { code: 'SE121', name: 'Đồ án 1', credits: 2 } },
+      { id: 'b1fd8382-8241-4115-b5c4-f305951fd8ea', classCode: 'MA005.Q21', sectionCode: 'Q21', note: null, instructor: 'Huynh Quoc Thai', room: 'E02.3', dayOfWeek: 6, startTime: '13:00', endTime: '13:45', startPeriod: 6, endPeriod: 6, sessionType: 'daytime', course: { code: 'MA005', name: 'Xác suất thống kê', credits: 3 } },
     ],
   },
   {
@@ -140,6 +148,30 @@ export const STUDENT_SEMESTER_SCHEDULES: SemesterScheduleRecord[] = [
     ],
   },
 ];
+
+function normalizePreviewInstructor(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+const LECTURER_PREVIEW_NAMES = new Set(['nguyen hoang phuc']);
+
+export const LECTURER_SEMESTER_SCHEDULES: SemesterScheduleRecord[] = STUDENT_SEMESTER_SCHEDULES.map(
+  (semester) => ({
+    ...semester,
+    sessions: semester.sessions.filter((session) =>
+      LECTURER_PREVIEW_NAMES.has(normalizePreviewInstructor(session.instructor)),
+    ),
+  }),
+).filter((semester) => semester.sessions.length > 0);
+
+export function getLecturerSemesterScheduleById(semesterId: string) {
+  return LECTURER_SEMESTER_SCHEDULES.find((semester) => semester.id === semesterId);
+}
 
 export const STUDENT_SEMESTER_GRADES: SemesterGradesRecord[] = [
   {

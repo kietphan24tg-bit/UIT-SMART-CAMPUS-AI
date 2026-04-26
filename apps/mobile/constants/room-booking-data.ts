@@ -5,6 +5,7 @@ import type {
   RoomScheduleDay,
   RoomScheduleSlot,
 } from '@/types/room-booking';
+import { ROOM_SCHEDULES_FROM_DB } from './room-booking-schedule.generated';
 
 type RoomCatalogSeed = readonly [
   buildingId: string,
@@ -546,21 +547,31 @@ let runtimeBuildingAvailability: BuildingAvailability[] | null = null;
 const runtimeRoomSummariesByBuilding = new Map<string, RoomAvailabilitySummary[]>();
 
 export function setRuntimeBuildingAvailability(buildings: BuildingAvailability[]) {
+  if (!buildings.length) {
+    runtimeBuildingAvailability = null;
+    return;
+  }
+
   runtimeBuildingAvailability = buildings;
 }
 
 export function setRuntimeRoomsForBuilding(buildingId: string, rooms: RoomAvailabilitySummary[]) {
+  if (!rooms.length) {
+    runtimeRoomSummariesByBuilding.delete(buildingId.toUpperCase());
+    return;
+  }
+
   runtimeRoomSummariesByBuilding.set(buildingId.toUpperCase(), rooms);
 }
 
 export function setRuntimeRoomCatalog(catalog: Record<string, RoomAvailabilitySummary[]>) {
   Object.entries(catalog).forEach(([buildingId, rooms]) => {
-    runtimeRoomSummariesByBuilding.set(buildingId.toUpperCase(), rooms);
+    setRuntimeRoomsForBuilding(buildingId, rooms);
   });
 }
 
 export function getBuildings() {
-  return runtimeBuildingAvailability ?? BUILDING_AVAILABILITY;
+  return runtimeBuildingAvailability?.length ? runtimeBuildingAvailability : BUILDING_AVAILABILITY;
 }
 
 export function getBuilding(buildingId: string) {
@@ -568,10 +579,11 @@ export function getBuilding(buildingId: string) {
 }
 
 export function getRoomsForBuilding(buildingId: string) {
-  return (
-    runtimeRoomSummariesByBuilding.get(buildingId.toUpperCase()) ??
-    ROOM_SUMMARIES.filter((item) => item.buildingId === buildingId.toUpperCase())
-  );
+  const normalizedBuildingId = buildingId.toUpperCase();
+  const runtimeRooms = runtimeRoomSummariesByBuilding.get(normalizedBuildingId);
+  return runtimeRooms?.length
+    ? runtimeRooms
+    : ROOM_SUMMARIES.filter((item) => item.buildingId === normalizedBuildingId);
 }
 
 export function getRoom(buildingId: string, roomId: string) {
@@ -583,7 +595,12 @@ export function getRoom(buildingId: string, roomId: string) {
 }
 
 export function getRoomSchedule(roomId: string) {
-  return ROOM_SCHEDULES[roomId.toUpperCase()] ?? [];
+  const code = roomId.toUpperCase();
+  const fromDb = ROOM_SCHEDULES_FROM_DB[code];
+  if (fromDb?.length) {
+    return fromDb;
+  }
+  return ROOM_SCHEDULES[code] ?? [];
 }
 
 export function createRoomBookingDraft(params: {

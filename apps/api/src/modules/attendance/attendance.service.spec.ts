@@ -58,6 +58,7 @@ describe('AttendanceService', () => {
             },
             classEnrollment: {
               findFirst: jest.fn(),
+              findMany: jest.fn(),
             },
           },
         },
@@ -260,6 +261,104 @@ describe('AttendanceService', () => {
         status: AttendanceSessionStatus.active,
       });
       expect(redisSetMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('exportSessionAttendance', () => {
+    it('exports roster with present and absent students', async () => {
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+        classSectionId: 'section-1',
+        lecturerId: 'lecturer-1',
+        status: AttendanceSessionStatus.closed,
+        startedAt: new Date('2026-04-25T00:30:00.000Z'),
+        expiresAt: new Date('2026-04-25T00:45:00.000Z'),
+        classSection: {
+          id: 'section-1',
+          classCode: 'SE346.Q21',
+          sectionCode: 'Q21',
+          course: {
+            code: 'SE346',
+            name: 'Lap trinh tren thiet bi di dong',
+            credits: 4,
+          },
+        },
+        records: [
+          {
+            id: 'record-1',
+            studentId: 'student-1',
+            checkinTime: new Date('2026-04-25T00:34:00.000Z'),
+            student: {
+              id: 'student-1',
+              email: 'student1@gm.uit.edu.vn',
+              firstName: 'Van A',
+              lastName: 'Nguyen',
+              studentId: '22520001',
+            },
+          },
+        ],
+      });
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'enrollment-1',
+          studentId: 'student-1',
+          student: {
+            id: 'student-1',
+            email: 'student1@gm.uit.edu.vn',
+            firstName: 'Van A',
+            lastName: 'Nguyen',
+            studentId: '22520001',
+          },
+        },
+        {
+          id: 'enrollment-2',
+          studentId: 'student-2',
+          student: {
+            id: 'student-2',
+            email: 'student2@gm.uit.edu.vn',
+            firstName: 'Thi B',
+            lastName: 'Tran',
+            studentId: '22520002',
+          },
+        },
+      ]);
+
+      const result = await service.exportSessionAttendance('session-1', 'lecturer-1');
+
+      expect(result.fileName).toContain('attendance-SE346.Q21-');
+      expect(result.fileName.endsWith('.xlsx')).toBe(true);
+      expect(Buffer.isBuffer(result.buffer)).toBe(true);
+      expect(result.buffer.byteLength).toBeGreaterThan(0);
+      expect(prisma.classEnrollment.findMany).toHaveBeenCalledWith({
+        where: {
+          classSectionId: 'section-1',
+          status: EnrollmentStatus.active,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              studentId: true,
+            },
+          },
+        },
+        orderBy: {
+          student: {
+            studentId: 'asc',
+          },
+        },
+      });
+    });
+
+    it('throws when session does not belong to lecturer', async () => {
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.exportSessionAttendance('session-1', 'lecturer-1')).rejects.toThrow(
+        'Attendance session not found',
+      );
     });
   });
 });

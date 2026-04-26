@@ -1,81 +1,77 @@
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { USER_ROLES } from '@smart-campus/shared';
+import { AppState, Linking } from 'react-native';
 
 import AttendanceHubScreen from '../index';
 
-import { useAuthStore } from '@/stores/auth-store';
-
-const mockRouter = {
-  push: jest.fn(),
-  replace: jest.fn(),
-  back: jest.fn(),
-};
-
+const mockPush = jest.fn();
+const mockBack = jest.fn();
 const mockGetCameraPermissionsAsync = jest.fn();
+const mockRequestCameraPermissionsAsync = jest.fn();
+const mockOpenSettings = jest.fn();
 
-jest.mock('expo-router', () => {
-  const React = require('react');
-  const { Text } = require('react-native');
-
-  return {
-    useRouter: () => mockRouter,
-    useFocusEffect: (callback: () => void) => callback(),
-    Redirect: ({ href }: { href: string }) => React.createElement(Text, null, `redirect:${href}`),
-  };
-});
+jest.mock('expo-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    back: mockBack,
+  }),
+  useFocusEffect: (effect: () => void) => effect(),
+}));
 
 jest.mock('expo-camera', () => ({
   Camera: {
-    getCameraPermissionsAsync: () => mockGetCameraPermissionsAsync(),
+    getCameraPermissionsAsync: (...args: unknown[]) => mockGetCameraPermissionsAsync(...args),
+    requestCameraPermissionsAsync: (...args: unknown[]) => mockRequestCameraPermissionsAsync(...args),
   },
 }));
-
-jest.mock('@/stores/auth-store');
-
-const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
 
 describe('AttendanceHubScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+    jest.spyOn(Linking, 'openSettings').mockImplementation((...args: unknown[]) =>
+      mockOpenSettings(...args),
+    );
     mockGetCameraPermissionsAsync.mockResolvedValue({
-      granted: true,
-      canAskAgain: true,
+      status: 'undetermined',
+      granted: false,
       expires: 'never',
+      canAskAgain: true,
+    });
+    mockRequestCameraPermissionsAsync.mockResolvedValue({
       status: 'granted',
+      granted: true,
+      expires: 'never',
+      canAskAgain: true,
     });
   });
 
-  it('renders scan hub for student role', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: {
-          role: USER_ROLES.STUDENT,
-        },
-      }),
-    );
-
+  it('requests camera permission before navigating to scan screen', async () => {
     const { getByText } = render(<AttendanceHubScreen />);
 
+    fireEvent.press(getByText('Bật quyền camera để tiếp tục'));
+
     await waitFor(() => {
-      expect(getByText('Quét QR điểm danh')).toBeTruthy();
+      expect(mockRequestCameraPermissionsAsync).toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith('/services/attendance/scan');
     });
-    expect(getByText('Mở camera quét QR')).toBeTruthy();
   });
 
-  it('redirects lecturer role to lecturer attendance management screen', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: {
-          role: USER_ROLES.LECTURER,
-        },
-      }),
-    );
+  it('opens settings when camera permission is permanently denied', async () => {
+    mockRequestCameraPermissionsAsync.mockResolvedValue({
+      status: 'denied',
+      granted: false,
+      expires: 'never',
+      canAskAgain: false,
+    });
 
     const { getByText } = render(<AttendanceHubScreen />);
 
+    fireEvent.press(getByText('Bật quyền camera để tiếp tục'));
+
     await waitFor(() => {
-      expect(getByText('redirect:/services/attendance/lecturer')).toBeTruthy();
+      expect(mockOpenSettings).toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,8 @@
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 
-import { apiClient } from './client';
+import { apiClient, API_BASE_URL, AUTH_ACCESS_TOKEN_KEY } from './client';
 
 export type AttendanceCheckinResponse = {
   sessionId: string;
@@ -183,6 +185,17 @@ export const attendanceApi = {
     return (await apiClient.get('/attendance/me/history', {
       params: { page, limit },
     })) as AttendanceStudentHistoryResponse;
+  },
+
+  exportSessionExcel: async (sessionId: string, fileUri: string) => {
+    const accessToken = await SecureStore.getItemAsync(AUTH_ACCESS_TOKEN_KEY);
+    return FileSystem.downloadAsync(
+      `${API_BASE_URL}/attendance/session/${encodeURIComponent(sessionId)}/export`,
+      fileUri,
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      },
+    );
   },
 };
 

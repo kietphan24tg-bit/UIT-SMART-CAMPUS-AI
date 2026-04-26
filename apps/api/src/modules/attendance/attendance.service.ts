@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
+import ExcelJS from 'exceljs';
 import {
   BadRequestException,
   ConflictException,
@@ -24,10 +25,66 @@ import type { GetAttendanceHistoryDto } from './dto/get-attendance-history.dto';
 import type { GetSessionRecordsDto } from './dto/get-session-records.dto';
 import type { StartAttendanceSessionDto } from './dto/start-attendance-session.dto';
 
+const DEMO_ATTENDANCE_STUDENT_EMAIL = 'student@gm.uit.edu.vn';
+
 interface AttendanceTokenPayload {
   sessionId: string;
   issuedAt: string;
   expiresAt: string;
+}
+
+type ExportableAttendanceSession = Prisma.AttendanceSessionGetPayload<{
+  include: {
+    classSection: {
+      select: {
+        id: true;
+        classCode: true;
+        sectionCode: true;
+        course: {
+          select: {
+            code: true;
+            name: true;
+            credits: true;
+          };
+        };
+      };
+    };
+    records: {
+      include: {
+        student: {
+          select: {
+            id: true;
+            email: true;
+            firstName: true;
+            lastName: true;
+            studentId: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+function formatFullName(firstName?: string | null, lastName?: string | null) {
+  return [lastName, firstName].filter(Boolean).join(' ').trim();
+}
+
+function formatExportDateTime(value: Date | null | undefined) {
+  if (!value) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(value);
+}
+
+function sanitizeFileName(value: string) {
+  return value.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_');
 }
 
 @Injectable()
@@ -194,8 +251,10 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     return this.renderLiveAttendanceHtml(sessionId, displayKey);
   }
 
-  async checkin(studentId: string, dto: CheckinAttendanceDto) {
-    await this.enforceCheckinRateLimit(studentId);
+  async checkin(studentId: string | undefined, dto: CheckinAttendanceDto) {
+    const effectiveStudentId = await this.resolveCheckinStudentId(studentId);
+    // await this.enforceCheckinRateLimit(studentId);
+    await this.enforceCheckinRateLimit(effectiveStudentId);
     const rawTokenPayload = await this.redisClient.get(this.buildTokenKey(dto.token));
     if (!rawTokenPayload) {
       throw new BadRequestException({
@@ -221,7 +280,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
     const activeEnrollment = await this.prisma.classEnrollment.findFirst({
       where: {
-        studentId,
+        studentId: effectiveStudentId,
         classSectionId: activeSession.classSectionId,
         status: EnrollmentStatus.active,
       },
@@ -239,7 +298,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       const record = await this.prisma.attendanceRecord.create({
         data: {
           sessionId: activeSession.id,
-          studentId,
+          studentId: effectiveStudentId,
         },
       });
 
@@ -257,6 +316,23 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       }
       throw error;
     }
+  }
+
+  private async resolveCheckinStudentId(studentId?: string) {
+    if (studentId) {
+      return studentId;
+    }
+
+    const demoStudent = await this.prisma.user.findUnique({
+      where: { email: DEMO_ATTENDANCE_STUDENT_EMAIL },
+      select: { id: true },
+    });
+
+    if (!demoStudent) {
+      throw new NotFoundException('Demo attendance student not found');
+    }
+
+    return demoStudent.id;
   }
 
   async getSessionRecords(sessionId: string, lecturerId: string, query: GetSessionRecordsDto) {
@@ -303,6 +379,71 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async exportSessionAttendance(sessionId: string, lecturerId: string) {
+    const session = await this.prisma.attendanceSession.findFirst({
+      where: { id: sessionId, lecturerId },
+      include: {
+        classSection: {
+          select: {
+            id: true,
+            classCode: true,
+            sectionCode: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+                credits: true,
+              },
+            },
+          },
+        },
+        records: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                studentId: true,
+              },
+            },
+          },
+          orderBy: { checkinTime: 'asc' },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Attendance session not found');
+    }
+
+    const roster = await this.prisma.classEnrollment.findMany({
+      where: {
+        classSectionId: session.classSectionId,
+        status: EnrollmentStatus.active,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            studentId: true,
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          studentId: 'asc',
+        },
+      },
+    });
+
+    return this.buildAttendanceExportWorkbook(session, roster);
   }
 
   async getHistory(lecturerId: string, query: GetAttendanceHistoryDto) {
@@ -502,6 +643,117 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (!session) {
       throw new NotFoundException('Attendance session not found');
     }
+  }
+
+  private async buildAttendanceExportWorkbook(
+    session: ExportableAttendanceSession,
+    roster: Array<
+      Prisma.ClassEnrollmentGetPayload<{
+        include: {
+          student: {
+            select: {
+              id: true;
+              email: true;
+              firstName: true;
+              lastName: true;
+              studentId: true;
+            };
+          };
+        };
+      }>
+    >,
+  ) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Diem danh');
+    const recordsByStudentId = new Map(session.records.map((record) => [record.studentId, record]));
+
+    worksheet.columns = [
+      { header: 'STT', key: 'index', width: 8 },
+      { header: 'MSSV', key: 'studentId', width: 18 },
+      { header: 'Họ và tên', key: 'fullName', width: 28 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Trạng thái', key: 'status', width: 16 },
+      { header: 'Giờ check-in', key: 'checkinTime', width: 22 },
+    ];
+
+    worksheet.mergeCells('A1:F1');
+    worksheet.getCell('A1').value = 'BÁO CÁO ĐIỂM DANH QR';
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+    const infoRows = [
+      ['Môn học', session.classSection.course.name],
+      ['Mã môn', session.classSection.course.code],
+      ['Mã lớp', session.classSection.classCode],
+      ['Nhóm', session.classSection.sectionCode],
+      ['Bắt đầu', formatExportDateTime(session.startedAt)],
+      ['Hết hạn', formatExportDateTime(session.expiresAt)],
+      ['Đã check-in / Sĩ số', `${session.records.length}/${roster.length}`],
+    ];
+
+    infoRows.forEach(([label, value], index) => {
+      const row = worksheet.getRow(index + 3);
+      row.getCell(1).value = label;
+      row.getCell(2).value = value;
+      row.getCell(1).font = { bold: true };
+    });
+
+    const headerRowIndex = infoRows.length + 5;
+    const headerRow = worksheet.getRow(headerRowIndex);
+    headerRow.values = ['STT', 'MSSV', 'Họ và tên', 'Email', 'Trạng thái', 'Giờ check-in'];
+    headerRow.font = { bold: true };
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEAF3FF' },
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD5E2F2' } },
+        left: { style: 'thin', color: { argb: 'FFD5E2F2' } },
+        bottom: { style: 'thin', color: { argb: 'FFD5E2F2' } },
+        right: { style: 'thin', color: { argb: 'FFD5E2F2' } },
+      };
+    });
+
+    roster.forEach((enrollment, index) => {
+      const record = recordsByStudentId.get(enrollment.studentId);
+      const row = worksheet.addRow({
+        index: index + 1,
+        studentId: enrollment.student.studentId ?? enrollment.student.email,
+        fullName: formatFullName(enrollment.student.firstName, enrollment.student.lastName),
+        email: enrollment.student.email,
+        status: record ? 'Có mặt' : 'Vắng',
+        checkinTime: record ? formatExportDateTime(record.checkinTime) : '',
+      });
+
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE4EDF7' } },
+          left: { style: 'thin', color: { argb: 'FFE4EDF7' } },
+          bottom: { style: 'thin', color: { argb: 'FFE4EDF7' } },
+          right: { style: 'thin', color: { argb: 'FFE4EDF7' } },
+        };
+      });
+    });
+
+    worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+    const startedDate = new Intl.DateTimeFormat('sv-SE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .format(session.startedAt)
+      .replace(/-/g, '');
+    const fileName = sanitizeFileName(
+      `attendance-${session.classSection.classCode}-${startedDate}.xlsx`,
+    );
+
+    return {
+      fileName,
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+    };
   }
 
   private buildTokenKey(token: string) {

@@ -60,62 +60,6 @@ const FIXED_ROOM_SCHEDULE_DAYS = [
   { dayOfWeek: 7, label: 'Thứ 7' },
 ] as const;
 
-const roomBookingInclude = {
-  room: {
-    select: {
-      roomCode: true,
-      name: true,
-      floor: {
-        select: {
-          building: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
-  },
-  timeSlot: {
-    select: {
-      id: true,
-      slotNumber: true,
-      label: true,
-      startTime: true,
-      endTime: true,
-    },
-  },
-  bookingSlots: {
-    include: {
-      timeSlot: {
-        select: {
-          id: true,
-          slotNumber: true,
-          label: true,
-          startTime: true,
-          endTime: true,
-        },
-      },
-    },
-    orderBy: {
-      slotOrder: 'asc' as const,
-    },
-  },
-} satisfies Prisma.RoomBookingInclude;
-
-type RoomBookingWithRelations = Prisma.RoomBookingGetPayload<{
-  include: typeof roomBookingInclude;
-}>;
-
-type SelectedTimeSlot = {
-  id: string;
-  slotNumber: number;
-  label: string;
-  startTime: string;
-  endTime: string;
-};
-
 function getBangkokDateTimeParts(now = new Date()): CurrentBangkokDateTime {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: BANGKOK_TIME_ZONE,
@@ -151,12 +95,12 @@ function createUtcDate(dateKey: string) {
 function parseBookingDate(dateKey: string) {
   const normalizedDateKey = String(dateKey || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDateKey)) {
-    throw new BadRequestException('bookingDate phải có định dạng YYYY-MM-DD');
+    throw new BadRequestException('bookingDate phai co dinh dang YYYY-MM-DD');
   }
 
   const parsedDate = createUtcDate(normalizedDateKey);
   if (Number.isNaN(parsedDate.getTime())) {
-    throw new BadRequestException('bookingDate không hợp lệ');
+    throw new BadRequestException('bookingDate khong hop le');
   }
 
   return parsedDate;
@@ -195,8 +139,73 @@ function getRoomBookingDayOfWeek(bookingDate: Date) {
   return utcDay === 0 ? 8 : utcDay + 1;
 }
 
-function buildFullName(firstName?: string | null, lastName?: string | null) {
-  return [lastName, firstName].filter(Boolean).join(' ').trim();
+/** Monday 00:00 UTC of the ISO week that contains `date` (Mon=1 .. Sun=7). */
+function getMondayOfDateUtc(date: Date) {
+  const utcDay = date.getUTCDay();
+  const isoDay = utcDay === 0 ? 7 : utcDay;
+  return addUtcDays(date, 1 - isoDay);
+}
+
+const ROOM_BOOKING_MAX_WEEKS_AHEAD = 8;
+
+function getFirstBookableWeekMonday(now = new Date()) {
+  const { monday: currentMonday } = getCurrentBangkokWeekRange(now);
+  return addUtcDays(currentMonday, 7);
+}
+
+function getLastAllowedWeekMonday(now = new Date()) {
+  return addUtcDays(getFirstBookableWeekMonday(now), (ROOM_BOOKING_MAX_WEEKS_AHEAD - 1) * 7);
+}
+
+function assertBookingDateAllowedForRoomBooking(bookingDate: Date, now = new Date()) {
+  const dayOfWeek = getRoomBookingDayOfWeek(bookingDate);
+  if (dayOfWeek < 2 || dayOfWeek > 7) {
+    throw new BadRequestException('bookingDate chi duoc tu Thu 2 den Thu 7');
+  }
+
+  const weekMonday = getMondayOfDateUtc(bookingDate);
+  const firstAllowed = getFirstBookableWeekMonday(now);
+  const lastAllowed = getLastAllowedWeekMonday(now);
+
+  if (weekMonday.getTime() < firstAllowed.getTime()) {
+    throw new BadRequestException('Dat phong phai cach it nhat mot tuan (tu tuan ke tiep tro di)');
+  }
+
+  if (weekMonday.getTime() > lastAllowed.getTime()) {
+    throw new BadRequestException(
+      `Dat phong toi da ${ROOM_BOOKING_MAX_WEEKS_AHEAD} tuan ke tu tuan duoc phep dau tien`,
+    );
+  }
+}
+
+function resolveScheduleWeekMonday(weekStart: string | undefined, now = new Date()) {
+  const firstAllowed = getFirstBookableWeekMonday(now);
+  const lastAllowed = getLastAllowedWeekMonday(now);
+
+  const normalized = String(weekStart || '').trim();
+  if (!normalized) {
+    return firstAllowed;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new BadRequestException('weekStart phai co dinh dang YYYY-MM-DD');
+  }
+
+  const parsed = createUtcDate(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('weekStart khong hop le');
+  }
+
+  const monday = getMondayOfDateUtc(parsed);
+  if (toDateKey(monday) !== normalized) {
+    throw new BadRequestException('weekStart phai la thu Hai cua tuan');
+  }
+
+  if (monday.getTime() < firstAllowed.getTime() || monday.getTime() > lastAllowed.getTime()) {
+    throw new BadRequestException('weekStart nam ngoai khoang dat phong cho phep');
+  }
+
+  return monday;
 }
 
 @Injectable()
@@ -206,8 +215,9 @@ export class RoomBookingsService {
   async createRoomBooking(userId: string, dto: CreateRoomBookingDto) {
     const roomCode = String(dto.roomCode || '').trim().toUpperCase();
     const bookingDate = parseBookingDate(dto.bookingDate);
+    assertBookingDateAllowedForRoomBooking(bookingDate);
 
-    const [room, selectedTimeSlots] = await Promise.all([
+    const [room, timeSlot] = await Promise.all([
       this.prisma.room.findFirst({
         where: {
           roomCode,
@@ -218,84 +228,87 @@ export class RoomBookingsService {
           roomCode: true,
         },
       }),
-      this.getSelectedTimeSlots(dto.timeSlotIds),
+      this.prisma.timeSlot.findUnique({
+        where: { id: dto.timeSlotId },
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+        },
+      }),
     ]);
 
     if (!room) {
-      throw new NotFoundException('Không tìm thấy phòng');
+      throw new NotFoundException('Khong tim thay phong');
     }
 
-    const conflictingSlot = await this.prisma.roomBookingSlot.findFirst({
+    if (!timeSlot) {
+      throw new NotFoundException('Khong tim thay tiet hoc');
+    }
+
+    const duplicateBooking = await this.prisma.roomBooking.findFirst({
       where: {
         roomId: room.id,
         bookingDate,
-        timeSlotId: {
-          in: selectedTimeSlots.map((timeSlot) => timeSlot.id),
-        },
-        booking: {
-          status: {
-            in: CONFLICT_BOOKING_STATUSES,
-          },
+        timeSlotId: timeSlot.id,
+        status: {
+          in: CONFLICT_BOOKING_STATUSES,
         },
       },
       select: {
-        timeSlot: {
-          select: {
-            label: true,
-          },
-        },
+        id: true,
       },
     });
 
-    if (conflictingSlot) {
-      throw new ConflictException(
-        conflictingSlot.timeSlot?.label
-          ? `Khung giờ ${conflictingSlot.timeSlot.label} đã có yêu cầu đặt phòng.`
-          : 'Một hoặc nhiều khung giờ đã có yêu cầu đặt phòng.',
-      );
+    if (duplicateBooking) {
+      throw new ConflictException('Khung gio nay da co yeu cau dat phong');
     }
 
-    const firstTimeSlot = selectedTimeSlots[0]!;
-    const lastTimeSlot = selectedTimeSlots[selectedTimeSlots.length - 1]!;
-
-    const booking = await this.prisma.$transaction(async (tx) => {
-      const createdBooking = await tx.roomBooking.create({
-        data: {
-          roomId: room.id,
-          userId,
-          bookingDate,
-          timeSlotId: firstTimeSlot.id,
-          startTime: firstTimeSlot.startTime,
-          endTime: lastTimeSlot.endTime,
-          title: dto.title?.trim() || null,
-          purpose: dto.purpose.trim(),
-          attendeeCount: dto.attendeeCount ?? null,
-          contactName: dto.contactName.trim(),
-          contactPhone: dto.contactPhone?.trim() || null,
-          departmentName: dto.departmentName?.trim() || null,
-          status: CREATED_BOOKING_STATUS,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      for (const [index, timeSlot] of selectedTimeSlots.entries()) {
-        await tx.roomBookingSlot.create({
-          data: {
-            bookingId: createdBooking.id,
-            roomId: room.id,
-            bookingDate,
-            timeSlotId: timeSlot.id,
-            slotOrder: index + 1,
-          },
-        });
-      }
-
-      return createdBooking;
+    const booking = await this.prisma.roomBooking.create({
+      data: {
+        roomId: room.id,
+        userId,
+        bookingDate,
+        timeSlotId: timeSlot.id,
+        startTime: timeSlot.startTime,
+        endTime: timeSlot.endTime,
+        title: dto.title?.trim() || null,
+        purpose: dto.purpose.trim(),
+        attendeeCount: dto.attendeeCount ?? null,
+        contactName: dto.contactName.trim(),
+        contactPhone: dto.contactPhone?.trim() || null,
+        departmentName: dto.departmentName?.trim() || null,
+        status: CREATED_BOOKING_STATUS,
+      },
+      select: {
+        id: true,
+        bookingDate: true,
+        timeSlotId: true,
+        title: true,
+        purpose: true,
+        attendeeCount: true,
+        contactName: true,
+        contactPhone: true,
+        departmentName: true,
+        status: true,
+        createdAt: true,
+      },
     });
 
-    return this.getBookingById(booking.id);
+    return {
+      id: booking.id,
+      roomCode: room.roomCode,
+      bookingDate: booking.bookingDate.toISOString().slice(0, 10),
+      timeSlotId: booking.timeSlotId ?? '',
+      title: booking.title,
+      purpose: booking.purpose,
+      attendeeCount: booking.attendeeCount,
+      contactName: booking.contactName,
+      contactPhone: booking.contactPhone,
+      departmentName: booking.departmentName,
+      status: booking.status,
+      createdAt: booking.createdAt.toISOString(),
+    };
   }
 
   async getBuildingRooms(buildingCode: string, filters: RoomListFilters = {}) {
@@ -305,7 +318,7 @@ export class RoomBookingsService {
     }
 
     const { dateKey, timeKey } = getBangkokDateTimeParts();
-    const today = createUtcDate(dateKey);
+    const today = new Date(`${dateKey}T00:00:00.000Z`);
 
     const timeSlots = await this.prisma.timeSlot.findMany({
       orderBy: { slotNumber: 'asc' },
@@ -331,14 +344,12 @@ export class RoomBookingsService {
       select: {
         roomCode: true,
         capacity: true,
-        roomBookingSlots: currentTimeSlot
+        roomBookings: currentTimeSlot
           ? {
               where: {
                 bookingDate: today,
+                status: { in: OCCUPYING_BOOKING_STATUSES },
                 timeSlotId: currentTimeSlot.id,
-                booking: {
-                  status: { in: OCCUPYING_BOOKING_STATUSES },
-                },
               },
               select: {
                 id: true,
@@ -352,18 +363,20 @@ export class RoomBookingsService {
       .map((room) => ({
         roomCode: room.roomCode,
         capacity: room.capacity,
-        status: this.resolveRoomStatus(room.roomBookingSlots),
+        status: this.resolveRoomStatus(room.roomBookings),
       }))
       .sort((left, right) => ROOM_CODE_COLLATOR.compare(left.roomCode, right.roomCode));
   }
 
-  async getRoomSchedule(roomCode: string) {
+  async getRoomSchedule(roomCode: string, weekStart?: string) {
     const normalizedRoomCode = String(roomCode || '').trim().toUpperCase();
     if (!normalizedRoomCode) {
-      throw new NotFoundException('Không tìm thấy phòng');
+      throw new NotFoundException('Room not found');
     }
 
-    const { monday, saturday } = getCurrentBangkokWeekRange();
+    const monday = resolveScheduleWeekMonday(weekStart);
+    const saturday = addUtcDays(monday, 5);
+
     const room = await this.prisma.room.findFirst({
       where: {
         roomCode: normalizedRoomCode,
@@ -374,60 +387,46 @@ export class RoomBookingsService {
         roomCode: true,
         name: true,
         capacity: true,
-        floor: {
-          select: {
-            building: {
-              select: {
-                code: true,
-                name: true,
-              },
-            },
-          },
-        },
       },
     });
 
     if (!room) {
-      throw new NotFoundException('Không tìm thấy phòng');
+      throw new NotFoundException('Room not found');
     }
 
-    const [timeSlots, roomBookingSlots] = await Promise.all([
+    const [timeSlots, roomBookings] = await Promise.all([
       this.prisma.timeSlot.findMany({
         orderBy: { slotNumber: 'asc' },
       }),
-      this.prisma.roomBookingSlot.findMany({
+      this.prisma.roomBooking.findMany({
         where: {
           roomId: room.id,
           bookingDate: {
             gte: monday,
             lte: saturday,
           },
-          booking: {
-            status: { in: OCCUPYING_BOOKING_STATUSES },
-          },
+          status: { in: OCCUPYING_BOOKING_STATUSES },
+          timeSlotId: { not: null },
         },
         select: {
           bookingDate: true,
           timeSlotId: true,
-          booking: {
-            select: {
-              title: true,
-            },
-          },
+          title: true,
         },
+        orderBy: { bookingDate: 'desc' },
       }),
     ]);
 
     const bookingByDayAndSlot = new Map<string, { title: string | null }>();
-    for (const slot of roomBookingSlots) {
-      const dayOfWeek = getRoomBookingDayOfWeek(slot.bookingDate);
-      if (dayOfWeek < 2 || dayOfWeek > 7) {
+    for (const booking of roomBookings) {
+      const dayOfWeek = getRoomBookingDayOfWeek(booking.bookingDate);
+      if (dayOfWeek < 2 || dayOfWeek > 7 || !booking.timeSlotId) {
         continue;
       }
 
-      const key = `${dayOfWeek}:${slot.timeSlotId}`;
+      const key = `${dayOfWeek}:${booking.timeSlotId}`;
       if (!bookingByDayAndSlot.has(key)) {
-        bookingByDayAndSlot.set(key, { title: slot.booking.title });
+        bookingByDayAndSlot.set(key, { title: booking.title });
       }
     }
 
@@ -455,8 +454,7 @@ export class RoomBookingsService {
       roomCode: room.roomCode,
       capacity: room.capacity,
       name: room.name,
-      buildingCode: room.floor.building.code,
-      buildingName: room.floor.building.name,
+      weekStart: toDateKey(monday),
       days,
     };
   }
@@ -465,6 +463,7 @@ export class RoomBookingsService {
     const buildings = await this.prisma.building.findMany({
       orderBy: { code: 'asc' },
       select: {
+        id: true,
         code: true,
         name: true,
       },
@@ -474,7 +473,6 @@ export class RoomBookingsService {
       buildings.map(async (building) => {
         const rooms = await this.getBuildingRooms(building.code);
         const availableRooms = rooms.filter((room) => room.status === ROOM_AVAILABLE_STATUS).length;
-
         return {
           id: building.code,
           name: building.name,
@@ -494,7 +492,33 @@ export class RoomBookingsService {
         userId,
         ...(status ? { status } : {}),
       },
-      include: roomBookingInclude,
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
       orderBy: [{ bookingDate: 'desc' }, { createdAt: 'desc' }],
     });
 
@@ -505,7 +529,31 @@ export class RoomBookingsService {
     const bookings = await this.prisma.roomBooking.findMany({
       where: status ? { status } : undefined,
       include: {
-        ...roomBookingInclude,
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
         user: {
           select: {
             id: true,
@@ -523,7 +571,7 @@ export class RoomBookingsService {
       requester: {
         id: booking.user.id,
         email: booking.user.email,
-        fullName: buildFullName(booking.user.firstName, booking.user.lastName),
+        fullName: [booking.user.lastName, booking.user.firstName].filter(Boolean).join(' ').trim(),
       },
     }));
   }
@@ -531,61 +579,81 @@ export class RoomBookingsService {
   async approveBooking(bookingId: string, approverId: string) {
     const booking = await this.prisma.roomBooking.findUnique({
       where: { id: bookingId },
-      include: roomBookingInclude,
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+          },
+        },
+      },
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
+      throw new NotFoundException('Booking not found');
     }
 
     if (booking.status !== 'pending') {
-      throw new BadRequestException('Chỉ có thể duyệt yêu cầu đang chờ');
+      throw new BadRequestException('Only pending bookings can be approved');
     }
 
-    const selectedTimeSlotIds = booking.bookingSlots.map((slot) => slot.timeSlotId);
-    if (selectedTimeSlotIds.length === 0) {
-      throw new BadRequestException('Yêu cầu đặt phòng chưa có khung giờ hợp lệ');
+    if (!booking.timeSlotId) {
+      throw new BadRequestException('Booking time slot is required');
     }
 
-    const hasConflict = await this.prisma.roomBookingSlot.findFirst({
+    const hasConflict = await this.prisma.roomBooking.findFirst({
       where: {
-        bookingId: { not: booking.id },
+        id: { not: booking.id },
         roomId: booking.roomId,
         bookingDate: booking.bookingDate,
-        timeSlotId: { in: selectedTimeSlotIds },
-        booking: {
-          status: {
-            in: OCCUPYING_BOOKING_STATUSES,
-          },
+        timeSlotId: booking.timeSlotId,
+        status: {
+          in: OCCUPYING_BOOKING_STATUSES,
         },
       },
-      select: {
-        timeSlot: {
-          select: {
-            label: true,
-          },
-        },
-      },
+      select: { id: true },
     });
 
     if (hasConflict) {
-      throw new ConflictException(
-        hasConflict.timeSlot?.label
-          ? `Khung giờ ${hasConflict.timeSlot.label} đã được sử dụng.`
-          : 'Một hoặc nhiều khung giờ đã được sử dụng.',
-      );
+      throw new ConflictException('This room slot has been occupied');
     }
 
-    await this.prisma.roomBooking.update({
+    const updated = await this.prisma.roomBooking.update({
       where: { id: booking.id },
       data: {
         status: 'approved',
         approvedById: approverId,
         approvedAt: new Date(),
       },
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
     });
 
-    return this.getBookingById(booking.id);
+    return this.mapBooking(updated);
   }
 
   async rejectBooking(bookingId: string, approverId: string) {
@@ -595,23 +663,50 @@ export class RoomBookingsService {
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
+      throw new NotFoundException('Booking not found');
     }
 
     if (booking.status !== 'pending') {
-      throw new BadRequestException('Chỉ có thể từ chối yêu cầu đang chờ');
+      throw new BadRequestException('Only pending bookings can be rejected');
     }
 
-    await this.prisma.roomBooking.update({
+    const updated = await this.prisma.roomBooking.update({
       where: { id: booking.id },
       data: {
         status: 'rejected',
         approvedById: approverId,
         approvedAt: new Date(),
       },
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
     });
 
-    return this.getBookingById(booking.id);
+    return this.mapBooking(updated);
   }
 
   async cancelBooking(bookingId: string, userId: string, isAdmin: boolean) {
@@ -625,100 +720,129 @@ export class RoomBookingsService {
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
+      throw new NotFoundException('Booking not found');
     }
 
     if (!isAdmin && booking.userId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền hủy yêu cầu này');
+      throw new ForbiddenException('You do not have permission to cancel this booking');
     }
 
     if (booking.status === 'cancelled' || booking.status === 'rejected') {
       return this.getBookingById(booking.id);
     }
 
-    await this.prisma.roomBooking.update({
+    const updated = await this.prisma.roomBooking.update({
       where: { id: booking.id },
       data: {
         status: 'cancelled',
       },
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
     });
 
-    return this.getBookingById(booking.id);
+    return this.mapBooking(updated);
   }
 
   private async getBookingById(bookingId: string) {
     const booking = await this.prisma.roomBooking.findUnique({
       where: { id: bookingId },
-      include: roomBookingInclude,
+      include: {
+        room: {
+          select: {
+            roomCode: true,
+            name: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
+      throw new NotFoundException('Booking not found');
     }
 
     return this.mapBooking(booking);
   }
 
-  private async getSelectedTimeSlots(timeSlotIds: string[]) {
-    const requestedTimeSlotIds = timeSlotIds
-      .map((timeSlotId) => String(timeSlotId || '').trim())
-      .filter(Boolean);
-
-    if (requestedTimeSlotIds.length === 0) {
-      throw new BadRequestException('Vui lòng chọn ít nhất một khung giờ');
-    }
-
-    if (new Set(requestedTimeSlotIds).size !== requestedTimeSlotIds.length) {
-      throw new BadRequestException('Danh sách khung giờ không được trùng nhau');
-    }
-
-    const timeSlots = await this.prisma.timeSlot.findMany({
-      where: {
-        id: {
-          in: requestedTimeSlotIds,
-        },
-      },
-      orderBy: {
-        slotNumber: 'asc',
-      },
-      select: {
-        id: true,
-        slotNumber: true,
-        label: true,
-        startTime: true,
-        endTime: true,
-      },
-    });
-
-    if (timeSlots.length !== requestedTimeSlotIds.length) {
-      throw new NotFoundException('Không tìm thấy một hoặc nhiều tiết học');
-    }
-
-    const orderedTimeSlotIds = timeSlots.map((timeSlot) => timeSlot.id);
-    const isCorrectOrder = requestedTimeSlotIds.every(
-      (timeSlotId, index) => timeSlotId === orderedTimeSlotIds[index],
-    );
-
-    if (!isCorrectOrder) {
-      throw new BadRequestException('Các khung giờ phải được gửi theo đúng thứ tự liên tiếp');
-    }
-
-    for (let index = 1; index < timeSlots.length; index += 1) {
-      const currentTimeSlot = timeSlots[index]!;
-      const previousTimeSlot = timeSlots[index - 1]!;
-      if (currentTimeSlot.slotNumber !== previousTimeSlot.slotNumber + 1) {
-        throw new BadRequestException('Chỉ được chọn các khung giờ liền kề trong cùng một yêu cầu');
-      }
-    }
-
-    return timeSlots as SelectedTimeSlot[];
-  }
-
-  private mapBooking(booking: RoomBookingWithRelations) {
-    const timeSlots = booking.bookingSlots
-      .map((slot) => slot.timeSlot)
-      .sort((left, right) => left.slotNumber - right.slotNumber);
-
+  private mapBooking(
+    booking: {
+      id: string;
+      bookingDate: Date;
+      timeSlotId: string | null;
+      startTime: string | null;
+      endTime: string | null;
+      title: string | null;
+      purpose: string;
+      attendeeCount: number | null;
+      contactName: string | null;
+      contactPhone: string | null;
+      departmentName: string | null;
+      notes: string | null;
+      status: RoomBookingStatus;
+      createdAt: Date;
+      approvedAt: Date | null;
+      room: {
+        roomCode: string;
+        name: string | null;
+        floor: {
+          building: {
+            code: string;
+            name: string;
+          };
+        };
+      };
+      timeSlot?: {
+        id: string;
+        slotNumber: number;
+        label: string;
+        startTime: string;
+        endTime: string;
+      } | null;
+    },
+  ) {
     return {
       id: booking.id,
       roomCode: booking.room.roomCode,
@@ -726,11 +850,18 @@ export class RoomBookingsService {
       buildingCode: booking.room.floor.building.code,
       buildingName: booking.room.floor.building.name,
       bookingDate: toDateKey(booking.bookingDate),
-      timeSlotIds: timeSlots.map((timeSlot) => timeSlot.id),
-      timeSlots,
-      slotCount: timeSlots.length,
+      timeSlotId: booking.timeSlotId ?? '',
       startTime: booking.startTime,
       endTime: booking.endTime,
+      timeSlot: booking.timeSlot
+        ? {
+            id: booking.timeSlot.id,
+            slotNumber: booking.timeSlot.slotNumber,
+            label: booking.timeSlot.label,
+            startTime: booking.timeSlot.startTime,
+            endTime: booking.timeSlot.endTime,
+          }
+        : null,
       title: booking.title,
       purpose: booking.purpose,
       attendeeCount: booking.attendeeCount,
@@ -739,16 +870,14 @@ export class RoomBookingsService {
       departmentName: booking.departmentName,
       notes: booking.notes,
       status: booking.status,
-      approvedAt: booking.approvedAt?.toISOString() ?? null,
-      createdAt: booking.createdAt.toISOString(),
+      approvedAt: booking.approvedAt,
+      createdAt: booking.createdAt,
     };
   }
 
   private resolveRoomStatus(
-    roomBookingSlots: Array<{ id: string }> | undefined,
+    roomBookings: Array<{ id: string }> | undefined,
   ): RoomAvailabilityStatus {
-    return roomBookingSlots && roomBookingSlots.length > 0
-      ? ROOM_OCCUPIED_STATUS
-      : ROOM_AVAILABLE_STATUS;
+    return roomBookings && roomBookings.length > 0 ? ROOM_OCCUPIED_STATUS : ROOM_AVAILABLE_STATUS;
   }
 }

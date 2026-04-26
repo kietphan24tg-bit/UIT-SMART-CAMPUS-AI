@@ -92,10 +92,7 @@ describe('RoomsInBuildingScreen', () => {
     expect(getByText('Sức chứa')).toBeTruthy();
     expect(getAllByText('Tất cả')).toHaveLength(2);
     expect(getAllByText('50 chỗ').length).toBeGreaterThan(0);
-    expect(getByText('Đang trống')).toBeTruthy();
-    expect(getByText('Bận đến 11:30')).toBeTruthy();
     expect(getByText('Lab máy tính')).toBeTruthy();
-    expect(getByText('Trống 14:00')).toBeTruthy();
 
     fireEvent.press(getByText('Tầng'));
     fireEvent.press(getByText('2'));

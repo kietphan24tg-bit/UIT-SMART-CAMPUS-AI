@@ -56,6 +56,7 @@ describe('RoomBookingsController', () => {
               roomCode: 'B1.02',
               capacity: 60,
               name: null,
+              weekStart: '2026-04-27',
               days: [],
             }),
             getBuildingRooms: jest.fn().mockResolvedValue([
@@ -100,13 +101,14 @@ describe('RoomBookingsController', () => {
   });
 
   it('should return the fixed weekly schedule for a room', async () => {
-    const result = await controller.getRoomSchedule('B1.02');
+    const result = await controller.getRoomSchedule('B1.02', undefined);
 
-    expect(service.getRoomSchedule).toHaveBeenCalledWith('B1.02');
+    expect(service.getRoomSchedule).toHaveBeenCalledWith('B1.02', undefined);
     expect(result).toEqual({
       roomCode: 'B1.02',
       capacity: 60,
       name: null,
+      weekStart: '2026-04-27',
       days: [],
     });
   });

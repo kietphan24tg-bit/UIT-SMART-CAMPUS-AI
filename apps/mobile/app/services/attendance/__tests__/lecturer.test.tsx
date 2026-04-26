@@ -1,92 +1,222 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { USER_ROLES } from '@smart-campus/shared';
 
-import LecturerAttendanceScreen from '../lecturer';
+import LecturerAttendanceScreen, {
+  groupAttendanceCardsByDay,
+  mapScheduleToAttendanceCards,
+  resolveScheduleCardToClassSection,
+} from '../lecturer';
 
-import { attendanceApi } from '@/services/api/attendance';
-import { useAuthStore } from '@/stores/auth-store';
+import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 
-const mockRouter = {
-  push: jest.fn(),
-  replace: jest.fn(),
-  back: jest.fn(),
-};
+const mockBack = jest.fn();
+const mockPush = jest.fn();
+const mockUseQuery = jest.fn();
 
 jest.mock('expo-router', () => ({
-  useRouter: () => mockRouter,
+  useRouter: () => ({
+    back: mockBack,
+    push: mockPush,
+  }),
 }));
 
-jest.mock('@/services/api/attendance', () => ({
-  attendanceApi: {
-    getLecturerClassSections: jest.fn(),
-    startSession: jest.fn(),
-    stopSession: jest.fn(),
-    getSessionRecords: jest.fn(),
-    getLecturerHistory: jest.fn(),
-  },
+jest.mock('@/hooks/use-schedule-screen');
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useMutation: jest.fn(),
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn(),
+  }),
 }));
 
-jest.mock('@/stores/auth-store');
+const mockUseScheduleScreenData = useScheduleScreenData as unknown as jest.Mock;
 
-const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
-const mockAttendanceApi = attendanceApi as unknown as {
-  getLecturerClassSections: jest.Mock;
-  getLecturerHistory: jest.Mock;
-};
-
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        gcTime: Infinity,
-      },
+const scheduleData = [
+  {
+    id: 'schedule-2',
+    classCode: 'SE346.Q21',
+    sectionCode: 'Q21',
+    dayOfWeek: 3,
+    startTime: '07:30',
+    endTime: '09:45',
+    room: 'B1.04',
+    instructor: 'Nguyen Hoang Phuc',
+    sessionType: 'daytime' as const,
+    course: {
+      code: 'SE346',
+      name: 'Lập trình trên thiết bị di động',
+      credits: 4,
     },
+  },
+  {
+    id: 'schedule-1',
+    classCode: 'SE301.Q21',
+    sectionCode: 'Q21',
+    dayOfWeek: 2,
+    startTime: '10:00',
+    endTime: '11:30',
+    room: 'E03.2',
+    instructor: 'Nguyen Hoang Phuc',
+    sessionType: 'daytime' as const,
+    course: {
+      code: 'SE301',
+      name: 'Phát triển phần mềm mã nguồn mở',
+      credits: 3,
+    },
+  },
+];
+
+const classSections = [
+  {
+    id: 'class-section-se346',
+    classCode: 'SE346.Q21',
+    sectionCode: 'Q21',
+    note: null,
+    capacity: 60,
+    enrolledCount: 55,
+    registrationOpen: true,
+    course: {
+      code: 'SE346',
+      name: 'Lập trình trên thiết bị di động',
+      credits: 4,
+    },
+    semester: {
+      id: 'sem-current',
+      name: 'HK2 2025-2026',
+      isCurrent: true,
+    },
+    meetings: [
+      {
+        id: 'meeting-1',
+        dayOfWeek: 3,
+        room: 'B1.04',
+        startTime: '07:30',
+        endTime: '09:45',
+        startPeriod: 1,
+        endPeriod: 3,
+        sessionType: 'daytime' as const,
+        note: null,
+      },
+    ],
+  },
+];
+
+describe('lecturer attendance helpers', () => {
+  it('matches class sections by priority order', () => {
+    const matched = resolveScheduleCardToClassSection(scheduleData[0], classSections);
+
+    expect(matched?.id).toBe('class-section-se346');
   });
 
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-}
+  it('maps and groups schedule cards by day and time', () => {
+    const cards = mapScheduleToAttendanceCards(scheduleData, classSections);
+    const groups = groupAttendanceCardsByDay(cards);
+
+    expect(cards.map((item) => item.id)).toEqual(['schedule-1', 'schedule-2']);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.dayOfWeek).toBe(2);
+    expect(groups[1]?.dayOfWeek).toBe(3);
+    expect(groups[1]?.items[0]?.attendanceSection?.id).toBe('class-section-se346');
+  });
+});
 
 describe('LecturerAttendanceScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAttendanceApi.getLecturerClassSections.mockResolvedValue([]);
-    mockAttendanceApi.getLecturerHistory.mockResolvedValue({ items: [], meta: { total: 0 } });
+
+    mockUseScheduleScreenData.mockReturnValue({
+      semesters: [
+        {
+          id: 'sem-current',
+          name: 'HK2 2025-2026',
+          academicYear: '2025-2026',
+          term: 2,
+          startDate: '2026-01-05T00:00:00.000Z',
+          endDate: '2026-05-31T23:59:59.000Z',
+          isCurrent: true,
+        },
+      ],
+      resolvedSemesterId: 'sem-current',
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: jest.fn(),
+      schedule: scheduleData,
+    });
+
+    mockUseQuery.mockImplementation(({ queryKey, enabled }: { queryKey: unknown[]; enabled?: boolean }) => {
+      const key = queryKey.join(':');
+
+      if (key === 'attendance:lecturer:class-sections') {
+        return {
+          data: classSections,
+          isLoading: false,
+          isError: false,
+          refetch: jest.fn(),
+        };
+      }
+
+      if (key.startsWith('attendance:lecturer:history')) {
+        return {
+          data: enabled
+            ? {
+                items: [],
+                meta: { total: 0, page: 1, limit: 10, totalPages: 0 },
+              }
+            : undefined,
+          isLoading: false,
+          isError: false,
+          refetch: jest.fn(),
+        };
+      }
+
+      if (key.startsWith('attendance:lecturer:records')) {
+        return {
+          data: enabled
+            ? {
+                items: [],
+                meta: { total: 0, page: 1, limit: 100, totalPages: 0 },
+              }
+            : undefined,
+          isLoading: false,
+          isError: false,
+          refetch: jest.fn(),
+        };
+      }
+
+      return {
+        data: undefined,
+        isLoading: false,
+        isError: false,
+        refetch: jest.fn(),
+      };
+    });
   });
 
-  it('shows access denied for non-lecturer role', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: {
-          role: USER_ROLES.STUDENT,
-        },
-      }),
-    );
+  it('renders schedule cards from lecturer mock schedule and auto-selects the first sorted card', () => {
+    const { getAllByText, getByText } = render(<LecturerAttendanceScreen />);
 
-    const { getByText } = renderWithClient(<LecturerAttendanceScreen />);
-
-    await waitFor(() => {
-      expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
-    });
-    expect(mockAttendanceApi.getLecturerClassSections).not.toHaveBeenCalled();
+    expect(getByText('Thứ ba')).toBeTruthy();
+    expect(getByText('Thứ tư')).toBeTruthy();
+    expect(getByText('SE301 · SE301.Q21')).toBeTruthy();
+    expect(getAllByText('Phát triển phần mềm mã nguồn mở').length).toBeGreaterThan(0);
+    expect(getByText('Danh sách lớp theo lịch học kỳ')).toBeTruthy();
   });
 
-  it('renders lecturer empty state when no class sections are assigned', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: {
-          role: USER_ROLES.LECTURER,
-        },
-      }),
-    );
+  it('navigates to detail workspace when pressing a mapped class card', () => {
+    const { getByText } = render(<LecturerAttendanceScreen />);
 
-    const { getByText } = renderWithClient(<LecturerAttendanceScreen />);
+    fireEvent.press(getByText('Lập trình trên thiết bị di động'));
 
-    await waitFor(() => {
-      expect(getByText('Chưa có lớp được phân công')).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/services/attendance/class/[scheduleId]',
+      params: { scheduleId: 'schedule-2' },
     });
-    expect(mockAttendanceApi.getLecturerClassSections).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows disabled state when a schedule card cannot be mapped to attendance data', () => {
+    const { getAllByText } = render(<LecturerAttendanceScreen />);
+
+    expect(getAllByText('Chưa liên kết dữ liệu điểm danh').length).toBeGreaterThan(0);
   });
 });

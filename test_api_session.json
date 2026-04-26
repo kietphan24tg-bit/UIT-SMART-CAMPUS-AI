@@ -1,0 +1,268 @@
+{
+  "info": {
+    "name": "Smart Campus - Attendance API",
+    "_postman_id": "b7e1a5d9-6f75-4f42-9d12-3c58f8ef1111",
+    "description": "End-to-end Attendance API test flow: login -> start session -> issue QR -> checkin -> records/history -> stop session.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "lecturerEmail", "value": "lecturer@uit.edu.vn" },
+    { "key": "studentEmail", "value": "student@gm.uit.edu.vn" },
+    { "key": "password", "value": "Password123" },
+    { "key": "classSectionId", "value": "06001aa7-d8c0-4b05-ab5d-5c7603328636" },
+    { "key": "lecturerToken", "value": "" },
+    { "key": "studentToken", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "displayKey", "value": "" },
+    { "key": "attendanceToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1) Login Lecturer",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{lecturerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.environment.set('lecturerToken', json.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2) Start Attendance Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{lecturerToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"classSectionId\": \"{{classSectionId}}\",\n  \"durationMinutes\": 10\n}"
+        },
+        "url": "{{baseUrl}}/attendance/session/start"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201/200', function () { pm.expect([200,201]).to.include(pm.response.code); });",
+              "const json = pm.response.json();",
+              "pm.environment.set('sessionId', json.data.sessionId);",
+              "pm.environment.set('displayKey', json.data.displayKey);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3) Issue QR Token (valid displayKey)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/attendance/session/{{sessionId}}/qr-token?displayKey={{displayKey}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.environment.set('attendanceToken', json.data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4) Issue QR Token (invalid displayKey -> 403)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/attendance/session/{{sessionId}}/qr-token?displayKey=wrong-key"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5) Login Student",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.environment.set('studentToken', json.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6) Checkin",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{attendanceToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/attendance/checkin"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201/200', function () { pm.expect([200,201]).to.include(pm.response.code); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7) Checkin Duplicate (expect 400/409/429)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{attendanceToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/attendance/checkin"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Duplicate checkin blocked', function () {",
+              "  pm.expect([400,409,429]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8) Get Session Records",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{lecturerToken}}" }],
+        "url": "{{baseUrl}}/attendance/session/{{sessionId}}/records?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9) Get Attendance History",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{lecturerToken}}" }],
+        "url": "{{baseUrl}}/attendance/history?classSectionId={{classSectionId}}&page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10) Stop Session",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{lecturerToken}}" }],
+        "url": "{{baseUrl}}/attendance/session/{{sessionId}}/stop"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200/201', function () { pm.expect([200,201]).to.include(pm.response.code); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11) Issue QR after Stop (expect 403)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/attendance/session/{{sessionId}}/qr-token?displayKey={{displayKey}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

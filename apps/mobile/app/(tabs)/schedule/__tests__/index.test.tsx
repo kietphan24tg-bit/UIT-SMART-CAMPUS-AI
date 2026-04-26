@@ -7,6 +7,7 @@ import ScheduleScreen, {
   getSubjectColorByCode,
 } from '../index';
 
+import { useEffectiveRole, useEffectiveUser } from '@/hooks/use-effective-role';
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ScheduleRecord, SemesterRecord } from '@/types/app-data';
@@ -21,8 +22,11 @@ jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
 }));
 jest.mock('@/hooks/use-schedule-screen');
+jest.mock('@/hooks/use-effective-role');
 jest.mock('@/stores/auth-store');
 
+const mockUseEffectiveRole = useEffectiveRole as jest.Mock;
+const mockUseEffectiveUser = useEffectiveUser as jest.Mock;
 const mockUseScheduleScreenData = useScheduleScreenData as unknown as jest.Mock;
 const mockUseOperationsScreenData = useOperationsScreenData as unknown as jest.Mock;
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
@@ -71,6 +75,8 @@ function makeScheduleRecord(code: string): ScheduleRecord {
 describe('ScheduleScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseEffectiveRole.mockReturnValue('student');
+    mockUseEffectiveUser.mockReturnValue(null);
 
     mockUseOperationsScreenData.mockReturnValue({
       data: {
@@ -170,6 +176,7 @@ describe('ScheduleScreen', () => {
   });
 
   it('renders academic schedule for student', () => {
+    mockUseEffectiveRole.mockReturnValue('student');
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
@@ -215,6 +222,7 @@ describe('ScheduleScreen', () => {
   });
 
   it('navigates to semester detail when pressing a semester chip', () => {
+    mockUseEffectiveRole.mockReturnValue('student');
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
@@ -255,8 +263,20 @@ describe('ScheduleScreen', () => {
   });
 
   it('renders lecturer support entries', () => {
+    mockUseEffectiveRole.mockReturnValue('lecturer');
+    mockUseEffectiveUser.mockReturnValue({
+      role: 'lecturer',
+      firstName: 'Hoàng Phúc',
+      lastName: 'Nguyễn',
+    });
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
-      const state = { user: { role: 'lecturer' } };
+      const state = {
+        user: {
+          role: 'lecturer',
+          firstName: 'Hoàng Phúc',
+          lastName: 'Nguyễn',
+        },
+      };
       return selector(state);
     });
     mockUseScheduleScreenData.mockReturnValue({
@@ -284,21 +304,93 @@ describe('ScheduleScreen', () => {
           startTime: '09:00',
           endTime: '11:00',
           room: 'E3.1',
-          instructor: 'Cô Lan',
+          instructor: 'Nguyễn Hoàng Phúc',
+          sessionType: 'daytime',
+          course: { name: 'SE346', code: 'SE346', credits: 3 },
+        },
+        {
+          id: 'schedule-2',
+          classCode: 'CS312',
+          sectionCode: 'CS312.1',
+          dayOfWeek: 3,
+          startTime: '13:00',
+          endTime: '15:00',
+          room: 'E3.2',
+          instructor: 'Phạm Thu Hà',
+          sessionType: 'daytime',
+          course: { name: 'CS312', code: 'CS312', credits: 3 },
+        },
+      ],
+    });
+
+    const { getByText, getAllByText, queryByText } = render(<ScheduleScreen />);
+
+    expect(getByText('Lịch dạy trong học kỳ')).toBeTruthy();
+    expect(getByText('Công cụ giảng dạy')).toBeTruthy();
+    expect(getByText('Điểm danh QR')).toBeTruthy();
+    expect(queryByText('Chọn kỳ cần xem.')).toBeNull();
+    expect(getAllByText('Nguyễn Hoàng Phúc').length).toBeGreaterThan(0);
+    expect(queryByText('CS312')).toBeNull();
+  });
+
+  it('does not fall back to full schedule when lecturer name does not match', () => {
+    mockUseEffectiveRole.mockReturnValue('lecturer');
+    mockUseEffectiveUser.mockReturnValue({
+      role: 'lecturer',
+      firstName: 'Không',
+      lastName: 'Khớp',
+    });
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = {
+        user: {
+          role: 'lecturer',
+          firstName: 'Không',
+          lastName: 'Khớp',
+        },
+      };
+      return selector(state);
+    });
+    mockUseScheduleScreenData.mockReturnValue({
+      semesters: [
+        {
+          id: 'sem-1',
+          name: 'HK2 2024-2025',
+          academicYear: '2024-2025',
+          term: 2,
+          startDate: '2025-01-01T00:00:00.000Z',
+          endDate: '2025-05-31T00:00:00.000Z',
+          isCurrent: true,
+        },
+      ],
+      resolvedSemesterId: 'sem-1',
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      schedule: [
+        {
+          id: 'schedule-1',
+          classCode: 'SE346',
+          sectionCode: 'SE346.1',
+          dayOfWeek: 2,
+          startTime: '09:00',
+          endTime: '11:00',
+          room: 'E3.1',
+          instructor: 'Nguyễn Hoàng Phúc',
           sessionType: 'daytime',
           course: { name: 'SE346', code: 'SE346', credits: 3 },
         },
       ],
     });
 
-    const { getByText } = render(<ScheduleScreen />);
+    const { getByText, queryByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Lịch dạy trong học kỳ')).toBeTruthy();
-    expect(getByText('Công cụ giảng dạy')).toBeTruthy();
-    expect(getByText('Điểm danh QR')).toBeTruthy();
+    expect(getByText('Theo ngày')).toBeTruthy();
+    expect(getByText('Chưa có lịch')).toBeTruthy();
+    expect(queryByText('SE346')).toBeNull();
   });
 
-  it('renders operations variant for admin', () => {
+  it('renders academic schedule variant for admin while operations mode is disabled', () => {
+    mockUseEffectiveRole.mockReturnValue('admin');
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'admin' } };
       return selector(state);
@@ -314,8 +406,8 @@ describe('ScheduleScreen', () => {
 
     const { getByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Điều phối campus')).toBeTruthy();
-    expect(getByText('Lối vào vận hành')).toBeTruthy();
-    expect(getByText('Parking + IoT')).toBeTruthy();
+    expect(getByText('Lịch học trong học kỳ')).toBeTruthy();
+    expect(getByText('Chọn kỳ cần xem.')).toBeTruthy();
+    expect(getByText('Theo ngày')).toBeTruthy();
   });
 });

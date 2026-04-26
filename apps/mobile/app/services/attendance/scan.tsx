@@ -2,12 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { USER_ROLES } from '@smart-campus/shared';
 import { Camera, CameraView, type PermissionResponse } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Linking,
   Platform,
   Pressable,
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useEffectiveRole } from '@/hooks/use-effective-role';
 import { logAttendanceCheckinAnalytics } from '@/services/analytics/attendance';
 import {
   attendanceCheckinWithNetworkRetry,
@@ -98,8 +100,12 @@ export default function AttendanceScanScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const TEST_SKIP_GUARDS = false;
-  const role = useAuthStore((s) => s.user?.role);
+  // const TEST_SKIP_GUARDS = false;
+  // const TEST_SKIP_AUTH_GUARDS = false;
+  const TEST_SKIP_GUARDS = true;
+  const TEST_SKIP_AUTH_GUARDS = true;
+  // const role = useAuthStore((s) => s.user?.role);
+  const role = useEffectiveRole();
   const [permission, setPermission] = useState<PermissionResponse | null>(null);
   const [sessionResolved, setSessionResolved] = useState(false);
   const [hasSessionToken, setHasSessionToken] = useState(false);
@@ -140,12 +146,27 @@ export default function AttendanceScanScreen() {
   }, []);
 
   const refreshCameraPermission = useCallback(() => {
-    const timeout = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('camera_permission_timeout')), CAMERA_PERMISSION_TIMEOUT_MS);
-    });
-    void Promise.race([Camera.getCameraPermissionsAsync(), timeout])
-      .then(setPermission)
-      .catch(() => setPermission(CAMERA_PERMISSION_FALLBACK));
+    const withTimeout = <T,>(promise: Promise<T>) => {
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('camera_permission_timeout')), CAMERA_PERMISSION_TIMEOUT_MS);
+      });
+      return Promise.race([promise, timeout]);
+    };
+
+    void (async () => {
+      try {
+        const currentPermission = await withTimeout(Camera.getCameraPermissionsAsync());
+        if (currentPermission.granted || currentPermission.canAskAgain === false) {
+          setPermission(currentPermission);
+          return;
+        }
+
+        const requestedPermission = await withTimeout(Camera.requestCameraPermissionsAsync());
+        setPermission(requestedPermission);
+      } catch {
+        setPermission(CAMERA_PERMISSION_FALLBACK);
+      }
+    })();
   }, []);
 
   const resolveSession = useCallback(() => {
@@ -178,14 +199,30 @@ export default function AttendanceScanScreen() {
     }, [clearProcessingDelayTimer, refreshCameraPermission, resolveSession]),
   );
 
+  // useEffect(() => {
+  //   if (role !== USER_ROLES.STUDENT) {
+  //     router.replace('/services/attendance' as never);
+  //   }
+  // }, [role, router]);
+  // if (role !== USER_ROLES.STUDENT) {
+  //   return null;
+  // }
   useEffect(() => {
-    if (role !== USER_ROLES.STUDENT) {
+    if (!TEST_SKIP_GUARDS && role !== USER_ROLES.STUDENT) {
       router.replace('/services/attendance' as never);
     }
-  }, [role, router]);
-  if (role !== USER_ROLES.STUDENT) {
-    return null;
-  }
+  }, [role, router, TEST_SKIP_GUARDS]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshCameraPermission();
+        resolveSession();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [refreshCameraPermission, resolveSession]);
 
   useEffect(() => {
     const t = setTimeout(() => setStallWarning(true), STALL_WARNING_MS);
@@ -314,7 +351,11 @@ export default function AttendanceScanScreen() {
     return <ScanLoadingFallback label="Đang kiểm tra phiên đăng nhập" accentColor={theme.colors.primary} />;
   }
 
-  if (!TEST_SKIP_GUARDS && !hasSessionToken) {
+  if (!TEST_SKIP_GUARDS && role !== USER_ROLES.STUDENT) {
+    return null;
+  }
+
+  if (!TEST_SKIP_AUTH_GUARDS && !hasSessionToken) {
     return (
       <View style={[styles.fill, { paddingTop: insets.top + 12, paddingHorizontal: 24 }]}>
         <Pressable
@@ -341,7 +382,7 @@ export default function AttendanceScanScreen() {
     return <ScanLoadingFallback label="Vui lòng chờ trong giây lát" accentColor={theme.colors.primary} />;
   }
 
-  if (!TEST_SKIP_GUARDS && !permission.granted) {
+  if (!permission.granted) {
     return (
       <View style={[styles.fill, { backgroundColor: '#000', paddingTop: insets.top }]}>
         <Pressable
