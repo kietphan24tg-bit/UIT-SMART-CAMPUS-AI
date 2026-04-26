@@ -6,6 +6,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { USER_ROLES } from '@smart-campus/shared';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,21 +27,29 @@ export class AttendanceController {
 
   @Post('session/start')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Start an attendance session' })
-  startSession(@CurrentUser('id') lecturerId: string, @Body() dto: StartAttendanceSessionDto) {
-    return this.attendanceService.startSession(lecturerId, dto);
+  startSession(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Body() dto: StartAttendanceSessionDto,
+  ) {
+    return this.attendanceService.startSession(actorId, actorRole, dto);
   }
 
   @Post('session/:id/stop')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Attendance session id' })
   @ApiOperation({ summary: 'Stop an attendance session early' })
-  stopSession(@Param('id') sessionId: string, @CurrentUser('id') lecturerId: string) {
-    return this.attendanceService.stopSession(sessionId, lecturerId);
+  stopSession(
+    @Param('id') sessionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.stopSession(sessionId, actorId, actorRole);
   }
 
   @Get('session/:id/qr-token')
@@ -62,7 +71,7 @@ export class AttendanceController {
 
   @Get('session/:id/records')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Attendance session id' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -70,32 +79,40 @@ export class AttendanceController {
   @ApiOperation({ summary: 'Get attendance records for a session' })
   getSessionRecords(
     @Param('id') sessionId: string,
-    @CurrentUser('id') lecturerId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
     @Query() query: GetSessionRecordsDto,
   ) {
-    return this.attendanceService.getSessionRecords(sessionId, lecturerId, query);
+    return this.attendanceService.getSessionRecords(sessionId, actorId, actorRole, query);
   }
 
   @Get('history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiQuery({ name: 'classSectionId', required: true, type: String })
   @ApiQuery({ name: 'date', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiOperation({ summary: 'Get attendance session history for lecturer by class/date' })
-  getHistory(@CurrentUser('id') lecturerId: string, @Query() query: GetAttendanceHistoryDto) {
-    return this.attendanceService.getHistory(lecturerId, query);
+  @ApiOperation({ summary: 'Get attendance session history by class/date for current manager role' })
+  getHistory(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Query() query: GetAttendanceHistoryDto,
+  ) {
+    return this.attendanceService.getHistory(actorId, actorRole, query);
   }
 
   @Get('lecturer/class-sections')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get class sections assigned to current lecturer' })
-  getLecturerClassSections(@CurrentUser('id') lecturerId: string) {
-    return this.attendanceService.getLecturerClassSections(lecturerId);
+  @ApiOperation({ summary: 'Get class sections manageable by current role' })
+  getLecturerClassSections(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getLecturerClassSections(actorId, actorRole);
   }
 
   @Get('me/history')

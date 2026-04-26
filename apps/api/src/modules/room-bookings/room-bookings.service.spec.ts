@@ -284,6 +284,29 @@ describe('RoomBookingsService', () => {
         }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
+
+    it('maps unique constraint race to ConflictException when concurrent create collides', async () => {
+      (prisma.room.findFirst as jest.Mock).mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      (prisma.timeSlot.findMany as jest.Mock).mockResolvedValue([slot1, slot2]);
+      (prisma.roomBookingSlot.findFirst as jest.Mock)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          timeSlot: {
+            label: 'Tiết 1',
+          },
+        });
+      (prisma.$transaction as jest.Mock).mockRejectedValue({ code: 'P2002' });
+
+      await expect(
+        service.createRoomBooking('user-1', {
+          roomCode: 'B1.02',
+          bookingDate: '2026-04-24',
+          timeSlotIds: ['slot-1', 'slot-2'],
+          purpose: 'Học nhóm',
+          contactName: 'Nguyen Van A',
+        }),
+      ).rejects.toThrow('Khung giờ Tiết 1 đã có yêu cầu đặt phòng.');
+    });
   });
 
   it('returns rooms in a building sorted by natural room code order', async () => {

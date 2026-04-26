@@ -225,75 +225,77 @@ export class RoomBookingsService {
       throw new NotFoundException('Không tìm thấy phòng');
     }
 
-    const conflictingSlot = await this.prisma.roomBookingSlot.findFirst({
-      where: {
-        roomId: room.id,
-        bookingDate,
-        timeSlotId: {
-          in: selectedTimeSlots.map((timeSlot) => timeSlot.id),
-        },
-        booking: {
-          status: {
-            in: CONFLICT_BOOKING_STATUSES,
-          },
-        },
-      },
-      select: {
-        timeSlot: {
-          select: {
-            label: true,
-          },
-        },
-      },
-    });
+    const selectedTimeSlotIds = selectedTimeSlots.map((timeSlot) => timeSlot.id);
+    const conflictingSlot = await this.findConflictingSlot(
+      room.id,
+      bookingDate,
+      selectedTimeSlotIds,
+    );
 
     if (conflictingSlot) {
       throw new ConflictException(
-        conflictingSlot.timeSlot?.label
-          ? `Khung giờ ${conflictingSlot.timeSlot.label} đã có yêu cầu đặt phòng.`
-          : 'Một hoặc nhiều khung giờ đã có yêu cầu đặt phòng.',
+        this.buildCreateConflictMessage(conflictingSlot.timeSlot?.label),
       );
     }
 
     const firstTimeSlot = selectedTimeSlots[0]!;
     const lastTimeSlot = selectedTimeSlots[selectedTimeSlots.length - 1]!;
 
-    const booking = await this.prisma.$transaction(async (tx) => {
-      const createdBooking = await tx.roomBooking.create({
-        data: {
-          roomId: room.id,
-          userId,
-          bookingDate,
-          timeSlotId: firstTimeSlot.id,
-          startTime: firstTimeSlot.startTime,
-          endTime: lastTimeSlot.endTime,
-          title: dto.title?.trim() || null,
-          purpose: dto.purpose.trim(),
-          attendeeCount: dto.attendeeCount ?? null,
-          contactName: dto.contactName.trim(),
-          contactPhone: dto.contactPhone?.trim() || null,
-          departmentName: dto.departmentName?.trim() || null,
-          status: CREATED_BOOKING_STATUS,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      for (const [index, timeSlot] of selectedTimeSlots.entries()) {
-        await tx.roomBookingSlot.create({
+    let booking: { id: string } | null = null;
+    try {
+      booking = await this.prisma.$transaction(async (tx) => {
+        const createdBooking = await tx.roomBooking.create({
           data: {
-            bookingId: createdBooking.id,
             roomId: room.id,
+            userId,
             bookingDate,
-            timeSlotId: timeSlot.id,
-            slotOrder: index + 1,
+            timeSlotId: firstTimeSlot.id,
+            startTime: firstTimeSlot.startTime,
+            endTime: lastTimeSlot.endTime,
+            title: dto.title?.trim() || null,
+            purpose: dto.purpose.trim(),
+            attendeeCount: dto.attendeeCount ?? null,
+            contactName: dto.contactName.trim(),
+            contactPhone: dto.contactPhone?.trim() || null,
+            departmentName: dto.departmentName?.trim() || null,
+            status: CREATED_BOOKING_STATUS,
+          },
+          select: {
+            id: true,
           },
         });
-      }
 
-      return createdBooking;
-    });
+        for (const [index, timeSlot] of selectedTimeSlots.entries()) {
+          await tx.roomBookingSlot.create({
+            data: {
+              bookingId: createdBooking.id,
+              roomId: room.id,
+              bookingDate,
+              timeSlotId: timeSlot.id,
+              slotOrder: index + 1,
+            },
+          });
+        }
+
+        return createdBooking;
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        const raceConflictingSlot = await this.findConflictingSlot(
+          room.id,
+          bookingDate,
+          selectedTimeSlotIds,
+        );
+        throw new ConflictException(
+          this.buildCreateConflictMessage(raceConflictingSlot?.timeSlot?.label),
+        );
+      }
+      throw error;
+    }
+
+    if (!booking) {
+      throw new ConflictException('Không thể tạo yêu cầu đặt phòng.');
+    }
 
     return this.getBookingById(booking.id);
   }
@@ -750,5 +752,48 @@ export class RoomBookingsService {
     return roomBookingSlots && roomBookingSlots.length > 0
       ? ROOM_OCCUPIED_STATUS
       : ROOM_AVAILABLE_STATUS;
+  }
+
+  private buildCreateConflictMessage(timeSlotLabel?: string | null) {
+    return timeSlotLabel
+      ? `Khung giờ ${timeSlotLabel} đã có yêu cầu đặt phòng.`
+      : 'Một hoặc nhiều khung giờ đã có yêu cầu đặt phòng.';
+  }
+
+  private async findConflictingSlot(
+    roomId: string,
+    bookingDate: Date,
+    timeSlotIds: string[],
+  ) {
+    return this.prisma.roomBookingSlot.findFirst({
+      where: {
+        roomId,
+        bookingDate,
+        timeSlotId: {
+          in: timeSlotIds,
+        },
+        booking: {
+          status: {
+            in: CONFLICT_BOOKING_STATUSES,
+          },
+        },
+      },
+      select: {
+        timeSlot: {
+          select: {
+            label: true,
+          },
+        },
+      },
+    });
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return Boolean(
+      error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 'P2002',
+    );
   }
 }

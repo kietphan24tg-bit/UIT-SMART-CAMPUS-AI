@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { USER_ROLES } from '@smart-campus/shared';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
@@ -23,8 +24,6 @@ import {
   getServiceEntries,
   getSupportStateLabel,
   getSupportStateTone,
-  isAdminRole,
-  isLecturerRole,
 } from '@/utils/app';
 
 const CAMPUS_MAP_GUIDE = [
@@ -56,7 +55,7 @@ export default function ServiceDetailScreen() {
   const serviceId = params.service ?? '';
 
   const service = getServiceEntries(role).find((item) => item.id === serviceId);
-  const isGradesViewer = serviceId === 'grades' && !isLecturerRole(role) && !isAdminRole(role);
+  const isGradesViewer = serviceId === 'grades' && role === USER_ROLES.STUDENT;
 
   const gradesQuery = useQuery({
     queryKey: ['service-grades'],

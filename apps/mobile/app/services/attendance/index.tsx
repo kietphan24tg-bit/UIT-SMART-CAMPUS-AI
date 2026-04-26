@@ -9,7 +9,7 @@ import { AttendanceCtaButton } from '@/components/attendance/attendance-cta-butt
 import { ContentStack, Screen } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { isLecturerRole } from '@/utils/app';
+import { canManageAttendanceRole } from '@/utils/app';
 
 export default function AttendanceHubScreen() {
   const theme = useAppTheme();
@@ -30,7 +30,7 @@ export default function AttendanceHubScreen() {
   const hasCameraPermission =
     !(__DEV__ && DEV_FORCE_CAMERA_PERMISSION_DENIED) && cameraPerm?.granted === true;
 
-  if (isLecturerRole(role)) {
+  if (canManageAttendanceRole(role)) {
     return <Redirect href="/services/attendance/lecturer" />;
   }
 

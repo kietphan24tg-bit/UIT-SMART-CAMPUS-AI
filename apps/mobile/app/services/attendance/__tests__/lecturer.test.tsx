@@ -89,4 +89,24 @@ describe('LecturerAttendanceScreen', () => {
     });
     expect(mockAttendanceApi.getLecturerClassSections).toHaveBeenCalledTimes(1);
   });
+
+  it.each([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
+    'allows %s role to access management attendance screen',
+    async (role) => {
+      mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+        selector({
+          user: {
+            role,
+          },
+        }),
+      );
+
+      const { getByText } = renderWithClient(<LecturerAttendanceScreen />);
+
+      await waitFor(() => {
+        expect(getByText('Chưa có lớp học phần')).toBeTruthy();
+      });
+      expect(mockAttendanceApi.getLecturerClassSections).toHaveBeenCalledTimes(1);
+    },
+  );
 });

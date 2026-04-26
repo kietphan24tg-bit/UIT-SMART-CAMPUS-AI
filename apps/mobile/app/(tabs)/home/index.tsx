@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { USER_ROLES } from '@smart-campus/shared';
 import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -57,6 +58,7 @@ export default function HomeScreen() {
   const quickActions = getRoleQuickActions(user?.role);
   const isOperationsRole = isAdminRole(user?.role);
   const isLecturer = isLecturerRole(user?.role);
+  const isStudent = user?.role === USER_ROLES.STUDENT;
   const shouldShowParkingHealth =
     snapshot.telemetryHealth !== 'online' && snapshot.telemetryHealth !== 'no-data';
   const quickActionRows = Array.from({ length: Math.ceil(quickActions.length / 2) }, (_, index) =>
@@ -366,7 +368,7 @@ export default function HomeScreen() {
                   />
                 )}
               </SectionCard>
-            ) : !isLecturer ? (
+            ) : isStudent ? (
               <SectionCard
                 title="Kết quả"
                 subtitle="GPA và tín chỉ."

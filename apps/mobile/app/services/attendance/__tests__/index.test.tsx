@@ -63,11 +63,30 @@ describe('AttendanceHubScreen', () => {
     expect(getByText('Mở camera quét QR')).toBeTruthy();
   });
 
-  it('redirects lecturer role to lecturer attendance management screen', async () => {
+  it.each([USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
+    'redirects %s role to attendance management screen',
+    async (role) => {
+      mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+        selector({
+          user: {
+            role,
+          },
+        }),
+      );
+
+      const { getByText } = render(<AttendanceHubScreen />);
+
+      await waitFor(() => {
+        expect(getByText('redirect:/services/attendance/lecturer')).toBeTruthy();
+      });
+    },
+  );
+
+  it('shows permission notice for unsupported role', async () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
       selector({
         user: {
-          role: USER_ROLES.LECTURER,
+          role: USER_ROLES.CANTEEN_ADMIN,
         },
       }),
     );
@@ -75,7 +94,7 @@ describe('AttendanceHubScreen', () => {
     const { getByText } = render(<AttendanceHubScreen />);
 
     await waitFor(() => {
-      expect(getByText('redirect:/services/attendance/lecturer')).toBeTruthy();
+      expect(getByText('Tính năng quét QR hiện chỉ dành cho tài khoản sinh viên.')).toBeTruthy();
     });
   });
 });

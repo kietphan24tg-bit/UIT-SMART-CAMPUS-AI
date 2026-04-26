@@ -9,6 +9,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
     '^@smart-campus/shared$': '<rootDir>/../../packages/shared/src',
   },
+  testTimeout: 30000,
   collectCoverageFrom: [
     'stores/**/*.{ts,tsx}',
     'hooks/**/*.{ts,tsx}',

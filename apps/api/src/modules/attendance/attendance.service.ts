@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AttendanceSession, Prisma } from '@prisma/client';
-import { AttendanceSessionStatus, EnrollmentStatus } from '@prisma/client';
+import { AttendanceSessionStatus, EnrollmentStatus, Role } from '@prisma/client';
 import { API_PREFIX, PAGINATION_DEFAULTS } from '@smart-campus/shared';
 import { createClient } from 'redis';
 
@@ -60,7 +60,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async startSession(lecturerId: string, dto: StartAttendanceSessionDto) {
+  async startSession(actorId: string, actorRole: Role, dto: StartAttendanceSessionDto) {
+    this.assertCanManageAttendance(actorRole);
     const classSection = await this.prisma.classSection.findUnique({
       where: { id: dto.classSectionId },
       select: { id: true, lecturerId: true },
@@ -70,9 +71,17 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Class section not found');
     }
 
-    if (!classSection.lecturerId || classSection.lecturerId !== lecturerId) {
+    if (
+      !this.canManageAllAttendance(actorRole) &&
+      (!classSection.lecturerId || classSection.lecturerId !== actorId)
+    ) {
       throw new ForbiddenException('You are not assigned to this class section');
     }
+
+    const sessionLecturerId =
+      this.canManageAllAttendance(actorRole) && classSection.lecturerId
+        ? classSection.lecturerId
+        : actorId;
 
     const existingActiveSession = await this.prisma.attendanceSession.findFirst({
       where: {
@@ -93,7 +102,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const session = await this.prisma.attendanceSession.create({
       data: {
         classSectionId: dto.classSectionId,
-        lecturerId,
+        lecturerId: sessionLecturerId,
         expiresAt,
       },
     });
@@ -119,12 +128,13 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async stopSession(sessionId: string, lecturerId: string) {
-    const session = await this.prisma.attendanceSession.findFirst({
-      where: { id: sessionId, lecturerId },
+  async stopSession(sessionId: string, actorId: string, actorRole: Role) {
+    this.assertCanManageAttendance(actorRole);
+    const session = await this.prisma.attendanceSession.findUnique({
+      where: { id: sessionId },
     });
 
-    if (!session) {
+    if (!session || (!this.canManageAllAttendance(actorRole) && session.lecturerId !== actorId)) {
       throw new NotFoundException('Attendance session not found');
     }
 
@@ -259,8 +269,13 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async getSessionRecords(sessionId: string, lecturerId: string, query: GetSessionRecordsDto) {
-    await this.verifyLecturerOwnsSession(sessionId, lecturerId);
+  async getSessionRecords(
+    sessionId: string,
+    actorId: string,
+    actorRole: Role,
+    query: GetSessionRecordsDto,
+  ) {
+    await this.verifySessionAccessByRole(sessionId, actorId, actorRole);
 
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
     const limit = Math.min(
@@ -305,7 +320,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async getHistory(lecturerId: string, query: GetAttendanceHistoryDto) {
+  async getHistory(actorId: string, actorRole: Role, query: GetAttendanceHistoryDto) {
+    this.assertCanManageAttendance(actorRole);
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
     const limit = Math.min(
       Math.max(query.limit ?? PAGINATION_DEFAULTS.LIMIT, 1),
@@ -314,8 +330,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const skip = (page - 1) * limit;
 
     const where: Prisma.AttendanceSessionWhereInput = {
-      lecturerId,
       classSectionId: query.classSectionId,
+      ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
     };
 
     if (query.date) {
@@ -370,10 +386,11 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async getLecturerClassSections(lecturerId: string) {
+  async getLecturerClassSections(actorId: string, actorRole: Role) {
+    this.assertCanManageAttendance(actorRole);
     const sections = await this.prisma.classSection.findMany({
       where: {
-        lecturerId,
+        ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
       },
       include: {
         course: {
@@ -493,14 +510,36 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async verifyLecturerOwnsSession(sessionId: string, lecturerId: string) {
+  private async verifySessionAccessByRole(
+    sessionId: string,
+    actorId: string,
+    actorRole: Role,
+  ) {
+    this.assertCanManageAttendance(actorRole);
     const session = await this.prisma.attendanceSession.findFirst({
-      where: { id: sessionId, lecturerId },
+      where: {
+        id: sessionId,
+        ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
+      },
       select: { id: true },
     });
 
     if (!session) {
       throw new NotFoundException('Attendance session not found');
+    }
+  }
+
+  private canManageAllAttendance(role: Role) {
+    return role === Role.admin || role === Role.super_admin;
+  }
+
+  private assertCanManageAttendance(role: Role) {
+    if (
+      role !== Role.lecturer &&
+      role !== Role.admin &&
+      role !== Role.super_admin
+    ) {
+      throw new ForbiddenException('You are not allowed to manage attendance');
     }
   }
 

@@ -67,7 +67,7 @@ export class CanteenController {
 
   @Patch('orders/:id/complete')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Mark paid order as completed by canteen admin' })
   completeOrder(@Param('id') orderId: string, @CurrentUser('id') actorId: string) {
@@ -100,7 +100,7 @@ export class CanteenController {
 
   @Post('categories')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create canteen category' })
   createCategory(@Body() dto: CreateCanteenCategoryDto) {
@@ -109,7 +109,7 @@ export class CanteenController {
 
   @Patch('categories/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update canteen category' })
   updateCategory(@Param('id') categoryId: string, @Body() dto: UpdateCanteenCategoryDto) {
@@ -118,7 +118,7 @@ export class CanteenController {
 
   @Delete('categories/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable canteen category' })
   removeCategory(@Param('id') categoryId: string) {
@@ -127,7 +127,7 @@ export class CanteenController {
 
   @Post('products')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create canteen product' })
   createProduct(@Body() dto: CreateCanteenProductDto) {
@@ -136,7 +136,7 @@ export class CanteenController {
 
   @Patch('products/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update canteen product' })
   updateProduct(@Param('id') productId: string, @Body() dto: UpdateCanteenProductDto) {
@@ -145,7 +145,7 @@ export class CanteenController {
 
   @Delete('products/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable canteen product' })
   removeProduct(@Param('id') productId: string) {

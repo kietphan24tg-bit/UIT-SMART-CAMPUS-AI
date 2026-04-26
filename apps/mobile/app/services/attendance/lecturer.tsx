@@ -8,14 +8,14 @@ import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, Skele
 import { attendanceApi, type AttendanceSessionStartResponse } from '@/services/api/attendance';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { formatDateTime, getDayLabel, isLecturerRole } from '@/utils/app';
+import { canManageAttendanceRole, formatDateTime, getDayLabel, isLecturerRole } from '@/utils/app';
 
 export default function LecturerAttendanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.user?.role);
-  const canManageAttendance = isLecturerRole(role);
+  const canManageAttendance = canManageAttendanceRole(role);
   const classSectionsQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'class-sections'],
     queryFn: attendanceApi.getLecturerClassSections,
@@ -80,7 +80,7 @@ export default function LecturerAttendanceScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description="Màn hình này chỉ dành cho tài khoản giảng viên."
+            description="Màn hình này chỉ dành cho giảng viên, quản trị viên hoặc quản trị hệ thống."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
@@ -127,8 +127,12 @@ export default function LecturerAttendanceScreen() {
         {!classSectionsQuery.isLoading && !classSectionsQuery.isError && (classSectionsQuery.data?.length ?? 0) === 0 ? (
           <EmptyState
             icon="albums-outline"
-            title="Chưa có lớp được phân công"
-            description="Bạn chưa được gán lớp học phần nào."
+            title={isLecturerRole(role) ? 'Chưa có lớp được phân công' : 'Chưa có lớp học phần'}
+            description={
+              isLecturerRole(role)
+                ? 'Bạn chưa được gán lớp học phần nào.'
+                : 'Hiện chưa có lớp học phần khả dụng để quản lý.'
+            }
           />
         ) : null}
 
