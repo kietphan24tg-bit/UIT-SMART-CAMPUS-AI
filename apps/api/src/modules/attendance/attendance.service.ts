@@ -68,6 +68,34 @@ type ExportableAttendanceSession = Prisma.AttendanceSessionGetPayload<{
   };
 }>;
 
+type ExportableAttendanceClassSection = Prisma.ClassSectionGetPayload<{
+  include: {
+    course: {
+      select: {
+        code: true;
+        name: true;
+        credits: true;
+      };
+    };
+    lecturer: {
+      select: {
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    attendanceSessions: {
+      include: {
+        records: {
+          select: {
+            studentId: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
 function formatFullName(firstName?: string | null, lastName?: string | null) {
   return [lastName, firstName].filter(Boolean).join(' ').trim();
 }
@@ -474,6 +502,73 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     return this.buildAttendanceExportWorkbook(session, roster);
   }
 
+  async exportClassSectionAttendanceSummary(
+    classSectionId: string,
+    actorId: string,
+    actorRole: Role,
+  ) {
+    await this.verifyClassSectionAccessByRole(classSectionId, actorId, actorRole);
+
+    const classSection = await this.prisma.classSection.findUnique({
+      where: { id: classSectionId },
+      include: {
+        course: {
+          select: {
+            code: true,
+            name: true,
+            credits: true,
+          },
+        },
+        lecturer: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        attendanceSessions: {
+          include: {
+            records: {
+              select: {
+                studentId: true,
+              },
+            },
+          },
+          orderBy: { startedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!classSection) {
+      throw new NotFoundException('Class section not found');
+    }
+
+    const roster = await this.prisma.classEnrollment.findMany({
+      where: {
+        classSectionId,
+        status: EnrollmentStatus.active,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            studentId: true,
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          studentId: 'asc',
+        },
+      },
+    });
+
+    return this.buildAttendanceClassSummaryWorkbook(classSection, roster);
+  }
+
   async getHistory(actorId: string, actorRole: Role, query: GetAttendanceHistoryDto) {
     this.assertCanManageAttendance(actorRole);
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
@@ -540,6 +635,70 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async getClassSectionSessionSummary(
+    classSectionId: string,
+    actorId: string,
+    actorRole: Role,
+  ) {
+    this.assertCanManageAttendance(actorRole);
+    await this.verifyClassSectionAccessByRole(classSectionId, actorId, actorRole);
+
+    const scopeWhere: Prisma.AttendanceSessionWhereInput = {
+      classSectionId,
+      ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
+    };
+
+    const [totalSessions, activeSessions, closedSessions, expiredSessions, latestSession] =
+      await Promise.all([
+        this.prisma.attendanceSession.count({
+          where: scopeWhere,
+        }),
+        this.prisma.attendanceSession.count({
+          where: {
+            ...scopeWhere,
+            status: AttendanceSessionStatus.active,
+          },
+        }),
+        this.prisma.attendanceSession.count({
+          where: {
+            ...scopeWhere,
+            status: AttendanceSessionStatus.closed,
+          },
+        }),
+        this.prisma.attendanceSession.count({
+          where: {
+            ...scopeWhere,
+            status: AttendanceSessionStatus.expired,
+          },
+        }),
+        this.prisma.attendanceSession.findFirst({
+          where: scopeWhere,
+          include: {
+            _count: {
+              select: { records: true },
+            },
+          },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ]);
+
+    return {
+      totalSessions,
+      activeSessions,
+      closedSessions,
+      expiredSessions,
+      latestSession: latestSession
+        ? {
+            id: latestSession.id,
+            status: latestSession.status,
+            startedAt: latestSession.startedAt,
+            expiresAt: latestSession.expiresAt,
+            checkedInCount: latestSession._count.records,
+          }
+        : null,
+    };
+  }
+
   async getLecturerClassSections(actorId: string, actorRole: Role) {
     this.assertCanManageAttendance(actorRole);
     const sections = await this.prisma.classSection.findMany({
@@ -597,6 +756,42 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       course: section.course,
       semester: section.semester,
       meetings: section.meetings,
+    }));
+  }
+
+  async getClassSectionStudents(classSectionId: string, actorId: string, actorRole: Role) {
+    this.assertCanManageAttendance(actorRole);
+    await this.verifyClassSectionAccessByRole(classSectionId, actorId, actorRole);
+
+    const roster = await this.prisma.classEnrollment.findMany({
+      where: {
+        classSectionId,
+        status: EnrollmentStatus.active,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            studentId: true,
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          studentId: 'asc',
+        },
+      },
+    });
+
+    return roster.map((enrollment) => ({
+      id: enrollment.student.id,
+      email: enrollment.student.email,
+      firstName: enrollment.student.firstName,
+      lastName: enrollment.student.lastName,
+      studentId: enrollment.student.studentId,
     }));
   }
 
@@ -683,6 +878,25 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async verifyClassSectionAccessByRole(
+    classSectionId: string,
+    actorId: string,
+    actorRole: Role,
+  ) {
+    this.assertCanManageAttendance(actorRole);
+    const classSection = await this.prisma.classSection.findFirst({
+      where: {
+        id: classSectionId,
+        ...(!this.canManageAllAttendance(actorRole) ? { lecturerId: actorId } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (!classSection) {
+      throw new NotFoundException('Class section not found');
+    }
+  }
+
   private async buildAttendanceExportWorkbook(
     session: ExportableAttendanceSession,
     roster: Array<
@@ -723,17 +937,19 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       ['Môn học', session.classSection.course.name],
       ['Mã môn', session.classSection.course.code],
       ['Mã lớp', session.classSection.classCode],
-      ['Nhóm', session.classSection.sectionCode],
       ['Bắt đầu', formatExportDateTime(session.startedAt)],
       ['Hết hạn', formatExportDateTime(session.expiresAt)],
       ['Đã check-in / Sĩ số', `${session.records.length}/${roster.length}`],
     ];
 
     infoRows.forEach(([label, value], index) => {
-      const row = worksheet.getRow(index + 3);
+      const rowNumber = index + 3;
+      const row = worksheet.getRow(rowNumber);
+      worksheet.mergeCells(`B${rowNumber}:F${rowNumber}`);
       row.getCell(1).value = label;
       row.getCell(2).value = value;
       row.getCell(1).font = { bold: true };
+      row.getCell(2).alignment = { horizontal: 'left' };
     });
 
     const headerRowIndex = infoRows.length + 5;
@@ -792,6 +1008,184 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       fileName,
       buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
     };
+  }
+
+  private async buildAttendanceClassSummaryWorkbook(
+    classSection: ExportableAttendanceClassSection,
+    roster: Array<
+      Prisma.ClassEnrollmentGetPayload<{
+        include: {
+          student: {
+            select: {
+              id: true;
+              email: true;
+              firstName: true;
+              lastName: true;
+              studentId: true;
+            };
+          };
+        };
+      }>
+    >,
+  ) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Tong hop diem danh');
+    const sessions = classSection.attendanceSessions;
+    const lastColumnIndex = 4 + sessions.length;
+    const lastColumnLetter = String.fromCharCode(64 + Math.max(lastColumnIndex, 4));
+    const lecturerName = classSection.lecturer
+      ? formatFullName(classSection.lecturer.firstName, classSection.lecturer.lastName)
+      : '';
+
+    worksheet.views = [{ state: 'frozen', ySplit: 7, xSplit: 3 }];
+    worksheet.properties.defaultRowHeight = 22;
+    worksheet.columns = [
+      { key: 'index', width: 8 },
+      { key: 'studentId', width: 16 },
+      { key: 'fullName', width: 28 },
+      { key: 'email', width: 30 },
+      ...sessions.map(() => ({ width: 16 })),
+    ];
+
+    worksheet.mergeCells(`A1:${lastColumnLetter}1`);
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = 'BAO CAO TONG HOP DIEM DANH THEO LOP';
+    titleCell.font = { bold: true, size: 16 };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const infoRows = [
+      ['Mon hoc', classSection.course.name],
+      ['Ma mon', classSection.course.code],
+      ['Ma lop', classSection.classCode],
+      ['Giang vien', lecturerName || classSection.lecturer?.email || 'Chua cap nhat'],
+      ['Tong sinh vien', String(roster.length)],
+    ];
+
+    infoRows.forEach(([label, value], index) => {
+      const rowNumber = index + 3;
+      worksheet.getCell(`A${rowNumber}`).value = label;
+      worksheet.getCell(`A${rowNumber}`).font = { bold: true, size: 11 };
+      worksheet.getCell(`B${rowNumber}`).value = value;
+      worksheet.mergeCells(`B${rowNumber}:D${rowNumber}`);
+      worksheet.getCell(`B${rowNumber}`).alignment = { horizontal: 'left' };
+    });
+
+    const legendCell = worksheet.getCell('F3');
+    legendCell.value = 'Chu thich';
+    legendCell.font = { bold: true, size: 11 };
+
+    const legendItems = [
+      ['F4', 'Co mat'],
+      ['F5', 'Vang'],
+      ['G4', 'Dang mo'],
+      ['G5', 'Het han'],
+    ] as const;
+
+    legendItems.forEach(([cellRef, value]) => {
+      const cell = worksheet.getCell(cellRef);
+      cell.value = value;
+      this.applySummaryStatusStyle(cell, value);
+      this.applySummaryBorder(cell);
+    });
+
+    const headerRowNumber = 7;
+    const headerRow = worksheet.getRow(headerRowNumber);
+    headerRow.height = 34;
+    headerRow.getCell(1).value = 'STT';
+    headerRow.getCell(2).value = 'MSSV';
+    headerRow.getCell(3).value = 'Ho va ten';
+    headerRow.getCell(4).value = 'Email';
+
+    sessions.forEach((session, index) => {
+      const dateLabel = new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+      }).format(session.startedAt);
+      const timeLabel = new Intl.DateTimeFormat('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(session.startedAt);
+      headerRow.getCell(5 + index).value = `${dateLabel}\n${timeLabel}`;
+    });
+
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEAF3FF' },
+      };
+      this.applySummaryBorder(cell, 'FFC9D7E6');
+    });
+
+    roster.forEach((enrollment, index) => {
+      const row = worksheet.addRow([
+        index + 1,
+        enrollment.student.studentId ?? enrollment.student.email,
+        formatFullName(enrollment.student.firstName, enrollment.student.lastName),
+        enrollment.student.email,
+        ...sessions.map((session) =>
+          session.records.some((record) => record.studentId === enrollment.studentId)
+            ? 'Co mat'
+            : session.status === AttendanceSessionStatus.active
+              ? 'Dang mo'
+              : session.status === AttendanceSessionStatus.expired
+                ? 'Het han'
+                : 'Vang',
+        ),
+      ]);
+
+      row.height = 24;
+      row.eachCell((cell, colNumber) => {
+        this.applySummaryBorder(cell);
+        if (colNumber >= 5) {
+          this.applySummaryStatusStyle(cell, String(cell.value || ''));
+        } else {
+          cell.alignment = { vertical: 'middle' };
+        }
+      });
+    });
+
+    const footerRowNumber = worksheet.lastRow.number + 2;
+    worksheet.mergeCells(`A${footerRowNumber}:${lastColumnLetter}${footerRowNumber}`);
+    const footerCell = worksheet.getCell(`A${footerRowNumber}`);
+    footerCell.value =
+      'Bao cao nay tong hop theo lop: moi cot la mot phien diem danh, moi dong la mot sinh vien.';
+    footerCell.font = { italic: true, size: 10, color: { argb: 'FF667085' } };
+
+    const fileName = sanitizeFileName(`attendance-summary-${classSection.classCode}.xlsx`);
+    return {
+      fileName,
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+    };
+  }
+
+  private applySummaryBorder(cell: ExcelJS.Cell, color = 'FFD7E0EA') {
+    cell.border = {
+      top: { style: 'thin', color: { argb: color } },
+      left: { style: 'thin', color: { argb: color } },
+      bottom: { style: 'thin', color: { argb: color } },
+      right: { style: 'thin', color: { argb: color } },
+    };
+  }
+
+  private applySummaryStatusStyle(cell: ExcelJS.Cell, value: string) {
+    const toneByStatus: Record<string, { fill: string; text: string }> = {
+      'Co mat': { fill: 'FFE8F7EC', text: 'FF146C2E' },
+      Vang: { fill: 'FFFCE8E6', text: 'FFC5221F' },
+      'Dang mo': { fill: 'FFFFF4E5', text: 'FF9A6700' },
+      'Het han': { fill: 'FFE8F0FE', text: 'FF175CD3' },
+    };
+
+    const tone = toneByStatus[value] ?? { fill: 'FFF8FAFC', text: 'FF344054' };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: tone.fill },
+    };
+    cell.font = { color: { argb: tone.text }, bold: true, size: 11 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
   }
 
   private canManageAllAttendance(role: Role) {
@@ -940,6 +1334,23 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         statusEl.className = isErr ? 'err' : '';
       }
 
+      function buildSubtitle(session) {
+        if (!session) {
+          return '';
+        }
+        var classCode = String(session.classCode || '').trim();
+        var sectionCode = String(session.sectionCode || '').trim();
+        if (!classCode) {
+          return sectionCode;
+        }
+        if (!sectionCode) {
+          return classCode;
+        }
+        return classCode.toUpperCase().endsWith(sectionCode.toUpperCase())
+          ? classCode
+          : (classCode + ' - ' + sectionCode);
+      }
+
       function buildQrUrl() {
         var base = String(cfg.apiBaseUrl || '').replace(/[/]$/, '');
         var prefix = String(cfg.apiPrefix || '');
@@ -977,10 +1388,10 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
           }
           if (data.session) {
             titleEl.textContent = data.session.courseName || 'Attendance';
-            subtitleEl.textContent = (data.session.classCode || '') + (data.session.sectionCode ? (' · ' + data.session.sectionCode) : '');
+            subtitleEl.textContent = buildSubtitle(data.session);
           }
           await QRCode.toCanvas(canvas, data.token, { margin: 2, width: 280 });
-          setStatus('Session: ' + (data.session && data.session.status ? data.session.status : 'active') + ' · Next refresh in ' + (data.refreshInSeconds || 30) + 's');
+          setStatus('Mo ung dung de quet ma diem danh');
         } catch (e) {
           setStatus(String(e && e.message ? e.message : e), true);
         }

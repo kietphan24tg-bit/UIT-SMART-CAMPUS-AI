@@ -10,6 +10,7 @@ const mockReplace = jest.fn();
 const mockUseQuery = jest.fn();
 const mockUseMutation = jest.fn();
 const mockExportSessionExcel = jest.fn();
+const mockExportClassSectionSummaryExcel = jest.fn();
 const mockShareAsync = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -38,6 +39,7 @@ jest.mock('@/services/api/attendance', () => {
     attendanceApi: {
       ...actual.attendanceApi,
       exportSessionExcel: (...args: unknown[]) => mockExportSessionExcel(...args),
+      exportClassSectionSummaryExcel: (...args: unknown[]) => mockExportClassSectionSummaryExcel(...args),
     },
   };
 });
@@ -179,6 +181,9 @@ describe('LecturerAttendanceClassDetailScreen', () => {
     mockExportSessionExcel.mockResolvedValue({
       uri: 'file:///cache/attendance-session-session-1.xlsx',
     });
+    mockExportClassSectionSummaryExcel.mockResolvedValue({
+      uri: 'file:///cache/attendance-class-summary-section-1.xlsx',
+    });
   });
 
   it('exports and shares an Excel file from history tab', async () => {
@@ -191,6 +196,21 @@ describe('LecturerAttendanceClassDetailScreen', () => {
       expect(mockExportSessionExcel).toHaveBeenCalledWith(
         'session-1',
         'file:///cache/attendance-session-session-1.xlsx',
+      );
+      expect(mockShareAsync).toHaveBeenCalled();
+    });
+  });
+
+  it('exports and shares a class summary Excel file from history header', async () => {
+    const { getByText } = render(<LecturerAttendanceClassDetailScreen />);
+
+    fireEvent.press(getByText('Lịch sử'));
+    fireEvent.press(getByText('Tổng hợp'));
+
+    await waitFor(() => {
+      expect(mockExportClassSectionSummaryExcel).toHaveBeenCalledWith(
+        'section-1',
+        'file:///cache/attendance-class-summary-section-1.xlsx',
       );
       expect(mockShareAsync).toHaveBeenCalled();
     });

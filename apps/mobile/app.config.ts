@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { ExpoConfig } from 'expo/config';
 
 const config: ExpoConfig = {
@@ -52,6 +55,58 @@ const config: ExpoConfig = {
     typedRoutes: true,
   },
 };
+
+function loadEnvFile(filePath: string) {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const raw = readFileSync(filePath, 'utf8');
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (!key || process.env[key] !== undefined) {
+      continue;
+    }
+
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+function loadMobileEnv() {
+  const projectRoot = __dirname;
+  const workspaceRoot = path.resolve(projectRoot, '..', '..');
+  const envFiles = [
+    path.join(projectRoot, '.env.local'),
+    path.join(projectRoot, '.env'),
+    path.join(workspaceRoot, '.env.local'),
+    path.join(workspaceRoot, '.env'),
+  ];
+
+  for (const envFile of envFiles) {
+    loadEnvFile(envFile);
+  }
+}
+
+loadMobileEnv();
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;

@@ -34,6 +34,8 @@ describe('AttendanceController', () => {
             exportSessionAttendance: jest.fn(),
             getHistory: jest.fn(),
             getLecturerClassSections: jest.fn(),
+            getClassSectionStudents: jest.fn(),
+            getClassSectionSessionSummary: jest.fn(),
             getStudentHistory: jest.fn(),
           },
         },
@@ -53,6 +55,8 @@ describe('AttendanceController', () => {
     expect(getMethodRoles('exportSessionAttendance')).toEqual(managerRoles);
     expect(getMethodRoles('getHistory')).toEqual(managerRoles);
     expect(getMethodRoles('getLecturerClassSections')).toEqual(managerRoles);
+    expect(getMethodRoles('getClassSectionStudents')).toEqual(managerRoles);
+    expect(getMethodRoles('getClassSectionSessionSummary')).toEqual(managerRoles);
   });
 
   it('keeps student-only checkin and personal history endpoints', () => {

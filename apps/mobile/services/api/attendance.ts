@@ -70,6 +70,28 @@ export type AttendanceSessionRecordResponse = {
   };
 };
 
+export type AttendanceClassSectionStudent = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  studentId: string | null;
+};
+
+export type AttendanceClassSectionSessionSummary = {
+  totalSessions: number;
+  activeSessions: number;
+  closedSessions: number;
+  expiredSessions: number;
+  latestSession: {
+    id: string;
+    status: 'active' | 'closed' | 'expired';
+    startedAt: string;
+    expiresAt: string;
+    checkedInCount: number;
+  } | null;
+};
+
 export type AttendanceStudentHistoryResponse = {
   items: Array<{
     id: string;
@@ -142,6 +164,22 @@ export const attendanceApi = {
     )) as AttendanceSessionRecordResponse;
   },
 
+  getClassSectionStudents: async (
+    classSectionId: string,
+  ): Promise<AttendanceClassSectionStudent[]> => {
+    return (await apiClient.get(
+      `/attendance/class-sections/${encodeURIComponent(classSectionId)}/students`,
+    )) as AttendanceClassSectionStudent[];
+  },
+
+  getClassSectionSessionSummary: async (
+    classSectionId: string,
+  ): Promise<AttendanceClassSectionSessionSummary> => {
+    return (await apiClient.get(
+      `/attendance/class-sections/${encodeURIComponent(classSectionId)}/session-summary`,
+    )) as AttendanceClassSectionSessionSummary;
+  },
+
   getLecturerHistory: async (
     classSectionId: string,
     page = 1,
@@ -191,6 +229,17 @@ export const attendanceApi = {
     const accessToken = await SecureStore.getItemAsync(AUTH_ACCESS_TOKEN_KEY);
     return FileSystem.downloadAsync(
       `${API_BASE_URL}/attendance/session/${encodeURIComponent(sessionId)}/export`,
+      fileUri,
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      },
+    );
+  },
+
+  exportClassSectionSummaryExcel: async (classSectionId: string, fileUri: string) => {
+    const accessToken = await SecureStore.getItemAsync(AUTH_ACCESS_TOKEN_KEY);
+    return FileSystem.downloadAsync(
+      `${API_BASE_URL}/attendance/class-sections/${encodeURIComponent(classSectionId)}/export`,
       fileUri,
       {
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

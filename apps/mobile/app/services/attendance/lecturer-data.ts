@@ -1,4 +1,8 @@
-import type { AttendanceLecturerClassSection, AttendanceSessionRecordResponse } from '@/services/api/attendance';
+import type {
+  AttendanceClassSectionStudent,
+  AttendanceLecturerClassSection,
+  AttendanceSessionRecordResponse,
+} from '@/services/api/attendance';
 import type { ScheduleRecord } from '@/types/app-data';
 
 export type LecturerAttendanceScheduleCard = {
@@ -22,42 +26,13 @@ export type GroupedScheduleCards = Array<{
   items: LecturerAttendanceScheduleCard[];
 }>;
 
-export type MockStudentRosterItem = {
+export type StudentRosterItem = {
   id: string;
   studentId: string;
   fullName: string;
   status: 'present' | 'absent' | 'pending';
   checkinTime?: string;
 };
-
-const MOCK_FIRST_NAMES = [
-  'An',
-  'Bình',
-  'Châu',
-  'Duy',
-  'Giang',
-  'Hải',
-  'Khánh',
-  'Linh',
-  'Minh',
-  'Ngọc',
-  'Phúc',
-  'Quân',
-  'Trang',
-  'Vy',
-] as const;
-
-const MOCK_LAST_NAMES = [
-  'Nguyễn',
-  'Trần',
-  'Lê',
-  'Phạm',
-  'Hoàng',
-  'Võ',
-  'Đặng',
-  'Huỳnh',
-  'Phan',
-] as const;
 
 export function resolveScheduleCardToClassSection(
   schedule: Pick<
@@ -134,46 +109,28 @@ export function groupAttendanceCardsByDay(cards: LecturerAttendanceScheduleCard[
     }));
 }
 
-function getMockStudentName(index: number) {
-  const lastName = MOCK_LAST_NAMES[index % MOCK_LAST_NAMES.length];
-  const firstName = MOCK_FIRST_NAMES[index % MOCK_FIRST_NAMES.length];
-  return `${lastName} ${firstName}`;
-}
-
-export function buildMockStudentRoster({
-  expectedCount,
+export function buildStudentRoster({
+  students,
   records,
+  hasActiveSession,
 }: {
-  expectedCount: number;
+  students: AttendanceClassSectionStudent[];
   records?: AttendanceSessionRecordResponse['items'];
+  hasActiveSession: boolean;
 }) {
-  const presentStudents =
-    records?.map<MockStudentRosterItem>((record) => ({
-      id: record.id,
-      studentId: record.student.studentId ?? record.student.email,
-      fullName: [record.student.lastName, record.student.firstName].filter(Boolean).join(' ').trim(),
-      status: 'present',
-      checkinTime: record.checkinTime,
-    })) ?? [];
+  const recordsByStudentId = new Map(
+    (records ?? []).map((record) => [record.student.id, record]),
+  );
 
-  const safeExpectedCount = Math.max(expectedCount, presentStudents.length, 12);
-  const roster = [...presentStudents];
-  const presentStudentIds = new Set(presentStudents.map((item) => item.studentId));
+  return students.map<StudentRosterItem>((student) => {
+    const matchedRecord = recordsByStudentId.get(student.id);
 
-  for (let index = roster.length; index < safeExpectedCount; index += 1) {
-    const studentId = `2252${String(index + 1).padStart(4, '0')}`;
-    if (presentStudentIds.has(studentId)) {
-      continue;
-    }
-
-    const mod = index % 5;
-    roster.push({
-      id: `mock-${studentId}`,
-      studentId,
-      fullName: getMockStudentName(index),
-      status: mod === 0 ? 'absent' : mod === 1 ? 'pending' : 'absent',
-    });
-  }
-
-  return roster.sort((left, right) => left.studentId.localeCompare(right.studentId));
+    return {
+      id: student.id,
+      studentId: student.studentId ?? student.email,
+      fullName: [student.lastName, student.firstName].filter(Boolean).join(' ').trim(),
+      status: matchedRecord ? 'present' : hasActiveSession ? 'absent' : 'pending',
+      checkinTime: matchedRecord?.checkinTime,
+    };
+  });
 }

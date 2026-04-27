@@ -112,6 +112,31 @@ export class AttendanceController {
     response.send(exported.buffer);
   }
 
+  @Get('class-sections/:id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Export attendance summary by class section to Excel' })
+  async exportClassSectionAttendanceSummary(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Res() response: Response,
+  ) {
+    const exported = await this.attendanceService.exportClassSectionAttendanceSummary(
+      classSectionId,
+      actorId,
+      actorRole,
+    );
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    response.send(exported.buffer);
+  }
+
   @Get('history')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
@@ -139,6 +164,34 @@ export class AttendanceController {
     @CurrentUser('role') actorRole: Role,
   ) {
     return this.attendanceService.getLecturerClassSections(actorId, actorRole);
+  }
+
+  @Get('class-sections/:id/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Get enrolled students for a class section' })
+  getClassSectionStudents(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getClassSectionStudents(classSectionId, actorId, actorRole);
+  }
+
+  @Get('class-sections/:id/session-summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Get attendance session summary for a class section' })
+  getClassSectionSessionSummary(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getClassSectionSessionSummary(classSectionId, actorId, actorRole);
   }
 
   @Get('me/history')

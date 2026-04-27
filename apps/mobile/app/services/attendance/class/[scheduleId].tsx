@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Linking, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { buildMockStudentRoster, mapScheduleToAttendanceCards } from '@/app/services/attendance/lecturer-data';
+import { buildStudentRoster, mapScheduleToAttendanceCards } from '@/app/services/attendance/lecturer-data';
 import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SkeletonBlock } from '@/components/ui';
 import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { attendanceApi, type AttendanceSessionStartResponse } from '@/services/api/attendance';
@@ -78,6 +78,21 @@ function getAttendanceStats({
     absentCount,
     repeatedLate: Math.max(Math.round(absentCount / 3), 0),
   };
+}
+
+function formatHistoryDate(value: string) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function formatHistoryTime(value: string) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function WorkspaceTabBar({
@@ -172,6 +187,7 @@ export default function LecturerAttendanceClassDetailScreen() {
   const [studentQuery, setStudentQuery] = React.useState('');
   const [sessionState, setSessionState] = React.useState<AttendanceSessionState | null>(null);
   const [exportingSessionId, setExportingSessionId] = React.useState<string | null>(null);
+  const [isExportingSummary, setIsExportingSummary] = React.useState(false);
 
   const classSectionsQuery = useQuery({
     queryKey: ['attendance', 'lecturer', 'class-sections'],
@@ -220,13 +236,20 @@ export default function LecturerAttendanceClassDetailScreen() {
     enabled: Boolean(selectedSection?.id),
   });
 
+  const studentsQuery = useQuery({
+    queryKey: ['attendance', 'lecturer', 'students', selectedSection?.id],
+    queryFn: () => attendanceApi.getClassSectionStudents(selectedSection?.id as string),
+    enabled: Boolean(selectedSection?.id),
+  });
+
   const roster = React.useMemo(
     () =>
-      buildMockStudentRoster({
-        expectedCount: selectedSection?.enrolledCount ?? 0,
+      buildStudentRoster({
+        students: studentsQuery.data ?? [],
         records: recordsQuery.data?.items,
+        hasActiveSession: Boolean(activeSession?.sessionId),
       }),
-    [recordsQuery.data?.items, selectedSection?.enrolledCount],
+    [activeSession?.sessionId, recordsQuery.data?.items, studentsQuery.data],
   );
 
   const filteredRoster = React.useMemo(() => {
@@ -286,6 +309,44 @@ export default function LecturerAttendanceClassDetailScreen() {
     [],
   );
 
+  const handleExportSummary = React.useCallback(async () => {
+    if (!selectedSection?.id) {
+      Alert.alert('Xuất Excel', 'Chưa tìm được lớp attendance để xuất báo cáo tổng hợp.');
+      return;
+    }
+
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+      if (!sharingAvailable) {
+        Alert.alert('Xuất Excel', 'Thiết bị hiện tại không hỗ trợ chia sẻ file.');
+        return;
+      }
+
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert('Xuất Excel', 'Không tìm được thư mục tạm để tạo file Excel.');
+        return;
+      }
+
+      setIsExportingSummary(true);
+      const fileUri = `${baseDir}attendance-class-summary-${selectedSection.id}.xlsx`;
+      await attendanceApi.exportClassSectionSummaryExcel(selectedSection.id, fileUri);
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        dialogTitle: 'Chia sẻ file Excel tổng hợp điểm danh',
+        UTI: 'org.openxmlformats.spreadsheetml.sheet',
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Không thể tạo hoặc chia sẻ file Excel tổng hợp.';
+      Alert.alert('Xuất Excel thất bại', message);
+    } finally {
+      setIsExportingSummary(false);
+    }
+  }, [selectedSection?.id]);
+
   return (
     <Screen>
       <View style={[styles.headerRow, { paddingTop: theme.spacing.sm, paddingHorizontal: theme.spacing.lg }]}>
@@ -343,9 +404,6 @@ export default function LecturerAttendanceClassDetailScreen() {
                 <Text style={[styles.heroMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
                   {getDayLabel(selectedCard.dayOfWeek)} · {selectedCard.startTime} - {selectedCard.endTime} ·{' '}
                   {getRoomLabel(selectedCard.room)}
-                </Text>
-                <Text style={[styles.heroMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-                  {selectedSection?.enrolledCount ?? 0}/{selectedSection?.capacity ?? 0} sinh viên
                 </Text>
               </View>
 
@@ -510,7 +568,7 @@ export default function LecturerAttendanceClassDetailScreen() {
                     Danh sách sinh viên
                   </Text>
                   <Text style={[styles.helperText, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
-                    Tạm dùng roster mock theo sĩ số lớp vì API hiện tại chưa có danh sách sinh viên theo lớp.
+                    Danh sách lấy từ sinh viên đã enroll trong lớp. Trạng thái điểm danh sẽ cập nhật theo phiên đang mở.
                   </Text>
                   <TextInput
                     value={studentQuery}
@@ -577,9 +635,14 @@ export default function LecturerAttendanceClassDetailScreen() {
                     <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
                       Lịch sử điểm danh
                     </Text>
-                    <Text style={[styles.helperText, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-                      Xuất từng phiên
-                    </Text>
+                    <SecondaryButton
+                      label={isExportingSummary ? 'Đang tạo...' : 'Tổng hợp'}
+                      loading={isExportingSummary}
+                      disabled={!selectedSection?.id}
+                      onPress={() => void handleExportSummary()}
+                      style={styles.historySummaryButton}
+                      icon={!isExportingSummary ? <Ionicons name="download-outline" size={16} color={theme.colors.primary} /> : undefined}
+                    />
                   </View>
 
                   {historyQuery.data?.items.length ? (
@@ -595,12 +658,86 @@ export default function LecturerAttendanceClassDetailScreen() {
                             },
                           ]}
                         >
-                          <Text style={[styles.rowPrimary, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                            {formatDateTime(item.startedAt)} · {item.checkedInCount}/{selectedSection?.enrolledCount ?? 0}
-                          </Text>
-                          <Text style={[styles.rowSecondary, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                            Trạng thái: {item.status} · Hết hạn {formatDateTime(item.expiresAt)}
-                          </Text>
+                          <View style={styles.historyInfoGrid}>
+                            <View
+                              style={[
+                                styles.historyInfoItem,
+                                {
+                                  backgroundColor: theme.colors.surfaceElevated,
+                                  borderColor: theme.colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.historyInfoLabel,
+                                  { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                                ]}
+                              >
+                                Ngày
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.historyInfoValue,
+                                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                ]}
+                              >
+                                {formatHistoryDate(item.startedAt)}
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.historyInfoItem,
+                                {
+                                  backgroundColor: theme.colors.surfaceElevated,
+                                  borderColor: theme.colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.historyInfoLabel,
+                                  { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                                ]}
+                              >
+                                Bắt đầu
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.historyInfoValue,
+                                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                ]}
+                              >
+                                {formatHistoryTime(item.startedAt)}
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.historyInfoItem,
+                                {
+                                  backgroundColor: theme.colors.surfaceElevated,
+                                  borderColor: theme.colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.historyInfoLabel,
+                                  { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                                ]}
+                              >
+                                Kết thúc
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.historyInfoValue,
+                                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                ]}
+                              >
+                                {formatHistoryTime(item.expiresAt)}
+                              </Text>
+                            </View>
+                          </View>
                           <SecondaryButton
                             label={exportingSessionId === item.id ? 'Đang tạo file...' : 'Xuất Excel'}
                             loading={exportingSessionId === item.id}
@@ -820,6 +957,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  historySummaryButton: {
+    minHeight: 40,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   helperText: {
     fontSize: 13,
     lineHeight: 18,
@@ -876,7 +1019,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 12,
+    gap: 12,
+  },
+  historyInfoGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  historyInfoItem: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 4,
+  },
+  historyInfoLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  historyInfoValue: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   metricGrid: {
     flexDirection: 'row',

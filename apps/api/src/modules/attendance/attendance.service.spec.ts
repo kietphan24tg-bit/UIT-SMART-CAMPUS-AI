@@ -64,6 +64,7 @@ describe('AttendanceService', () => {
             classSection: {
               findUnique: jest.fn(),
               findMany: jest.fn(),
+              findFirst: jest.fn(),
             },
             attendanceSession: {
               create: jest.fn(),
@@ -278,6 +279,7 @@ describe('AttendanceService', () => {
       (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValue({ id: 'session-1' });
       (prisma.attendanceRecord.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.attendanceRecord.count as jest.Mock).mockResolvedValue(0);
+      (prisma.classSection.findFirst as jest.Mock).mockResolvedValue({ id: 'section-1' });
     });
 
     it('scopes lecturer session records by lecturerId', async () => {
@@ -301,6 +303,99 @@ describe('AttendanceService', () => {
       expect(prisma.attendanceSession.findFirst).toHaveBeenCalledWith({
         where: { id: 'session-1' },
         select: { id: true },
+      });
+    });
+
+    it('returns enrolled students for an accessible class section', async () => {
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([
+        {
+          student: {
+            id: 'student-1',
+            email: 'student1@gm.uit.edu.vn',
+            firstName: 'Van A',
+            lastName: 'Nguyen',
+            studentId: '22520001',
+          },
+        },
+      ]);
+
+      const result = await service.getClassSectionStudents('section-1', 'lecturer-1', Role.lecturer);
+
+      expect(prisma.classSection.findFirst).toHaveBeenCalledWith({
+        where: { id: 'section-1', lecturerId: 'lecturer-1' },
+        select: { id: true },
+      });
+      expect(prisma.classEnrollment.findMany).toHaveBeenCalledWith({
+        where: {
+          classSectionId: 'section-1',
+          status: EnrollmentStatus.active,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              studentId: true,
+            },
+          },
+        },
+        orderBy: {
+          student: {
+            studentId: 'asc',
+          },
+        },
+      });
+      expect(result).toEqual([
+        {
+          id: 'student-1',
+          email: 'student1@gm.uit.edu.vn',
+          firstName: 'Van A',
+          lastName: 'Nguyen',
+          studentId: '22520001',
+        },
+      ]);
+    });
+
+    it('returns session summary for an accessible class section', async () => {
+      (prisma.attendanceSession.count as jest.Mock)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(1);
+      (prisma.attendanceSession.findFirst as jest.Mock).mockResolvedValueOnce({
+        id: 'session-4',
+        status: AttendanceSessionStatus.active,
+        startedAt: new Date('2026-04-27T05:49:00.000Z'),
+        expiresAt: new Date('2026-04-27T06:04:00.000Z'),
+        _count: {
+          records: 8,
+        },
+      });
+
+      const result = await service.getClassSectionSessionSummary(
+        'section-1',
+        'lecturer-1',
+        Role.lecturer,
+      );
+
+      expect(prisma.classSection.findFirst).toHaveBeenCalledWith({
+        where: { id: 'section-1', lecturerId: 'lecturer-1' },
+        select: { id: true },
+      });
+      expect(result).toEqual({
+        totalSessions: 4,
+        activeSessions: 1,
+        closedSessions: 2,
+        expiredSessions: 1,
+        latestSession: {
+          id: 'session-4',
+          status: AttendanceSessionStatus.active,
+          startedAt: new Date('2026-04-27T05:49:00.000Z'),
+          expiresAt: new Date('2026-04-27T06:04:00.000Z'),
+          checkedInCount: 8,
+        },
       });
     });
 
