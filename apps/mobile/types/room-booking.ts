@@ -26,13 +26,19 @@ export interface RoomAvailabilitySummary {
 
 export interface RoomScheduleSlot {
   id: string;
-  slotNumber: number;
+  slotNumber?: number;
   startTime: string;
   endTime: string;
   status: RoomSlotStatus;
   label: string;
   courseCode?: string;
   statusLabel?: string;
+  source?: 'semester' | 'booking' | null;
+  title?: string | null;
+  subtitle?: string | null;
+  bookingId?: string | null;
+  classSectionId?: string | null;
+  bookable?: boolean;
 }
 
 export interface RoomScheduleDay {
@@ -48,6 +54,7 @@ export interface RoomSchedule {
   buildingCode: string;
   buildingName: string;
   capacity: number;
+  weekStart?: string;
   days: RoomScheduleDay[];
 }
 

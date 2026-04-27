@@ -28,8 +28,13 @@ type RoomScheduleSlot = {
   label: string;
   startTime: string;
   endTime: string;
-  bookingTitle: string | null;
-  displayText: string;
+  status: 'free' | 'occupied' | 'available_later';
+  source: 'semester' | 'booking' | null;
+  title: string | null;
+  subtitle: string | null;
+  bookingId: string | null;
+  classSectionId: string | null;
+  bookable: boolean;
 };
 
 type RoomScheduleDay = {
@@ -42,17 +47,12 @@ type RoomScheduleDay = {
 const BANGKOK_TIME_ZONE = 'Asia/Bangkok';
 const ACTIVE_ROOM_STATUS: RoomStatus = 'active';
 const OCCUPYING_BOOKING_STATUSES: RoomBookingStatus[] = ['approved', 'booked', 'maintenance'];
-const CONFLICT_BOOKING_STATUSES: RoomBookingStatus[] = [
-  'pending',
-  'approved',
-  'booked',
-  'maintenance',
-];
 const INACTIVE_BOOKING_STATUSES: RoomBookingStatus[] = ['rejected', 'cancelled'];
 const CREATED_BOOKING_STATUS: RoomBookingStatus = 'pending';
 const EMPTY_ROOM_SCHEDULE_TEXT = 'Trống';
 const ROOM_AVAILABLE_STATUS: RoomAvailabilityStatus = 'Trống hiện tại';
 const ROOM_OCCUPIED_STATUS: RoomAvailabilityStatus = 'Đang được sử dụng';
+const APPROVAL_REJECT_NOTE = 'Slot đã được duyệt cho yêu cầu khác';
 const ROOM_CODE_COLLATOR = new Intl.Collator('en', {
   numeric: true,
   sensitivity: 'base',
@@ -277,6 +277,14 @@ function buildFullName(firstName?: string | null, lastName?: string | null) {
   return [lastName, firstName].filter(Boolean).join(' ').trim();
 }
 
+function normalizeRoomText(value?: string | null) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function isDateWithinRange(date: Date, startDate: Date, endDate: Date) {
+  return date.getTime() >= startDate.getTime() && date.getTime() <= endDate.getTime();
+}
+
 @Injectable()
 export class RoomBookingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -307,6 +315,7 @@ export class RoomBookingsService {
     const selectedTimeSlotIds = selectedTimeSlots.map((timeSlot) => timeSlot.id);
     const conflictingSlot = await this.findConflictingSlot(
       room.id,
+      room.roomCode,
       bookingDate,
       selectedTimeSlotIds,
     );
@@ -356,6 +365,7 @@ export class RoomBookingsService {
 
         const raceConflictingSlot = await this.findConflictingSlot(
           room.id,
+          room.roomCode,
           bookingDate,
           selectedTimeSlotIds,
         );
@@ -467,7 +477,7 @@ export class RoomBookingsService {
       throw new NotFoundException('Không tìm thấy phòng');
     }
 
-    const [timeSlots, roomBookingSlots] = await Promise.all([
+    const [timeSlots, roomBookingSlots, classMeetings] = await Promise.all([
       this.prisma.timeSlot.findMany({
         orderBy: { slotNumber: 'asc' },
       }),
@@ -483,18 +493,63 @@ export class RoomBookingsService {
           },
         },
         select: {
+          bookingId: true,
           bookingDate: true,
           timeSlotId: true,
           booking: {
             select: {
               title: true,
+              purpose: true,
+              contactName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.classMeeting.findMany({
+        where: {
+          room: {
+            equals: normalizedRoomCode,
+            mode: 'insensitive',
+          },
+          classSection: {
+            semester: {
+              startDate: { lte: saturday },
+              endDate: { gte: monday },
+            },
+          },
+        },
+        select: {
+          dayOfWeek: true,
+          startPeriod: true,
+          endPeriod: true,
+          startTime: true,
+          endTime: true,
+          classSection: {
+            select: {
+              id: true,
+              classCode: true,
+              course: {
+                select: {
+                  code: true,
+                  name: true,
+                },
+              },
+              semester: {
+                select: {
+                  startDate: true,
+                  endDate: true,
+                },
+              },
             },
           },
         },
       }),
     ]);
 
-    const bookingByDayAndSlot = new Map<string, { title: string | null }>();
+    const bookingByDayAndSlot = new Map<
+      string,
+      { bookingId: string; title: string | null; subtitle: string | null }
+    >();
     for (const slot of roomBookingSlots) {
       const dayOfWeek = getRoomBookingDayOfWeek(slot.bookingDate);
       if (dayOfWeek < 2 || dayOfWeek > 7) {
@@ -503,7 +558,54 @@ export class RoomBookingsService {
 
       const key = `${dayOfWeek}:${slot.timeSlotId}`;
       if (!bookingByDayAndSlot.has(key)) {
-        bookingByDayAndSlot.set(key, { title: slot.booking.title });
+        bookingByDayAndSlot.set(key, {
+          bookingId: slot.bookingId,
+          title: slot.booking.title ?? slot.booking.contactName ?? 'Đã đặt',
+          subtitle: slot.booking.purpose ?? null,
+        });
+      }
+    }
+
+    const classMeetingByDayAndSlot = new Map<
+      string,
+      { classSectionId: string; title: string; subtitle: string | null }
+    >();
+    for (const meeting of classMeetings) {
+      if (meeting.dayOfWeek < 2 || meeting.dayOfWeek > 7) {
+        continue;
+      }
+
+      const meetingDate = getDateByDayOfWeek(monday, meeting.dayOfWeek);
+      if (
+        !isDateWithinRange(
+          meetingDate,
+          meeting.classSection.semester.startDate,
+          meeting.classSection.semester.endDate,
+        )
+      ) {
+        continue;
+      }
+
+      const matchingTimeSlots = timeSlots.filter((timeSlot) => {
+        if (meeting.startPeriod != null && meeting.endPeriod != null) {
+          return (
+            timeSlot.slotNumber >= meeting.startPeriod &&
+            timeSlot.slotNumber <= meeting.endPeriod
+          );
+        }
+
+        return timeSlot.startTime >= meeting.startTime && timeSlot.endTime <= meeting.endTime;
+      });
+
+      for (const timeSlot of matchingTimeSlots) {
+        const key = `${meeting.dayOfWeek}:${timeSlot.id}`;
+        if (!classMeetingByDayAndSlot.has(key)) {
+          classMeetingByDayAndSlot.set(key, {
+            classSectionId: meeting.classSection.id,
+            title: meeting.classSection.classCode || meeting.classSection.course.code,
+            subtitle: meeting.classSection.course.name || meeting.classSection.course.code,
+          });
+        }
       }
     }
 
@@ -512,8 +614,42 @@ export class RoomBookingsService {
       dateKey: toDateKey(getDateByDayOfWeek(monday, day.dayOfWeek)),
       label: day.label,
       slots: timeSlots.map((timeSlot) => {
-        const booking = bookingByDayAndSlot.get(`${day.dayOfWeek}:${timeSlot.id}`);
-        const bookingTitle = booking?.title ?? null;
+        const key = `${day.dayOfWeek}:${timeSlot.id}`;
+        const classMeeting = classMeetingByDayAndSlot.get(key);
+        if (classMeeting) {
+          return {
+            timeSlotId: timeSlot.id,
+            slotNumber: timeSlot.slotNumber,
+            label: timeSlot.label,
+            startTime: timeSlot.startTime,
+            endTime: timeSlot.endTime,
+            status: 'occupied' as const,
+            source: 'semester' as const,
+            title: classMeeting.title,
+            subtitle: classMeeting.subtitle,
+            bookingId: null,
+            classSectionId: classMeeting.classSectionId,
+            bookable: false,
+          };
+        }
+
+        const booking = bookingByDayAndSlot.get(key);
+        if (booking) {
+          return {
+            timeSlotId: timeSlot.id,
+            slotNumber: timeSlot.slotNumber,
+            label: timeSlot.label,
+            startTime: timeSlot.startTime,
+            endTime: timeSlot.endTime,
+            status: 'occupied' as const,
+            source: 'booking' as const,
+            title: booking.title,
+            subtitle: booking.subtitle,
+            bookingId: booking.bookingId,
+            classSectionId: null,
+            bookable: false,
+          };
+        }
 
         return {
           timeSlotId: timeSlot.id,
@@ -521,8 +657,13 @@ export class RoomBookingsService {
           label: timeSlot.label,
           startTime: timeSlot.startTime,
           endTime: timeSlot.endTime,
-          bookingTitle,
-          displayText: bookingTitle || EMPTY_ROOM_SCHEDULE_TEXT,
+          status: 'free' as const,
+          source: null,
+          title: null,
+          subtitle: null,
+          bookingId: null,
+          classSectionId: null,
+          bookable: true,
         };
       }),
     }));
@@ -605,7 +746,7 @@ export class RoomBookingsService {
     }));
   }
 
-  async approveBooking(bookingId: string, approverId: string) {
+  private async approveBookingLegacy(bookingId: string, approverId: string) {
     const booking = await this.prisma.roomBooking.findUnique({
       where: { id: bookingId },
       include: roomBookingInclude,
@@ -660,6 +801,108 @@ export class RoomBookingsService {
         approvedById: approverId,
         approvedAt: new Date(),
       },
+    });
+
+    return this.getBookingById(booking.id);
+  }
+
+  async approveBooking(bookingId: string, approverId: string) {
+    const booking = await this.prisma.roomBooking.findUnique({
+      where: { id: bookingId },
+      include: roomBookingInclude,
+    });
+
+    if (!booking) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+    }
+
+    if (booking.status !== 'pending') {
+      throw new BadRequestException('Chá»‰ cÃ³ thá»ƒ duyá»‡t yÃªu cáº§u Ä‘ang chá»');
+    }
+
+    const selectedTimeSlotIds = booking.bookingSlots.map((slot) => slot.timeSlotId);
+    if (selectedTimeSlotIds.length === 0) {
+      throw new BadRequestException('YÃªu cáº§u Ä‘áº·t phÃ²ng chÆ°a cÃ³ khung giá» há»£p lá»‡');
+    }
+
+    const roomCode = booking.room.roomCode;
+    const bookingDate = booking.bookingDate;
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const latestBooking = await tx.roomBooking.findUnique({
+        where: { id: booking.id },
+        include: roomBookingInclude,
+      });
+
+      if (!latestBooking) {
+        throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+      }
+
+      if (latestBooking.status !== 'pending') {
+        throw new BadRequestException('YÃªu cáº§u nÃ y khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i chá» duyá»‡t');
+      }
+
+      const latestTimeSlotIds = latestBooking.bookingSlots.map((slot) => slot.timeSlotId);
+      const conflictingSlot = await this.findConflictingSlot(
+        latestBooking.roomId,
+        roomCode,
+        bookingDate,
+        latestTimeSlotIds,
+        tx,
+        latestBooking.id,
+      );
+
+      if (conflictingSlot) {
+        throw new ConflictException(
+          this.buildApproveConflictMessage(conflictingSlot.timeSlot?.label),
+        );
+      }
+
+      await tx.roomBooking.update({
+        where: { id: latestBooking.id },
+        data: {
+          status: 'approved',
+          approvedById: approverId,
+          approvedAt: now,
+          timeSlotId: latestBooking.bookingSlots[0]?.timeSlotId ?? null,
+        },
+      });
+
+      const overlappingPendingBookings = await tx.roomBooking.findMany({
+        where: {
+          id: { not: latestBooking.id },
+          roomId: latestBooking.roomId,
+          bookingDate,
+          status: 'pending',
+          bookingSlots: {
+            some: {
+              timeSlotId: {
+                in: latestTimeSlotIds,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (overlappingPendingBookings.length > 0) {
+        await tx.roomBooking.updateMany({
+          where: {
+            id: {
+              in: overlappingPendingBookings.map((item) => item.id),
+            },
+          },
+          data: {
+            status: 'rejected',
+            approvedById: approverId,
+            approvedAt: now,
+            notes: APPROVAL_REJECT_NOTE,
+          },
+        });
+      }
     });
 
     return this.getBookingById(booking.id);
@@ -807,7 +1050,7 @@ export class RoomBookingsService {
           roomId,
           userId,
           bookingDate,
-          timeSlotId: firstTimeSlot.id,
+          timeSlotId: null,
           startTime: firstTimeSlot.startTime,
           endTime: lastTimeSlot.endTime,
           title: dto.title?.trim() || null,
@@ -883,7 +1126,104 @@ export class RoomBookingsService {
       : 'Một hoặc nhiều khung giờ đã có yêu cầu đặt phòng.';
   }
 
+  private buildApproveConflictMessage(timeSlotLabel?: string | null) {
+    return timeSlotLabel
+      ? `Khung giá» ${timeSlotLabel} Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.`
+      : 'Má»™t hoáº·c nhiá»u khung giá» Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.';
+  }
+
   private async findConflictingSlot(
+    roomId: string,
+    roomCode: string,
+    bookingDate: Date,
+    timeSlotIds: string[],
+    prismaClient: Pick<PrismaService, 'roomBookingSlot' | 'classMeeting' | 'timeSlot'> = this.prisma,
+    excludedBookingId?: string,
+  ) {
+    const selectedTimeSlots = await prismaClient.timeSlot.findMany({
+      where: {
+        id: {
+          in: timeSlotIds,
+        },
+      },
+      select: {
+        id: true,
+        slotNumber: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    const fixedScheduleConflict = await prismaClient.classMeeting.findFirst({
+      where: {
+        room: {
+          equals: normalizeRoomText(roomCode),
+          mode: 'insensitive',
+        },
+        dayOfWeek: getRoomBookingDayOfWeek(bookingDate),
+        classSection: {
+          semester: {
+            startDate: { lte: bookingDate },
+            endDate: { gte: bookingDate },
+          },
+        },
+        OR: selectedTimeSlots.map((timeSlot) => ({
+          OR: [
+            {
+              startPeriod: { not: null, lte: timeSlot.slotNumber },
+              endPeriod: { not: null, gte: timeSlot.slotNumber },
+            },
+            {
+              startPeriod: null,
+              endPeriod: null,
+              startTime: { lte: timeSlot.startTime },
+              endTime: { gte: timeSlot.endTime },
+            },
+          ],
+        })),
+      },
+      select: {
+        classSection: {
+          select: {
+            classCode: true,
+          },
+        },
+      },
+    });
+
+    if (fixedScheduleConflict) {
+      return {
+        timeSlot: {
+          label: fixedScheduleConflict.classSection.classCode || 'Lá»‹ch cá»‘ Ä‘á»‹nh',
+        },
+      };
+    }
+
+    return prismaClient.roomBookingSlot.findFirst({
+      where: {
+        roomId,
+        bookingDate,
+        timeSlotId: {
+          in: timeSlotIds,
+        },
+        booking: {
+          ...(excludedBookingId ? { id: { not: excludedBookingId } } : {}),
+          status: {
+            in: OCCUPYING_BOOKING_STATUSES,
+          },
+        },
+      },
+      select: {
+        timeSlot: {
+          select: {
+            label: true,
+          },
+        },
+      },
+    });
+  }
+
+  private async findConflictingSlotLegacy(
     roomId: string,
     bookingDate: Date,
     timeSlotIds: string[],
@@ -897,7 +1237,7 @@ export class RoomBookingsService {
         },
         booking: {
           status: {
-            in: CONFLICT_BOOKING_STATUSES,
+            in: OCCUPYING_BOOKING_STATUSES,
           },
         },
       },

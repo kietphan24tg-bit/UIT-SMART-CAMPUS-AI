@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   LecturerAttendanceScheduleCard,
   groupAttendanceCardsByDay,
+  mapClassSectionsToAttendanceCards,
   mapScheduleToAttendanceCards,
   resolveScheduleCardToClassSection,
 } from '@/app/services/attendance/lecturer-data';
@@ -134,9 +135,26 @@ export default function LecturerAttendanceScreen() {
     enabled: canManageAttendance,
   });
 
+  const fallbackClassSections = React.useMemo(() => {
+    const sections = classSectionsQuery.data ?? [];
+    if (sections.length === 0) {
+      return [];
+    }
+
+    if (scheduleState.resolvedSemesterId) {
+      return sections.filter((section) => section.semester.id === scheduleState.resolvedSemesterId);
+    }
+
+    const currentSections = sections.filter((section) => section.semester.isCurrent);
+    return currentSections.length > 0 ? currentSections : sections;
+  }, [classSectionsQuery.data, scheduleState.resolvedSemesterId]);
+
   const scheduleCards = React.useMemo(
-    () => mapScheduleToAttendanceCards(scheduleState.schedule, classSectionsQuery.data ?? []),
-    [classSectionsQuery.data, scheduleState.schedule],
+    () =>
+      scheduleState.schedule.length > 0
+        ? mapScheduleToAttendanceCards(scheduleState.schedule, classSectionsQuery.data ?? [])
+        : mapClassSectionsToAttendanceCards(fallbackClassSections),
+    [classSectionsQuery.data, fallbackClassSections, scheduleState.schedule],
   );
   const groupedCards = React.useMemo(
     () => groupAttendanceCardsByDay(scheduleCards),

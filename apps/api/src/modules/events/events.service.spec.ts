@@ -13,7 +13,7 @@ describe('EventsService', () => {
   let service: EventsService;
   const configService = {
     get: jest.fn((key: string, defaultValue?: number) =>
-      key === 'UIT_EVENTS_CACHE_TTL_MS' ? 900_000 : defaultValue,
+      key === 'UIT_EVENTS_CACHE_TTL_MS' ? 86_400_000 : defaultValue,
     ),
   };
   const scraper = {

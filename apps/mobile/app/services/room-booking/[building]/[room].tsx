@@ -19,7 +19,6 @@ import {
   getMondayKeyForDateKey,
   listAllBookableDateOptions,
   listAllowedWeekMondayKeys,
-  ROOM_BOOKING_MAX_WEEKS_AHEAD,
   shiftMockScheduleToWeek,
 } from '@/utils/room-booking-weeks';
 import { useAuthStore } from '@/stores/auth-store';
@@ -74,30 +73,33 @@ export default function RoomDetailScreen() {
   const roomId = typeof params.room === 'string' ? params.room.toUpperCase() : '';
   const building = getBuilding(buildingId);
   const room = getRoom(buildingId, roomId);
+  const allowedWeekKeys = listAllowedWeekMondayKeys();
+  const hasAvailableWeeks = allowedWeekKeys.length > 0;
+  const bookableDateOptions = listAllBookableDateOptions();
 
   const [scheduleWeekStart, setScheduleWeekStart] = useState(
-    () => listAllowedWeekMondayKeys()[0] ?? '',
+    () => allowedWeekKeys[0] ?? '',
   );
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const scheduleQuery = useQuery({
     queryKey: ['room-bookings', 'room-schedule', roomId, scheduleWeekStart],
     queryFn: () => roomBookingsApi.getRoomSchedule(roomId, scheduleWeekStart),
-    enabled: Boolean(roomId) && Boolean(scheduleWeekStart),
+    enabled: Boolean(roomId) && Boolean(scheduleWeekStart) && hasAvailableWeeks,
   });
 
-  const schedule = scheduleQuery.data?.days?.length
-    ? scheduleQuery.data.days
-    : shiftMockScheduleToWeek(getRoomSchedule(roomId), scheduleWeekStart);
+  const schedule = !hasAvailableWeeks
+    ? []
+    : scheduleQuery.data?.days?.length
+      ? scheduleQuery.data.days
+      : shiftMockScheduleToWeek(getRoomSchedule(roomId), scheduleWeekStart);
   const [selectedDayKey, setSelectedDayKey] = useState<RoomScheduleDay['dayKey']>('mon');
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [mode, setMode] = useState<'schedule' | 'booking'>('schedule');
-  const [title, setTitle] = useState('Học nhóm');
-  const [purpose, setPurpose] = useState('Học nhóm');
-  const [attendeeCount, setAttendeeCount] = useState('5');
-  const [contactPhone, setContactPhone] = useState(user?.phone ?? '');
-  const [needsProjector, setNeedsProjector] = useState(true);
-  const [needsMicrophone, setNeedsMicrophone] = useState(false);
+  const [title, setTitle] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [attendeeCount, setAttendeeCount] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -120,6 +122,18 @@ export default function RoomDetailScreen() {
     schedule.find((item) => item.dayKey === selectedDayKey) ?? schedule[0] ?? null;
 
   useEffect(() => {
+    if (!hasAvailableWeeks) {
+      setScheduleWeekStart('');
+      setSelectedDayKey('mon');
+      setSelectedSlotId('');
+      setDatePickerOpen(false);
+      return;
+    }
+
+    setScheduleWeekStart((current) => (allowedWeekKeys.includes(current) ? current : allowedWeekKeys[0]));
+  }, [allowedWeekKeys, hasAvailableWeeks]);
+
+  useEffect(() => {
     if (!schedule.length) {
       setSelectedDayKey('mon');
       return;
@@ -136,11 +150,11 @@ export default function RoomDetailScreen() {
       return;
     }
 
-    const firstBookableSlot = selectedDay.slots.find((slot) => slot.status !== 'occupied');
+    const firstBookableSlot = selectedDay.slots.find((slot) => slot.status === 'free');
     setSelectedSlotId((current) => {
       if (
         current &&
-        selectedDay.slots.some((slot) => slot.id === current && slot.status !== 'occupied')
+        selectedDay.slots.some((slot) => slot.id === current && slot.status === 'free')
       ) {
         return current;
       }
@@ -148,10 +162,6 @@ export default function RoomDetailScreen() {
       return firstBookableSlot?.id ?? '';
     });
   }, [selectedDay]);
-
-  useEffect(() => {
-    setContactPhone((current) => current || user?.phone || '');
-  }, [user?.phone]);
 
   if (!building || !room) {
     return (
@@ -172,7 +182,9 @@ export default function RoomDetailScreen() {
 
   const selectedSlot = selectedDay?.slots.find((slot) => slot.id === selectedSlotId) ?? null;
   const canBook = Boolean(
-    selectedDay?.slots.some((slot) => slot.status !== 'occupied') && selectedSlot,
+    selectedDay?.slots.some((slot) => slot.status === 'free') &&
+      selectedSlot &&
+      selectedSlot.status === 'free',
   );
   const selectedDate = toDisplayDate(selectedDay?.dateKey);
 
@@ -188,11 +200,6 @@ export default function RoomDetailScreen() {
     const normalizedPurpose = purpose.trim();
     const normalizedContactPhone = contactPhone.trim();
     const normalizedAttendeeCount = Number.parseInt(attendeeCount.trim(), 10);
-    const equipment = [
-      needsProjector ? 'Máy chiếu' : null,
-      needsMicrophone ? 'Micro' : null,
-    ].filter(Boolean);
-
     if (!contactName) {
       setSubmitted(false);
       setFormError('Không tìm thấy thông tin người đặt phòng.');
@@ -222,10 +229,8 @@ export default function RoomDetailScreen() {
     createBookingMutation.mutate({
       roomCode: room.code,
       bookingDate: selectedDay.dateKey ?? '',
-      timeSlotId: selectedSlot.id,
-      purpose: equipment.length
-        ? `${normalizedPurpose} - Thiết bị cần: ${equipment.join(', ')}`
-        : normalizedPurpose,
+      timeSlotIds: [selectedSlot.id],
+      purpose: normalizedPurpose,
       contactName,
       attendeeCount: normalizedAttendeeCount,
       title: normalizedTitle,
@@ -300,117 +305,146 @@ export default function RoomDetailScreen() {
                 { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
               ]}
             >
-              Chỉ đặt phòng từ tuần kế tiếp (tối đa {ROOM_BOOKING_MAX_WEEKS_AHEAD} tuần).
+              Chỉ đặt phòng từ tuần kế tiếp.
             </Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.weekChipRow}
-            >
-              {listAllowedWeekMondayKeys().map((weekKey) => {
-                const selected = weekKey === scheduleWeekStart;
-                return (
-                  <Pressable
-                    key={weekKey}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      setScheduleWeekStart(weekKey);
-                      setSelectedDayKey('mon');
-                      setSubmitted(false);
-                    }}
-                    style={({ pressed }) => [
-                      styles.weekChip,
-                      {
-                        backgroundColor: selected
-                          ? theme.colors.primarySurface
-                          : theme.colors.surfaceSubtle,
-                        borderColor: selected ? theme.colors.primary : theme.colors.border,
-                        opacity: pressed ? 0.86 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.weekChipLabel,
-                        {
-                          color: selected ? theme.colors.primary : theme.colors.textMuted,
-                          fontFamily: selected ? theme.fonts.semibold : theme.fonts.medium,
-                        },
-                      ]}
-                    >
-                      {formatWeekRangeLabel(weekKey)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {hasAvailableWeeks ? (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.weekChipRow}
+                >
+                  {allowedWeekKeys.map((weekKey) => {
+                    const selected = weekKey === scheduleWeekStart;
+                    return (
+                      <Pressable
+                        key={weekKey}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => {
+                          setScheduleWeekStart(weekKey);
+                          setSelectedDayKey('mon');
+                          setSubmitted(false);
+                        }}
+                        style={({ pressed }) => [
+                          styles.weekChip,
+                          {
+                            backgroundColor: selected
+                              ? theme.colors.primarySurface
+                              : theme.colors.surfaceSubtle,
+                            borderColor: selected ? theme.colors.primary : theme.colors.border,
+                            opacity: pressed ? 0.86 : 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.weekChipLabel,
+                            {
+                              color: selected ? theme.colors.primary : theme.colors.textMuted,
+                              fontFamily: selected ? theme.fonts.semibold : theme.fonts.medium,
+                            },
+                          ]}
+                        >
+                          {formatWeekRangeLabel(weekKey)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
 
-            <View style={styles.dayTabs}>
-              {schedule.map((day) => {
-                const isSelected = selectedDayKey === day.dayKey;
-                return (
-                <Pressable
-                  key={day.dayKey}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setSelectedDayKey(day.dayKey);
-                    setSubmitted(false);
-                  }}
-                  style={({ pressed }) => [
-                    styles.dayTab,
-                    {
-                      backgroundColor: isSelected
-                        ? theme.colors.primarySurface
-                        : theme.colors.surfaceSubtle,
-                      borderColor: isSelected ? theme.colors.primary : theme.colors.border,
-                      opacity: pressed ? 0.84 : 1,
-                    },
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dayTabs}
+                >
+                  {schedule.map((day) => {
+                    const isSelected = selectedDayKey === day.dayKey;
+                    return (
+                      <Pressable
+                        key={day.dayKey}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setSelectedDayKey(day.dayKey);
+                          setSubmitted(false);
+                        }}
+                        style={({ pressed }) => [
+                          styles.dayTab,
+                          {
+                            backgroundColor: isSelected
+                              ? theme.colors.primarySurface
+                              : theme.colors.surfaceSubtle,
+                            borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                            opacity: pressed ? 0.84 : 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.dayTabLabel,
+                            {
+                              color: isSelected ? theme.colors.primary : theme.colors.textMuted,
+                              fontFamily: isSelected ? theme.fonts.semibold : theme.fonts.medium,
+                            },
+                          ]}
+                        >
+                          {day.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.dayTabLabel,
-                      {
-                        color: isSelected ? theme.colors.primary : theme.colors.textMuted,
-                        fontFamily: isSelected ? theme.fonts.semibold : theme.fonts.medium,
-                      },
-                    ]}
-                  >
-                    {day.label}
-                  </Text>
-                </Pressable>
-                );
-              })}
-            </View>
+                  {DAY_TITLES[selectedDay?.dayKey ?? 'mon']}
+                </Text>
 
-            <Text
-              style={[
-                styles.sectionTitle,
-                { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-              ]}
-            >
-              {DAY_TITLES[selectedDay?.dayKey ?? 'mon']}
-            </Text>
+                <View style={styles.slotList}>
+                  {selectedDay?.slots.map((slot) => (
+                    <ScheduleRow
+                      key={slot.id}
+                      slot={slot}
+                      selected={slot.id === selectedSlotId}
+                      onPress={() => {
+                        if (slot.status !== 'free') {
+                          return;
+                        }
 
-            <View style={styles.slotList}>
-              {selectedDay?.slots.map((slot) => (
-                <ScheduleRow
-                  key={slot.id}
-                  slot={slot}
-                  selected={slot.id === selectedSlotId}
-                  onPress={() => {
-                    if (slot.status === 'occupied') {
-                      return;
-                    }
-
-                    setSelectedSlotId(slot.id);
-                    setSubmitted(false);
-                  }}
-                />
-              ))}
-            </View>
+                        setSelectedSlotId(slot.id);
+                        setSubmitted(false);
+                      }}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View
+                style={[
+                  styles.notice,
+                  {
+                    backgroundColor: theme.colors.infoSurface,
+                    borderColor: theme.colors.info,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.noticeText,
+                    { color: theme.colors.info, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
+                  Hiện không có tuần đặt phòng khả dụng.
+                </Text>
+              </View>
+            )}
 
             <PrimaryButton
               label="Đặt phòng"
@@ -505,16 +539,8 @@ export default function RoomDetailScreen() {
                   >
                     Chọn ngày
                   </Text>
-                  <Text
-                    style={[
-                      styles.modalSubtitle,
-                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                    ]}
-                  >
-                    Các ngày từ tuần kế theo lịch Bangkok; Thứ 2–Thứ 7.
-                  </Text>
                   <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
-                    {listAllBookableDateOptions().map((opt) => {
+                    {bookableDateOptions.map((opt) => {
                       const active = opt.dateKey === selectedDay?.dateKey;
                       return (
                         <Pressable
@@ -574,29 +600,6 @@ export default function RoomDetailScreen() {
               />
             </View>
 
-            <View style={styles.formSection}>
-              <Text
-                style={[
-                  styles.fieldLabel,
-                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                ]}
-              >
-                Thiết bị cần:
-              </Text>
-              <View style={styles.checkboxList}>
-                <CheckboxRow
-                  label="Máy chiếu"
-                  checked={needsProjector}
-                  onPress={() => setNeedsProjector((prev) => !prev)}
-                />
-                <CheckboxRow
-                  label="Micro"
-                  checked={needsMicrophone}
-                  onPress={() => setNeedsMicrophone((prev) => !prev)}
-                />
-              </View>
-            </View>
-
             {submitted ? (
               <View
                 style={[
@@ -642,6 +645,7 @@ export default function RoomDetailScreen() {
             <PrimaryButton
               label="Submit"
               loading={createBookingMutation.isPending}
+              disabled={submitted || createBookingMutation.isPending}
               onPress={handleSubmitBooking}
             />
             <SecondaryButton
@@ -670,29 +674,41 @@ function ScheduleRow({
     slot.status === 'free'
       ? theme.colors.success
       : slot.status === 'occupied'
-        ? theme.colors.text
+        ? slot.source === 'semester'
+          ? theme.colors.text
+          : theme.colors.primary
         : theme.colors.info;
-  const slotText = slot.courseCode ?? slot.label;
+  const slotText =
+    slot.status === 'free'
+      ? slot.label
+      : slot.title ??
+        slot.courseCode ??
+        (slot.source === 'semester' ? 'Lịch cố định' : 'Đã đặt');
+  const disabled = slot.status !== 'free';
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: slot.status === 'occupied', selected }}
-      disabled={slot.status === 'occupied'}
+      accessibilityState={{ disabled, selected }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.slotRow,
         {
           backgroundColor: selected ? theme.colors.primarySurface : theme.colors.surfaceSubtle,
           borderColor: selected ? theme.colors.primary : theme.colors.border,
-          opacity: slot.status === 'occupied' ? 1 : pressed ? 0.84 : 1,
+          opacity: disabled ? 1 : pressed ? 0.84 : 1,
         },
       ]}
     >
       <Text style={[styles.slotTime, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
         {slot.startTime} - {slot.endTime}
       </Text>
-      <Text style={[styles.slotLabel, { color: statusColor, fontFamily: theme.fonts.semibold }]}>
+      <Text
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        style={[styles.slotLabel, { color: statusColor, fontFamily: theme.fonts.semibold }]}
+      >
         {slotText}
       </Text>
     </Pressable>
@@ -715,38 +731,6 @@ function MetaRow({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </View>
-  );
-}
-
-function CheckboxRow({
-  label,
-  checked,
-  onPress,
-}: {
-  label: string;
-  checked: boolean;
-  onPress: () => void;
-}) {
-  const theme = useAppTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      onPress={onPress}
-      style={styles.checkboxRow}
-    >
-      <Ionicons
-        name={checked ? 'checkbox-outline' : 'square-outline'}
-        size={20}
-        color={checked ? theme.colors.primary : theme.colors.textSoft}
-      />
-      <Text
-        style={[styles.checkboxLabel, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -781,23 +765,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingVertical: 2,
+    paddingRight: 12,
   },
   weekChip: {
+    minWidth: 116,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    alignItems: 'center',
   },
   weekChipLabel: {
     fontSize: 13,
   },
   dayTabs: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    paddingVertical: 2,
+    paddingRight: 12,
   },
   dayTab: {
-    minWidth: 48,
+    minWidth: 56,
     minHeight: 38,
     borderRadius: 12,
     borderWidth: 1,
@@ -829,7 +817,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   slotLabel: {
-    flexShrink: 0,
+    flexShrink: 1,
+    maxWidth: '42%',
+    textAlign: 'right',
     fontSize: 14,
   },
   bookingHeader: {
@@ -897,20 +887,6 @@ const styles = StyleSheet.create({
   },
   formSection: {
     gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 14,
-  },
-  checkboxList: {
-    gap: 10,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  checkboxLabel: {
-    fontSize: 15,
   },
   notice: {
     borderWidth: 1,

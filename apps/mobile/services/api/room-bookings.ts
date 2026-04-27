@@ -25,8 +25,13 @@ type RoomScheduleApiSlot = {
   label: string;
   startTime: string;
   endTime: string;
-  bookingTitle: string | null;
-  displayText: string;
+  status: RoomSlotStatus;
+  source: 'semester' | 'booking' | null;
+  title: string | null;
+  subtitle: string | null;
+  bookingId: string | null;
+  classSectionId: string | null;
+  bookable: boolean;
 };
 
 type RoomScheduleApiDay = {
@@ -42,6 +47,7 @@ type RoomScheduleApiResponse = {
   name: string | null;
   buildingCode?: string;
   buildingName?: string;
+  weekStart?: string;
   days: RoomScheduleApiDay[];
 };
 
@@ -178,22 +184,6 @@ function mapApiRoomToSummary(
   };
 }
 
-function mapApiScheduleSlotStatus(slot: RoomScheduleApiSlot): RoomSlotStatus {
-  if (slot.bookingTitle) {
-    return 'occupied';
-  }
-
-  const normalizedDisplayText = normalizeStatusText(slot.displayText);
-  if (
-    normalizedDisplayText === 'trong' ||
-    normalizedDisplayText.startsWith('trong ')
-  ) {
-    return 'free';
-  }
-
-  return 'available_later';
-}
-
 function mapApiScheduleDay(day: RoomScheduleApiDay): RoomScheduleDay | null {
   const dayKey = DAY_KEY_BY_API_DAY[day.dayOfWeek];
   if (!dayKey) {
@@ -209,14 +199,14 @@ function mapApiScheduleDay(day: RoomScheduleApiDay): RoomScheduleDay | null {
       slotNumber: slot.slotNumber,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      status: mapApiScheduleSlotStatus(slot),
+      status: slot.status,
       label: slot.label,
-      statusLabel: slot.displayText,
-      courseCode:
-        slot.bookingTitle ??
-        (normalizeStatusText(slot.displayText).startsWith('trong')
-          ? undefined
-          : slot.displayText),
+      source: slot.source,
+      title: slot.title,
+      subtitle: slot.subtitle,
+      bookingId: slot.bookingId,
+      classSectionId: slot.classSectionId,
+      bookable: slot.bookable,
     })),
   };
 }
@@ -228,8 +218,9 @@ function mapScheduleResponse(response: RoomScheduleApiResponse): RoomSchedule {
     buildingCode: response.buildingCode ?? response.roomCode.charAt(0).toUpperCase(),
     buildingName: response.buildingName ?? `Tòa ${response.roomCode.charAt(0).toUpperCase()}`,
     capacity: response.capacity,
+    weekStart: response.weekStart ?? response.days[0]?.dateKey,
     days: response.days
-    .map((day) => mapApiScheduleDay(day))
+      .map((day) => mapApiScheduleDay(day))
       .filter((day): day is RoomScheduleDay => Boolean(day)),
   };
 }
@@ -290,11 +281,16 @@ export const roomBookingsApi = {
     return Object.fromEntries(entries);
   },
 
-  getRoomSchedule: async (roomCode: string): Promise<RoomSchedule> => {
+  getRoomSchedule: async (roomCode: string, weekStart?: string): Promise<RoomSchedule> => {
     assertLiveModeOnly();
 
     const response = (await apiClient.get(
       `/room-bookings/rooms/${encodeURIComponent(roomCode.toUpperCase())}/schedule`,
+      {
+        params: {
+          ...(weekStart ? { weekStart } : {}),
+        },
+      },
     )) as RoomScheduleApiResponse;
 
     return mapScheduleResponse(response);

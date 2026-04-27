@@ -86,7 +86,7 @@ export class EventsService {
   }
 
   private getCacheTtlMs() {
-    return this.configService.get<number>('UIT_EVENTS_CACHE_TTL_MS', 900_000);
+    return this.configService.get<number>('UIT_EVENTS_CACHE_TTL_MS', 86_400_000);
   }
 
   private async getCachedList() {

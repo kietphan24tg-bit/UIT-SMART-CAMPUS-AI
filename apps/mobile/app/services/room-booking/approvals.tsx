@@ -76,6 +76,23 @@ export default function RoomBookingApprovalsScreen() {
       </View>
 
       <ContentStack narrow overlapHero={false}>
+        <View
+          style={[
+            styles.noticeCard,
+            {
+              backgroundColor: theme.colors.primarySurface,
+              borderColor: theme.colors.primary,
+            },
+          ]}
+        >
+          <Text style={[styles.noticeTitle, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+            Duyệt theo ưu tiên đến trước
+          </Text>
+          <Text style={[styles.noticeBody, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            Nhiều yêu cầu pending có thể trùng cùng một slot. Khi duyệt một yêu cầu, hệ thống sẽ tự từ chối các yêu cầu pending trùng slot còn lại.
+          </Text>
+        </View>
+
         {pendingQuery.isLoading ? (
           <View style={styles.skeletonWrap}>
             <SkeletonBlock height={120} />
@@ -169,6 +186,19 @@ const styles = StyleSheet.create({
   },
   skeletonWrap: {
     gap: 10,
+  },
+  noticeCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 6,
+  },
+  noticeTitle: {
+    fontSize: 13,
+  },
+  noticeBody: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   list: {
     gap: 10,

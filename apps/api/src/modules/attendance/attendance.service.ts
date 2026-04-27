@@ -17,6 +17,7 @@ import type { AttendanceSession, Prisma } from '@prisma/client';
 import { AttendanceSessionStatus, EnrollmentStatus, Role } from '@prisma/client';
 import { API_PREFIX, PAGINATION_DEFAULTS } from '@smart-campus/shared';
 import { createClient } from 'redis';
+import type { Response } from 'express';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -313,10 +314,43 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async renderLiveAttendancePage(sessionId: string, displayKey: string | undefined) {
-    this.assertDisplayKeyPresent(displayKey);
-    await this.validateDisplayKeyOrThrow(sessionId, displayKey);
-    return this.renderLiveAttendanceHtml(sessionId, displayKey);
+  async renderLiveAttendancePage(
+    sessionId: string,
+    displayKey: string | undefined,
+    response?: Response,
+  ) {
+    try {
+      this.assertDisplayKeyPresent(displayKey);
+      await this.validateDisplayKeyOrThrow(sessionId, displayKey);
+
+      const session = await this.prisma.attendanceSession.findUnique({
+        where: { id: sessionId },
+      });
+      await this.ensureSessionActive(session);
+
+      const html = this.renderLiveAttendanceHtml(sessionId, displayKey);
+      if (response) {
+        return response.type('html').status(HttpStatus.OK).send(html);
+      }
+      return html;
+    } catch (error) {
+      const statusCode =
+        error instanceof NotFoundException
+          ? HttpStatus.NOT_FOUND
+          : error instanceof ForbiddenException || error instanceof BadRequestException
+            ? HttpStatus.GONE
+            : HttpStatus.INTERNAL_SERVER_ERROR;
+      const html = this.renderInactiveLiveAttendanceHtml(
+        statusCode === HttpStatus.INTERNAL_SERVER_ERROR
+          ? 'Không thể tải màn hình điểm danh lúc này.'
+          : 'Phiên điểm danh đã kết thúc. Liên kết QR này không còn hiệu lực.',
+      );
+
+      if (response) {
+        return response.type('html').status(statusCode).send(html);
+      }
+      return html;
+    }
   }
 
   async checkin(studentId: string, dto: CheckinAttendanceDto) {
@@ -1301,7 +1335,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Attendance QR</title>
+  <title>Điểm danh QR</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <style>
     :root { color-scheme: light dark; }
@@ -1315,10 +1349,10 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   </style>
 </head>
 <body>
-  <h1 id="title">Attendance</h1>
+  <h1 id="title">Điểm danh</h1>
   <p class="sub" id="subtitle"></p>
-  <div id="qr-wrap"><canvas id="qr" width="280" height="280" aria-label="Attendance QR code"></canvas></div>
-  <p id="status">Loading...</p>
+  <div id="qr-wrap"><canvas id="qr" width="280" height="280" aria-label="Mã QR điểm danh"></canvas></div>
+  <p id="status">Đang tải...</p>
   <script>
     (function () {
       var cfg = ${configJson};
@@ -1332,6 +1366,15 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       function setStatus(text, isErr) {
         statusEl.textContent = text;
         statusEl.className = isErr ? 'err' : '';
+      }
+
+      function showInactive(text) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        canvas.style.display = 'none';
+        setStatus(text || 'Phiên điểm danh đã kết thúc. Liên kết này không còn hiệu lực.', true);
       }
 
       function buildSubtitle(session) {
@@ -1371,27 +1414,28 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
           var res = await fetch(buildQrUrl(), { credentials: 'omit' });
           var body = await res.json().catch(function () { return null; });
           if (!res.ok) {
-            setStatus((body && body.message) ? body.message : ('HTTP ' + res.status), true);
-            if (res.status === 403 && timeoutId) {
-              clearTimeout(timeoutId);
-              timeoutId = null;
+            if (res.status === 400 || res.status === 403 || res.status === 404 || res.status === 410) {
+              showInactive('Phiên điểm danh đã kết thúc. Liên kết này không còn hiệu lực.');
+              return;
             }
+            setStatus((body && body.message) ? body.message : ('HTTP ' + res.status), true);
             return;
           }
           var data = body && body.data;
           if (!data || !data.token) {
-            setStatus('Invalid response', true);
+            setStatus('Phản hồi không hợp lệ', true);
             return;
           }
           if (data.refreshInSeconds) {
             pollMs = Number(data.refreshInSeconds) * 1000 || 30000;
           }
           if (data.session) {
-            titleEl.textContent = data.session.courseName || 'Attendance';
+            titleEl.textContent = data.session.courseName || 'Điểm danh';
             subtitleEl.textContent = buildSubtitle(data.session);
           }
           await QRCode.toCanvas(canvas, data.token, { margin: 2, width: 280 });
-          setStatus('Mo ung dung de quet ma diem danh');
+          canvas.style.display = 'block';
+          setStatus('Mở ứng dụng để quét mã điểm danh');
         } catch (e) {
           setStatus(String(e && e.message ? e.message : e), true);
         }
@@ -1400,6 +1444,29 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       tick().finally(scheduleNext);
     })();
   </script>
+</body>
+</html>`;
+  }
+
+  private renderInactiveLiveAttendanceHtml(message: string) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Điểm danh QR</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; background: #f8fafc; color: #0f172a; }
+    .card { width: min(100%, 520px); background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 2rem; text-align: center; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08); }
+    h1 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+    p { margin: 0; line-height: 1.6; color: #475569; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>QR không còn hiệu lực</h1>
+    <p>${message}</p>
+  </main>
 </body>
 </html>`;
   }

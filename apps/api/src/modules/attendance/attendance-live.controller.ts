@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Param, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { SkipResponseTransform } from '../../common/decorators/skip-response-transform.decorator';
 
@@ -13,8 +14,9 @@ export class AttendanceLiveController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   getLivePage(
     @Param('sessionId') sessionId: string,
+    @Res() response: Response,
     @Query('displayKey') displayKey?: string,
   ) {
-    return this.attendanceService.renderLiveAttendancePage(sessionId, displayKey);
+    return this.attendanceService.renderLiveAttendancePage(sessionId, displayKey, response);
   }
 }

@@ -15,9 +15,18 @@ import { formatDateTime, getDayLabel } from '@/utils/app';
 
 type AttendanceWorkspaceTab = 'attendance' | 'students' | 'history' | 'stats';
 
+type AttendanceWorkspaceSession = {
+  sessionId: string;
+  startedAt: string;
+  expiresAt: string;
+  status: 'active' | 'closed' | 'expired';
+  displayKey?: string | null;
+  displayUrl?: string | null;
+};
+
 type AttendanceSessionState = {
   classSectionId: string;
-  session: AttendanceSessionStartResponse;
+  session: AttendanceWorkspaceSession;
 };
 
 const WORKSPACE_TABS: Array<{
@@ -93,6 +102,19 @@ function formatHistoryTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function mapStartResponseToSession(
+  session: AttendanceSessionStartResponse,
+): AttendanceWorkspaceSession {
+  return {
+    sessionId: session.sessionId,
+    startedAt: session.startedAt,
+    expiresAt: session.expiresAt,
+    status: session.status,
+    displayKey: session.displayKey,
+    displayUrl: session.displayUrl,
+  };
 }
 
 function WorkspaceTabBar({
@@ -202,15 +224,82 @@ export default function LecturerAttendanceClassDetailScreen() {
   const selectedCard =
     scheduleCards.find((item) => item.id === params.scheduleId) ?? null;
   const selectedSection = selectedCard?.attendanceSection ?? null;
-  const activeSession =
+  const sessionSummaryQuery = useQuery({
+    queryKey: ['attendance', 'lecturer', 'session-summary', selectedSection?.id],
+    queryFn: () => attendanceApi.getClassSectionSessionSummary(selectedSection?.id as string),
+    enabled: Boolean(selectedSection?.id),
+    refetchInterval: selectedSection?.id ? 5000 : false,
+  });
+
+  const localSession =
     selectedSection?.id === sessionState?.classSectionId ? sessionState?.session ?? null : null;
+  const summaryActiveSession = React.useMemo(() => {
+    if (sessionSummaryQuery.data?.latestSession?.status !== 'active') {
+      return null;
+    }
+
+    return {
+      sessionId: sessionSummaryQuery.data.latestSession.id,
+      startedAt: sessionSummaryQuery.data.latestSession.startedAt,
+      expiresAt: sessionSummaryQuery.data.latestSession.expiresAt,
+      status: sessionSummaryQuery.data.latestSession.status,
+      displayKey: null,
+      displayUrl: null,
+    } satisfies AttendanceWorkspaceSession;
+  }, [sessionSummaryQuery.data?.latestSession]);
+  const activeSession =
+    localSession?.status === 'active'
+      ? summaryActiveSession && summaryActiveSession.sessionId === localSession.sessionId
+        ? { ...localSession, ...summaryActiveSession }
+        : localSession
+      : summaryActiveSession;
+
+  React.useEffect(() => {
+    if (!selectedSection?.id) {
+      return;
+    }
+
+    if (summaryActiveSession) {
+      setSessionState((current) => {
+        if (
+          current?.classSectionId === selectedSection.id &&
+          current.session.sessionId === summaryActiveSession.sessionId
+        ) {
+          return {
+            classSectionId: current.classSectionId,
+            session: {
+              ...current.session,
+              startedAt: summaryActiveSession.startedAt,
+              expiresAt: summaryActiveSession.expiresAt,
+              status: summaryActiveSession.status,
+            },
+          };
+        }
+
+        return {
+          classSectionId: selectedSection.id,
+          session: summaryActiveSession,
+        };
+      });
+      return;
+    }
+
+    setSessionState((current) => {
+      if (current?.classSectionId === selectedSection.id && current.session.status === 'active') {
+        return null;
+      }
+      return current;
+    });
+  }, [selectedSection?.id, summaryActiveSession]);
 
   const startSessionMutation = useMutation({
     mutationFn: (classSectionId: string) => attendanceApi.startSession(classSectionId, 15),
     onSuccess: (result, classSectionId) => {
-      setSessionState({ classSectionId, session: result });
+      setSessionState({ classSectionId, session: mapStartResponseToSession(result) });
       setActiveTab('attendance');
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'history'] });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'session-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'records'] });
     },
   });
 
@@ -219,6 +308,7 @@ export default function LecturerAttendanceClassDetailScreen() {
     onSuccess: () => {
       setSessionState((current) => (current?.classSectionId === selectedSection?.id ? null : current));
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'history'] });
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'session-summary'] });
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'lecturer', 'records'] });
     },
   });
@@ -471,17 +561,24 @@ export default function LecturerAttendanceClassDetailScreen() {
                       Hết hạn: {formatDateTime(activeSession.expiresAt)}
                     </Text>
                     <View style={styles.actionRow}>
-                      <PrimaryButton
-                        label="Mở màn hình QR"
-                        onPress={() => void Linking.openURL(activeSession.displayUrl)}
-                        style={styles.flexAction}
-                      />
+                      {activeSession.displayUrl ? (
+                        <PrimaryButton
+                          label="Mở màn hình QR"
+                          onPress={() => void Linking.openURL(activeSession.displayUrl as string)}
+                          style={styles.flexAction}
+                        />
+                      ) : null}
                       <SecondaryButton
                         label={stopSessionMutation.isPending ? 'Đang dừng...' : 'Dừng phiên'}
                         onPress={() => stopSessionMutation.mutate(activeSession.sessionId)}
-                        style={styles.flexAction}
+                        style={activeSession.displayUrl ? styles.flexAction : undefined}
                       />
                     </View>
+                    {!activeSession.displayUrl ? (
+                      <Text style={[styles.sessionMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+                        Phiên đang mở được khôi phục từ máy chủ. Cần tạo phiên mới để lấy lại liên kết màn hình QR.
+                      </Text>
+                    ) : null}
                   </View>
                 ) : (
                   <PrimaryButton
@@ -517,7 +614,9 @@ export default function LecturerAttendanceClassDetailScreen() {
                     </Text>
                   </View>
 
-                  {recordsQuery.data?.items.length ? (
+                  {recordsQuery.isLoading ? (
+                    <SkeletonBlock height={180} />
+                  ) : recordsQuery.data?.items.length ? (
                     <View style={styles.listStack}>
                       {recordsQuery.data.items.slice(0, 8).map((record) => (
                         <View
@@ -587,7 +686,21 @@ export default function LecturerAttendanceClassDetailScreen() {
                   />
 
                   <View style={styles.listStack}>
-                    {filteredRoster.slice(0, 20).map((item) => {
+                    {studentsQuery.isLoading ? <SkeletonBlock height={220} /> : null}
+                    {!studentsQuery.isLoading && filteredRoster.length === 0 ? (
+                      <EmptyState
+                        icon="people-outline"
+                        title="Chưa có dữ liệu sinh viên"
+                        description={
+                          studentsQuery.isError
+                            ? 'Không tải được danh sách sinh viên của lớp này.'
+                            : studentQuery.trim()
+                              ? 'Không tìm thấy sinh viên phù hợp với từ khóa đang nhập.'
+                              : 'Lớp này hiện chưa có sinh viên enroll hoặc đang bị map sai sang lớp attendance khác.'
+                        }
+                      />
+                    ) : null}
+                    {!studentsQuery.isLoading && filteredRoster.slice(0, 20).map((item) => {
                       const tone = getStatusToneColor({ status: item.status, theme });
 
                       return (

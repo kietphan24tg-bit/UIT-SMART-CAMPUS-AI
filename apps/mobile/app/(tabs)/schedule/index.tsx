@@ -30,7 +30,6 @@ import {
   isAdminRole,
   isLecturerRole,
 } from '@/utils/app';
-import { useEffectiveUser } from '@/hooks/use-effective-role';
 
 function getScheduleRoomLabel(room?: string | null) {
   return room ? `Phòng ${room}` : 'Chưa cập nhật';
@@ -178,24 +177,6 @@ function getSubjectKey(item: ScheduleRecord) {
   return item.course.code.trim() || item.classCode.trim() || item.course.name.trim();
 }
 
-function normalizePersonName(value?: string | null) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function getCurrentUserFullName(
-  user?: {
-    firstName?: string | null;
-    lastName?: string | null;
-  } | null,
-) {
-  return [user?.lastName, user?.firstName].filter(Boolean).join(' ').trim();
-}
-
 export function buildSubjectColorIndex(schedule: ScheduleRecord[]) {
   const subjectCodes = Array.from(new Set(schedule.map(getSubjectKey))).sort((left, right) =>
     left.localeCompare(right),
@@ -240,8 +221,6 @@ export default function ScheduleScreen() {
   const router = useRouter();
   // const role = useAuthStore((state) => state.user?.role);
   const role = useEffectiveRole();
-  const user = useEffectiveUser();
-
   // Bypass role-scoped operations view for local demo/testing. Restore this line to show operations for admin roles again.
   // const isOperationsRole = isAdminRole(role);
   const isOperationsRole = false && isAdminRole(role);
@@ -584,13 +563,7 @@ export default function ScheduleScreen() {
   const selectedSemester = scheduleState.semesters.find(
     (item) => item.id === scheduleState.resolvedSemesterId,
   );
-  const currentLecturerName = getCurrentUserFullName(user);
-  const lecturerSchedule = isLecturer
-    ? scheduleState.schedule.filter(
-        (item) => normalizePersonName(item.instructor) === normalizePersonName(currentLecturerName),
-      )
-    : scheduleState.schedule;
-  const resolvedSchedule = isLecturer ? lecturerSchedule : scheduleState.schedule;
+  const resolvedSchedule = scheduleState.schedule;
   const groupedSchedule = groupScheduleByDay(resolvedSchedule);
   const subjectColorIndex = buildSubjectColorIndex(resolvedSchedule);
   const nextClass = getNextClass(resolvedSchedule);

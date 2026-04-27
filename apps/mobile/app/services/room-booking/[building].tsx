@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { ContentStack, EmptyState, Screen } from '@/components/ui';
 import {
@@ -35,6 +35,7 @@ const CAPACITY_OPTIONS = [
 ] as const;
 
 type DropdownType = 'floor' | 'capacity' | null;
+type DropdownAnchor = { x: number; y: number; width: number; height: number };
 
 export default function RoomsInBuildingScreen() {
   const theme = useAppTheme();
@@ -94,7 +95,7 @@ export default function RoomsInBuildingScreen() {
   }
 
   return (
-    <Screen>
+    <Screen scroll={!openDropdown}>
       <ContentStack gap={16} overlapHero={false}>
         <Pressable
           accessibilityRole="button"
@@ -225,10 +226,29 @@ function InlineDropdown({
   onSelect: (value: string) => void;
 }) {
   const theme = useAppTheme();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const selectorRef = useRef<View | null>(null);
+  const [anchor, setAnchor] = useState<DropdownAnchor | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    selectorRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+    });
+  }, [open]);
+
+  const panelTop = anchor ? anchor.y + anchor.height + 6 : 0;
+  const panelLeft = anchor ? Math.max(16, Math.min(anchor.x, windowWidth - anchor.width - 16)) : 16;
+  const panelWidth = anchor ? Math.min(anchor.width, windowWidth - 32) : undefined;
+  const panelMaxHeight = Math.max(120, Math.min(220, windowHeight - panelTop - 24));
 
   return (
     <View style={styles.dropdownWrap}>
       <Pressable
+        ref={selectorRef}
         accessibilityRole="button"
         onPress={onToggle}
         style={({ pressed }) => [
@@ -252,50 +272,67 @@ function InlineDropdown({
       </Pressable>
 
       {open ? (
-        <View
-          style={[
-            styles.dropdownPanel,
-            {
-              backgroundColor: theme.colors.surfaceElevated,
-              borderColor: theme.colors.border,
-            },
-            theme.elevation.level1 as never,
-          ]}
-        >
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.dropdownScroll}>
-            {options.map((option) => {
-              const selected = option === value;
-
-              return (
-                <Pressable
-                  key={`${label}-${option}`}
-                  accessibilityRole="button"
-                  onPress={() => onSelect(option)}
-                  style={({ pressed }) => [
-                    styles.dropdownOption,
-                    {
-                      backgroundColor: selected ? theme.colors.primarySurface : theme.colors.surfaceElevated,
-                      borderColor: selected ? theme.colors.primary : theme.colors.border,
-                      opacity: pressed ? 0.84 : 1,
-                    },
-                  ]}
+        <Modal transparent visible={open} animationType="fade" onRequestClose={onToggle}>
+          <View style={styles.dropdownModalRoot}>
+            <Pressable style={styles.dropdownBackdrop} onPress={onToggle} />
+            {anchor ? (
+              <View
+                style={[
+                  styles.dropdownPanel,
+                  {
+                    top: panelTop,
+                    left: panelLeft,
+                    width: panelWidth,
+                    maxHeight: panelMaxHeight,
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderColor: theme.colors.border,
+                  },
+                  theme.elevation.level1 as never,
+                ]}
+              >
+                <ScrollView
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  style={styles.dropdownScroll}
+                  contentContainerStyle={styles.dropdownScrollContent}
                 >
-                  <Text
-                    style={[
-                      styles.dropdownOptionLabel,
-                      {
-                        color: selected ? theme.colors.primary : theme.colors.text,
-                        fontFamily: selected ? theme.fonts.semibold : theme.fonts.medium,
-                      },
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+                  {options.map((option) => {
+                    const selected = option === value;
+
+                    return (
+                      <Pressable
+                        key={`${label}-${option}`}
+                        accessibilityRole="button"
+                        onPress={() => onSelect(option)}
+                        style={({ pressed }) => [
+                          styles.dropdownOption,
+                          {
+                            backgroundColor: selected ? theme.colors.primarySurface : theme.colors.surfaceElevated,
+                            borderColor: selected ? theme.colors.primary : theme.colors.border,
+                            opacity: pressed ? 0.84 : 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionLabel,
+                            {
+                              color: selected ? theme.colors.primary : theme.colors.text,
+                              fontFamily: selected ? theme.fonts.semibold : theme.fonts.medium,
+                            },
+                          ]}
+                        >
+                          {option}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+          </View>
+        </Modal>
       ) : null}
     </View>
   );
@@ -376,9 +413,6 @@ const styles = StyleSheet.create({
   },
   dropdownPanel: {
     position: 'absolute',
-    top: 58,
-    left: 0,
-    right: 0,
     zIndex: 40,
     elevation: 40,
     borderWidth: 1,
@@ -386,7 +420,10 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   dropdownScroll: {
-    maxHeight: 220,
+    flexGrow: 0,
+  },
+  dropdownScrollContent: {
+    paddingBottom: 2,
   },
   dropdownOption: {
     minHeight: 42,
@@ -398,6 +435,12 @@ const styles = StyleSheet.create({
   },
   dropdownOptionLabel: {
     fontSize: 14,
+  },
+  dropdownModalRoot: {
+    flex: 1,
+  },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
   roomsSection: {
     gap: 12,

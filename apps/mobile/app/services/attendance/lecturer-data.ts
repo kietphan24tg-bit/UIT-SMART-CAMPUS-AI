@@ -41,6 +41,28 @@ export function resolveScheduleCardToClassSection(
   >,
   classSections: AttendanceLecturerClassSection[],
 ) {
+  const byClassCodeAndMeeting = classSections.find(
+    (item) =>
+      item.classCode === schedule.classCode &&
+      item.meetings.some(
+        (meeting) =>
+          meeting.dayOfWeek === schedule.dayOfWeek &&
+          meeting.startTime === schedule.startTime &&
+          meeting.endTime === schedule.endTime,
+      ),
+  );
+  if (byClassCodeAndMeeting) {
+    return byClassCodeAndMeeting;
+  }
+
+  const byClassCodeAndCourse = classSections.find(
+    (item) =>
+      item.classCode === schedule.classCode && item.course.code === schedule.course.code,
+  );
+  if (byClassCodeAndCourse) {
+    return byClassCodeAndCourse;
+  }
+
   const byClassCode = classSections.find((item) => item.classCode === schedule.classCode);
   if (byClassCode) {
     return byClassCode;
@@ -90,6 +112,32 @@ export function mapScheduleToAttendanceCards(
       course: item.course,
       attendanceSection: resolveScheduleCardToClassSection(item, classSections),
     }));
+}
+
+export function mapClassSectionsToAttendanceCards(
+  classSections: AttendanceLecturerClassSection[],
+) {
+  return classSections
+    .flatMap((section) =>
+      section.meetings.map<LecturerAttendanceScheduleCard>((meeting) => ({
+        id: meeting.id,
+        classCode: section.classCode,
+        sectionCode: section.sectionCode,
+        dayOfWeek: meeting.dayOfWeek,
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+        room: meeting.room,
+        course: section.course,
+        attendanceSection: section,
+      })),
+    )
+    .sort((left, right) => {
+      if (left.dayOfWeek !== right.dayOfWeek) {
+        return left.dayOfWeek - right.dayOfWeek;
+      }
+
+      return left.startTime.localeCompare(right.startTime);
+    });
 }
 
 export function groupAttendanceCardsByDay(cards: LecturerAttendanceScheduleCard[]): GroupedScheduleCards {
