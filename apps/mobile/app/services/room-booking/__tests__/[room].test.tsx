@@ -178,7 +178,7 @@ describe('RoomDetailScreen', () => {
     fireEvent.changeText(inputs[0], 'SE346 Team Meeting');
     fireEvent.changeText(inputs[3], '0912345678');
 
-    fireEvent.press(getByText('Submit'));
+    fireEvent.press(getByText('Gửi yêu cầu'));
 
     await waitFor(() => {
       expect(roomBookingsApi.createRoomBooking).toHaveBeenCalled();

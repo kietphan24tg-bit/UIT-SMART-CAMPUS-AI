@@ -19,8 +19,8 @@ export class RoomScheduleSlotDto {
   @ApiProperty({ enum: ['free', 'occupied', 'available_later'], example: 'occupied' })
   status!: 'free' | 'occupied' | 'available_later';
 
-  @ApiPropertyOptional({ enum: ['semester', 'booking'], nullable: true, example: 'semester' })
-  source!: 'semester' | 'booking' | null;
+  @ApiPropertyOptional({ enum: ['semester', 'booking', 'override'], nullable: true, example: 'semester' })
+  source!: 'semester' | 'booking' | 'override' | null;
 
   @ApiPropertyOptional({ example: 'SE346.Q22', nullable: true })
   title!: string | null;
@@ -33,6 +33,15 @@ export class RoomScheduleSlotDto {
 
   @ApiPropertyOptional({ example: 'section-1', nullable: true })
   classSectionId!: string | null;
+
+  @ApiPropertyOptional({ example: 'override-1', nullable: true })
+  overrideId!: string | null;
+
+  @ApiPropertyOptional({ example: 'meeting-1', nullable: true })
+  classMeetingId!: string | null;
+
+  @ApiProperty({ example: true })
+  editable!: boolean;
 
   @ApiProperty({ example: false })
   bookable!: boolean;

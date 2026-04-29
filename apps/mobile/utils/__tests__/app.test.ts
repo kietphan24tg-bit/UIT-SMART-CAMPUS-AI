@@ -50,7 +50,7 @@ describe('app utils', () => {
     expect(sos?.route).toBe('/services/gps-sos');
   });
 
-  it('should keep grades live for student only', () => {
+  it('should route grades by role', () => {
     const studentGrades = getServiceEntries('student').find((item) => item.id === 'grades');
     const lecturerGrades = getServiceEntries('lecturer').find((item) => item.id === 'grades');
     const adminGrades = getServiceEntries('admin').find((item) => item.id === 'grades');
@@ -60,13 +60,16 @@ describe('app utils', () => {
     expect(studentGrades?.isInteractive).toBe(true);
     expect(studentGrades?.route).toBe('/services/grades');
 
-    expect(lecturerGrades?.supportState).toBe('unsupported');
-    expect(lecturerGrades?.isInteractive).toBe(false);
+    expect(lecturerGrades?.supportState).toBe('live');
+    expect(lecturerGrades?.isInteractive).toBe(true);
+    expect(lecturerGrades?.route).toBe('/services/grades/lecturer');
 
-    expect(adminGrades?.supportState).toBe('unsupported');
-    expect(adminGrades?.isInteractive).toBe(false);
+    expect(adminGrades?.supportState).toBe('live');
+    expect(adminGrades?.isInteractive).toBe(true);
+    expect(adminGrades?.route).toBe('/services/grades/lecturer');
 
-    expect(superAdminGrades?.supportState).toBe('unsupported');
-    expect(superAdminGrades?.isInteractive).toBe(false);
+    expect(superAdminGrades?.supportState).toBe('live');
+    expect(superAdminGrades?.isInteractive).toBe(true);
+    expect(superAdminGrades?.route).toBe('/services/grades/lecturer');
   });
 });

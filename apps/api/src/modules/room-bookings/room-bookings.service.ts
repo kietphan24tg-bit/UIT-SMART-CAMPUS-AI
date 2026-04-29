@@ -8,6 +8,13 @@ import {
 import type { Prisma, RoomBookingStatus, RoomStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import type {
+  ClassMeetingOverrideDto,
+  CreateRoomScheduleOverrideDto,
+  MoveClassMeetingDto,
+  RejectRoomBookingSlotDto,
+  UpdateRoomScheduleOverrideDto,
+} from './dto/admin-room-booking.dto';
 import type { CreateRoomBookingDto } from './dto/create-room-booking.dto';
 
 type CurrentBangkokDateTime = {
@@ -29,11 +36,14 @@ type RoomScheduleSlot = {
   startTime: string;
   endTime: string;
   status: 'free' | 'occupied' | 'available_later';
-  source: 'semester' | 'booking' | null;
+  source: 'semester' | 'booking' | 'override' | null;
   title: string | null;
   subtitle: string | null;
   bookingId: string | null;
   classSectionId: string | null;
+  overrideId?: string | null;
+  classMeetingId?: string | null;
+  editable?: boolean;
   bookable: boolean;
 };
 
@@ -519,6 +529,7 @@ export class RoomBookingsService {
           },
         },
         select: {
+          id: true,
           dayOfWeek: true,
           startPeriod: true,
           endPeriod: true,
@@ -546,6 +557,33 @@ export class RoomBookingsService {
       }),
     ]);
 
+    const classMeetingIds = classMeetings.map((meeting) => meeting.id);
+    const roomScheduleOverrides = await this.prisma.roomScheduleOverride.findMany({
+      where: {
+        overrideDate: {
+          gte: monday,
+          lte: saturday,
+        },
+        OR: [
+          { roomId: room.id },
+          ...(classMeetingIds.length > 0
+            ? [{ sourceClassMeetingId: { in: classMeetingIds } }]
+            : []),
+        ],
+      },
+      include: {
+        timeSlot: {
+          select: {
+            id: true,
+            slotNumber: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+    });
+
     const bookingByDayAndSlot = new Map<
       string,
       { bookingId: string; title: string | null; subtitle: string | null }
@@ -566,9 +604,51 @@ export class RoomBookingsService {
       }
     }
 
+    const cancelledOrMovedClassMeetingByDate = new Set<string>();
+    const overrideByDayAndSlot = new Map<
+      string,
+      {
+        overrideId: string;
+        title: string;
+        subtitle: string | null;
+        type: string;
+        sourceClassMeetingId: string | null;
+      }
+    >();
+
+    for (const override of roomScheduleOverrides) {
+      const overrideDateKey = toDateKey(override.overrideDate);
+      if (
+        override.sourceClassMeetingId &&
+        (override.type === 'cancel_class' || override.type === 'move_class')
+      ) {
+        cancelledOrMovedClassMeetingByDate.add(
+          `${overrideDateKey}:${override.sourceClassMeetingId}`,
+        );
+      }
+
+      if (override.roomId !== room.id || override.type === 'cancel_class') {
+        continue;
+      }
+
+      const dayOfWeek = getRoomBookingDayOfWeek(override.overrideDate);
+      if (dayOfWeek < 2 || dayOfWeek > 7) {
+        continue;
+      }
+
+      const key = `${dayOfWeek}:${override.timeSlotId}`;
+      overrideByDayAndSlot.set(key, {
+        overrideId: override.id,
+        title: override.title,
+        subtitle: override.note,
+        type: override.type,
+        sourceClassMeetingId: override.sourceClassMeetingId,
+      });
+    }
+
     const classMeetingByDayAndSlot = new Map<
       string,
-      { classSectionId: string; title: string; subtitle: string | null }
+      { classMeetingId: string; classSectionId: string; title: string; subtitle: string | null }
     >();
     for (const meeting of classMeetings) {
       if (meeting.dayOfWeek < 2 || meeting.dayOfWeek > 7) {
@@ -583,6 +663,10 @@ export class RoomBookingsService {
           meeting.classSection.semester.endDate,
         )
       ) {
+        continue;
+      }
+
+      if (cancelledOrMovedClassMeetingByDate.has(`${toDateKey(meetingDate)}:${meeting.id}`)) {
         continue;
       }
 
@@ -601,6 +685,7 @@ export class RoomBookingsService {
         const key = `${meeting.dayOfWeek}:${timeSlot.id}`;
         if (!classMeetingByDayAndSlot.has(key)) {
           classMeetingByDayAndSlot.set(key, {
+            classMeetingId: meeting.id,
             classSectionId: meeting.classSection.id,
             title: meeting.classSection.classCode || meeting.classSection.course.code,
             subtitle: meeting.classSection.course.name || meeting.classSection.course.code,
@@ -615,6 +700,27 @@ export class RoomBookingsService {
       label: day.label,
       slots: timeSlots.map((timeSlot) => {
         const key = `${day.dayOfWeek}:${timeSlot.id}`;
+        const override = overrideByDayAndSlot.get(key);
+        if (override) {
+          return {
+            timeSlotId: timeSlot.id,
+            slotNumber: timeSlot.slotNumber,
+            label: timeSlot.label,
+            startTime: timeSlot.startTime,
+            endTime: timeSlot.endTime,
+            status: 'occupied' as const,
+            source: 'override' as const,
+            title: override.title,
+            subtitle: override.subtitle,
+            bookingId: null,
+            classSectionId: null,
+            overrideId: override.overrideId,
+            classMeetingId: override.sourceClassMeetingId,
+            editable: true,
+            bookable: false,
+          };
+        }
+
         const classMeeting = classMeetingByDayAndSlot.get(key);
         if (classMeeting) {
           return {
@@ -629,6 +735,9 @@ export class RoomBookingsService {
             subtitle: classMeeting.subtitle,
             bookingId: null,
             classSectionId: classMeeting.classSectionId,
+            overrideId: null,
+            classMeetingId: classMeeting.classMeetingId,
+            editable: true,
             bookable: false,
           };
         }
@@ -647,6 +756,9 @@ export class RoomBookingsService {
             subtitle: booking.subtitle,
             bookingId: booking.bookingId,
             classSectionId: null,
+            overrideId: null,
+            classMeetingId: null,
+            editable: true,
             bookable: false,
           };
         }
@@ -663,6 +775,9 @@ export class RoomBookingsService {
           subtitle: null,
           bookingId: null,
           classSectionId: null,
+          overrideId: null,
+          classMeetingId: null,
+          editable: true,
           bookable: true,
         };
       }),
@@ -744,6 +859,393 @@ export class RoomBookingsService {
         fullName: buildFullName(booking.user.firstName, booking.user.lastName),
       },
     }));
+  }
+
+  async getAdminRequestRooms(status: RoomBookingStatus = 'pending') {
+    const bookings = await this.prisma.roomBooking.findMany({
+      where: { status },
+      select: {
+        id: true,
+        bookingDate: true,
+        room: {
+          select: {
+            roomCode: true,
+            floor: {
+              select: {
+                building: {
+                  select: {
+                    code: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        bookingSlots: {
+          select: {
+            timeSlotId: true,
+          },
+        },
+      },
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        roomCode: string;
+        buildingCode: string;
+        buildingName: string;
+        requestIds: Set<string>;
+        slotKeys: Set<string>;
+      }
+    >();
+
+    for (const booking of bookings) {
+      const roomCode = booking.room.roomCode;
+      const existing =
+        grouped.get(roomCode) ??
+        {
+          roomCode,
+          buildingCode: booking.room.floor.building.code,
+          buildingName: booking.room.floor.building.name,
+          requestIds: new Set<string>(),
+          slotKeys: new Set<string>(),
+        };
+
+      existing.requestIds.add(booking.id);
+      for (const slot of booking.bookingSlots) {
+        existing.slotKeys.add(`${toDateKey(booking.bookingDate)}:${slot.timeSlotId}`);
+      }
+      grouped.set(roomCode, existing);
+    }
+
+    return Array.from(grouped.values())
+      .map((entry) => ({
+        roomCode: entry.roomCode,
+        buildingCode: entry.buildingCode,
+        buildingName: entry.buildingName,
+        pendingRequestCount: entry.requestIds.size,
+        pendingSlotCount: entry.slotKeys.size,
+      }))
+      .sort((left, right) => ROOM_CODE_COLLATOR.compare(left.roomCode, right.roomCode));
+  }
+
+  async getAdminRoomRequestSlots(roomCode: string, status: RoomBookingStatus = 'pending') {
+    const room = await this.prisma.room.findFirst({
+      where: {
+        roomCode: normalizeRoomText(roomCode),
+      },
+      select: {
+        id: true,
+        roomCode: true,
+      },
+    });
+
+    if (!room) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+    }
+
+    const slots = await this.prisma.roomBookingSlot.findMany({
+      where: {
+        roomId: room.id,
+        booking: { status },
+      },
+      include: {
+        timeSlot: {
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+        booking: {
+          select: {
+            id: true,
+          },
+        },
+      },
+      orderBy: [{ bookingDate: 'asc' }, { timeSlot: { slotNumber: 'asc' } }],
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        bookingDate: string;
+        startTime: string;
+        endTime: string;
+        timeSlotIds: string[];
+        requestIds: Set<string>;
+      }
+    >();
+
+    for (const slot of slots) {
+      const bookingDate = toDateKey(slot.bookingDate);
+      const key = `${bookingDate}:${slot.timeSlotId}`;
+      const existing =
+        grouped.get(key) ??
+        {
+          bookingDate,
+          startTime: slot.timeSlot.startTime,
+          endTime: slot.timeSlot.endTime,
+          timeSlotIds: [slot.timeSlotId],
+          requestIds: new Set<string>(),
+        };
+      existing.requestIds.add(slot.booking.id);
+      grouped.set(key, existing);
+    }
+
+    return {
+      roomCode: room.roomCode,
+      slots: Array.from(grouped.values()).map((entry) => ({
+        bookingDate: entry.bookingDate,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        timeSlotIds: entry.timeSlotIds,
+        requestCount: entry.requestIds.size,
+      })),
+    };
+  }
+
+  async getAdminSlotRequests(roomCode: string, dateKey: string, timeSlotId: string) {
+    const bookingDate = parseBookingDate(dateKey);
+    const room = await this.prisma.room.findFirst({
+      where: { roomCode: normalizeRoomText(roomCode) },
+      select: {
+        id: true,
+        roomCode: true,
+      },
+    });
+
+    if (!room) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+    }
+
+    const timeSlot = await this.prisma.timeSlot.findUnique({
+      where: { id: timeSlotId },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    if (!timeSlot) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+    }
+
+    const bookings = await this.prisma.roomBooking.findMany({
+      where: {
+        roomId: room.id,
+        bookingDate,
+        status: 'pending',
+        bookingSlots: {
+          some: {
+            timeSlotId,
+          },
+        },
+      },
+      include: {
+        ...roomBookingInclude,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      roomCode: room.roomCode,
+      bookingDate: dateKey,
+      timeSlot,
+      requests: bookings.map((booking) => ({
+        ...this.mapBooking(booking),
+        requester: {
+          id: booking.user.id,
+          email: booking.user.email,
+          fullName: buildFullName(booking.user.firstName, booking.user.lastName),
+        },
+      })),
+    };
+  }
+
+  async rejectSlotRequests(dto: RejectRoomBookingSlotDto, approverId: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { roomCode: normalizeRoomText(dto.roomCode) },
+      select: { id: true },
+    });
+
+    if (!room) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+    }
+
+    const bookingDate = parseBookingDate(dto.bookingDate);
+    await this.prisma.roomBooking.updateMany({
+      where: {
+        roomId: room.id,
+        bookingDate,
+        status: 'pending',
+        bookingSlots: {
+          some: {
+            timeSlotId: {
+              in: dto.timeSlotIds,
+            },
+          },
+        },
+      },
+      data: {
+        status: 'rejected',
+        approvedById: approverId,
+        approvedAt: new Date(),
+        notes: dto.reason?.trim() || null,
+      },
+    });
+
+    return this.getAdminRoomRequestSlots(dto.roomCode, 'pending');
+  }
+
+  async createScheduleOverride(dto: CreateRoomScheduleOverrideDto, adminId: string) {
+    const [room, timeSlot] = await Promise.all([
+      this.prisma.room.findFirst({
+        where: { roomCode: normalizeRoomText(dto.roomCode), status: ACTIVE_ROOM_STATUS },
+        select: { id: true },
+      }),
+      this.prisma.timeSlot.findUnique({
+        where: { id: dto.timeSlotId },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!room) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+    }
+    if (!timeSlot) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+    }
+
+    const override = await this.prisma.roomScheduleOverride.create({
+      data: {
+        roomId: room.id,
+        overrideDate: parseBookingDate(dto.overrideDate),
+        timeSlotId: timeSlot.id,
+        type: dto.type,
+        title: dto.title.trim(),
+        note: dto.note?.trim() || null,
+        createdById: adminId,
+      },
+    });
+
+    return this.mapScheduleOverride(override);
+  }
+
+  async updateScheduleOverride(overrideId: string, dto: UpdateRoomScheduleOverrideDto) {
+    const existing = await this.prisma.roomScheduleOverride.findUnique({
+      where: { id: overrideId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch admin');
+    }
+
+    const updated = await this.prisma.roomScheduleOverride.update({
+      where: { id: overrideId },
+      data: {
+        ...(dto.title != null ? { title: dto.title.trim() } : {}),
+        ...(dto.note != null ? { note: dto.note.trim() || null } : {}),
+      },
+    });
+
+    return this.mapScheduleOverride(updated);
+  }
+
+  async deleteScheduleOverride(overrideId: string) {
+    const existing = await this.prisma.roomScheduleOverride.findUnique({
+      where: { id: overrideId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch admin');
+    }
+
+    await this.prisma.roomScheduleOverride.delete({ where: { id: overrideId } });
+    return { id: overrideId, deleted: true };
+  }
+
+  async cancelClassMeetingOccurrence(
+    classMeetingId: string,
+    dto: ClassMeetingOverrideDto,
+    adminId: string,
+  ) {
+    const meeting = await this.getClassMeetingForOverride(classMeetingId);
+    const overrideDate = parseBookingDate(dto.overrideDate);
+    const dayOfWeek = getRoomBookingDayOfWeek(overrideDate);
+    if (dayOfWeek !== meeting.dayOfWeek) {
+      throw new BadRequestException('NgÃ y há»§y khÃ´ng khá»›p thá»© cá»§a lá»‹ch há»c');
+    }
+
+    const timeSlot = await this.resolveClassMeetingFirstTimeSlot(meeting);
+    const room = await this.getRoomByCodeOrThrow(meeting.room);
+    const override = await this.prisma.roomScheduleOverride.create({
+      data: {
+        roomId: room.id,
+        overrideDate,
+        timeSlotId: timeSlot.id,
+        type: 'cancel_class',
+        title: meeting.classSection.classCode,
+        note: dto.note?.trim() || null,
+        sourceClassMeetingId: meeting.id,
+        createdById: adminId,
+      },
+    });
+
+    return this.mapScheduleOverride(override);
+  }
+
+  async moveClassMeetingOccurrence(
+    classMeetingId: string,
+    dto: MoveClassMeetingDto,
+    adminId: string,
+  ) {
+    const meeting = await this.getClassMeetingForOverride(classMeetingId);
+    const overrideDate = parseBookingDate(dto.overrideDate);
+    const dayOfWeek = getRoomBookingDayOfWeek(overrideDate);
+    if (dayOfWeek !== meeting.dayOfWeek) {
+      throw new BadRequestException('NgÃ y Ä‘iá»u chá»‰nh khÃ´ng khá»›p thá»© cá»§a lá»‹ch há»c');
+    }
+
+    const [room, timeSlot] = await Promise.all([
+      this.getRoomByCodeOrThrow(dto.roomCode),
+      this.prisma.timeSlot.findUnique({
+        where: { id: dto.timeSlotId },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!timeSlot) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+    }
+
+    const override = await this.prisma.roomScheduleOverride.create({
+      data: {
+        roomId: room.id,
+        overrideDate,
+        timeSlotId: timeSlot.id,
+        type: 'move_class',
+        title: meeting.classSection.classCode,
+        note: dto.note?.trim() || null,
+        sourceClassMeetingId: meeting.id,
+        createdById: adminId,
+      },
+    });
+
+    return this.mapScheduleOverride(override);
   }
 
   private async approveBookingLegacy(bookingId: string, approverId: string) {
@@ -979,6 +1481,84 @@ export class RoomBookingsService {
     return this.mapBooking(booking);
   }
 
+  private async getRoomByCodeOrThrow(roomCode?: string | null) {
+    const normalizedRoomCode = normalizeRoomText(roomCode);
+    if (!normalizedRoomCode) {
+      throw new BadRequestException('Lá»‹ch há»c chÆ°a cÃ³ phÃ²ng há»£p lá»‡');
+    }
+
+    const room = await this.prisma.room.findFirst({
+      where: {
+        roomCode: normalizedRoomCode,
+        status: ACTIVE_ROOM_STATUS,
+      },
+      select: {
+        id: true,
+        roomCode: true,
+      },
+    });
+
+    if (!room) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+    }
+
+    return room;
+  }
+
+  private async getClassMeetingForOverride(classMeetingId: string) {
+    const meeting = await this.prisma.classMeeting.findUnique({
+      where: { id: classMeetingId },
+      select: {
+        id: true,
+        dayOfWeek: true,
+        room: true,
+        startPeriod: true,
+        endPeriod: true,
+        startTime: true,
+        endTime: true,
+        classSection: {
+          select: {
+            classCode: true,
+          },
+        },
+      },
+    });
+
+    if (!meeting) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch há»c');
+    }
+
+    return meeting;
+  }
+
+  private async resolveClassMeetingFirstTimeSlot(meeting: {
+    startPeriod: number | null;
+    startTime: string;
+    endTime: string;
+  }) {
+    const timeSlot = await this.prisma.timeSlot.findFirst({
+      where:
+        meeting.startPeriod != null
+          ? { slotNumber: meeting.startPeriod }
+          : {
+              startTime: {
+                gte: meeting.startTime,
+              },
+              endTime: {
+                lte: meeting.endTime,
+              },
+            },
+      orderBy: { slotNumber: 'asc' },
+      select: { id: true },
+    });
+
+    if (!timeSlot) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá» cá»§a lá»‹ch há»c');
+    }
+
+    return timeSlot;
+  }
+
   private async getSelectedTimeSlots(timeSlotIds: string[]) {
     const requestedTimeSlotIds = timeSlotIds
       .map((timeSlotId) => String(timeSlotId || '').trim())
@@ -1132,12 +1712,43 @@ export class RoomBookingsService {
       : 'Má»™t hoáº·c nhiá»u khung giá» Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.';
   }
 
+  private mapScheduleOverride(override: {
+    id: string;
+    roomId: string;
+    overrideDate: Date;
+    timeSlotId: string;
+    type: string;
+    title: string;
+    note: string | null;
+    sourceClassMeetingId: string | null;
+    createdById: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: override.id,
+      roomId: override.roomId,
+      overrideDate: toDateKey(override.overrideDate),
+      timeSlotId: override.timeSlotId,
+      type: override.type,
+      title: override.title,
+      note: override.note,
+      sourceClassMeetingId: override.sourceClassMeetingId,
+      createdById: override.createdById,
+      createdAt: override.createdAt.toISOString(),
+      updatedAt: override.updatedAt.toISOString(),
+    };
+  }
+
   private async findConflictingSlot(
     roomId: string,
     roomCode: string,
     bookingDate: Date,
     timeSlotIds: string[],
-    prismaClient: Pick<PrismaService, 'roomBookingSlot' | 'classMeeting' | 'timeSlot'> = this.prisma,
+    prismaClient: Pick<
+      PrismaService,
+      'roomBookingSlot' | 'classMeeting' | 'timeSlot' | 'roomScheduleOverride'
+    > = this.prisma,
     excludedBookingId?: string,
   ) {
     const selectedTimeSlots = await prismaClient.timeSlot.findMany({
@@ -1153,6 +1764,30 @@ export class RoomBookingsService {
         endTime: true,
       },
     });
+
+    const overrideConflict = await prismaClient.roomScheduleOverride.findFirst({
+      where: {
+        roomId,
+        overrideDate: bookingDate,
+        timeSlotId: {
+          in: timeSlotIds,
+        },
+        type: {
+          in: ['manual', 'maintenance', 'move_class'],
+        },
+      },
+      select: {
+        title: true,
+      },
+    });
+
+    if (overrideConflict) {
+      return {
+        timeSlot: {
+          label: overrideConflict.title,
+        },
+      };
+    }
 
     const fixedScheduleConflict = await prismaClient.classMeeting.findFirst({
       where: {
@@ -1183,6 +1818,7 @@ export class RoomBookingsService {
         })),
       },
       select: {
+        id: true,
         classSection: {
           select: {
             classCode: true,
@@ -1192,6 +1828,23 @@ export class RoomBookingsService {
     });
 
     if (fixedScheduleConflict) {
+      const classOverride = await prismaClient.roomScheduleOverride.findFirst({
+        where: {
+          sourceClassMeetingId: fixedScheduleConflict.id,
+          overrideDate: bookingDate,
+          type: {
+            in: ['cancel_class', 'move_class'],
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (classOverride) {
+        return null;
+      }
+
       return {
         timeSlot: {
           label: fixedScheduleConflict.classSection.classCode || 'Lá»‹ch cá»‘ Ä‘á»‹nh',

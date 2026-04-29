@@ -92,11 +92,7 @@ export default function ServiceDetailScreen() {
   if (isGradesViewer) {
     return (
       <Screen>
-        <TopHero
-          eyebrow="Dịch vụ học vụ"
-          title={service.title}
-          subtitle={service.description}
-        />
+        <TopHero eyebrow="Dịch vụ học vụ" title={service.title} subtitle={service.description} />
         <ContentStack narrow overlapHero={false}>
           <GradesPanel
             loading={gradesQuery.isLoading}
@@ -126,9 +122,14 @@ export default function ServiceDetailScreen() {
             title="Tổng quan dịch vụ"
             subtitle="Hỗ trợ tham quan khuôn viên UIT bằng mô hình 360 trực tiếp trong ứng dụng."
           >
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-              Dịch vụ cho phép tham quan các khu vực chính của khuôn viên UIT mà không cần chuyển sang trình duyệt
-              ngoài.
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
+              Dịch vụ cho phép tham quan các khu vực chính của khuôn viên UIT mà không cần chuyển
+              sang trình duyệt ngoài.
             </Text>
             <View
               style={[
@@ -169,10 +170,7 @@ export default function ServiceDetailScreen() {
             </View>
           </SectionCard>
 
-          <SectionCard
-            title="Hướng dẫn nhanh"
-            subtitle="Các bước đề xuất để bắt đầu tham quan."
-          >
+          <SectionCard title="Hướng dẫn nhanh" subtitle="Các bước đề xuất để bắt đầu tham quan.">
             <View style={styles.mapGuideColumn}>
               {CAMPUS_MAP_GUIDE.map((item) => (
                 <View
@@ -219,8 +217,14 @@ export default function ServiceDetailScreen() {
             </View>
           </SectionCard>
 
-          <PrimaryButton label="Mở tour 3D UIT" onPress={() => router.push('/services/campus-map/view')} />
-          <SecondaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
+          <PrimaryButton
+            label="Mở tour 3D UIT"
+            onPress={() => router.push('/services/campus-map/view')}
+          />
+          <SecondaryButton
+            label="Quay lại danh sách dịch vụ"
+            onPress={() => router.replace('/services')}
+          />
         </ContentStack>
       </Screen>
     );
@@ -247,20 +251,26 @@ export default function ServiceDetailScreen() {
             </Text>
           </SectionCard>
 
-            <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
-              <View style={styles.column}>
-                <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
-                <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
-                <InfoRow label="Catalog học vụ" value="Tạo học phần, lớp học phần và lịch học" />
-              </View>
-            </SectionCard>
+          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
+            <View style={styles.column}>
+              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
+              <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
+              <InfoRow label="Catalog học vụ" value="Tạo học phần, lớp học phần và lịch học" />
+            </View>
+          </SectionCard>
 
-            <PrimaryButton label="Mở catalog học vụ" onPress={() => router.push('/services/admin-catalog')} />
-            <SecondaryButton label="Mở queue phê duyệt đặt phòng" onPress={() => router.push('/services/room-booking/approvals')} />
-            <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
-          </ContentStack>
-        </Screen>
-      );
+          <PrimaryButton
+            label="Mở catalog học vụ"
+            onPress={() => router.push('/services/admin-catalog')}
+          />
+          <SecondaryButton
+            label="Mở queue phê duyệt đặt phòng"
+            onPress={() => router.push('/services/room-booking/approvals')}
+          />
+          <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
+        </ContentStack>
+      </Screen>
+    );
   }
 
   return (
@@ -275,10 +285,14 @@ export default function ServiceDetailScreen() {
         }}
       />
 
-      <ContentStack narrow={service.id === 'chatbot' || service.id === 'library'} overlapHero={false}>
+      <ContentStack
+        narrow={service.id === 'chatbot' || service.id === 'library'}
+        overlapHero={false}
+      >
         <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
           <Text style={styles.body}>
-            {service.disabledReason || 'Dịch vụ này đang hoạt động trong phạm vi hiện tại của ứng dụng.'}
+            {service.disabledReason ||
+              'Dịch vụ này đang hoạt động trong phạm vi hiện tại của ứng dụng.'}
           </Text>
         </SectionCard>
 
@@ -306,7 +320,10 @@ export default function ServiceDetailScreen() {
           </Text>
         </SectionCard>
 
-        <PrimaryButton label="Quay lại danh sách dịch vụ" onPress={() => router.replace('/services')} />
+        <PrimaryButton
+          label="Quay lại danh sách dịch vụ"
+          onPress={() => router.replace('/services')}
+        />
         <SecondaryButton
           label="Liên hệ hỗ trợ"
           onPress={() =>
@@ -333,10 +350,7 @@ function GradesPanel({
 
   return (
     <>
-      <SectionCard
-        title="Tổng quan GPA"
-        subtitle="Điểm trung bình tích lũy toàn khóa."
-      >
+      <SectionCard title="Tổng quan GPA" subtitle="Điểm trung bình tích lũy toàn khóa.">
         {loading ? (
           <View style={styles.column}>
             <SkeletonBlock height={24} width="35%" />
@@ -348,7 +362,8 @@ function GradesPanel({
               {formatGpaValue(overview?.gpa)}
             </Text>
             <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-              Tích lũy {overview?.totalEarnedCredits ?? 0} tín chỉ qua {overview?.totalSemesters ?? 0} học kỳ
+              Tích lũy {overview?.totalEarnedCredits ?? 0} tín chỉ qua{' '}
+              {overview?.totalSemesters ?? 0} học kỳ
             </Text>
           </View>
         )}
@@ -372,7 +387,8 @@ function GradesPanel({
                     {semesterGroup.name}
                   </Text>
                   <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                    GPA {formatGpaValue(semesterGroup.summary.gpa)} · {semesterGroup.summary.totalCredits} tín chỉ
+                    GPA {formatGpaValue(semesterGroup.summary.gpa)} ·{' '}
+                    {semesterGroup.summary.totalCredits} tín chỉ
                   </Text>
                 </View>
 
@@ -387,9 +403,13 @@ function GradesPanel({
                       },
                     ]}
                   >
-                    <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>{grade.course.name}</Text>
+                    <Text style={[styles.gradeTitle, { color: theme.colors.text }]}>
+                      {grade.course.name}
+                    </Text>
                     <Text style={[styles.body, { color: theme.colors.textMuted }]}>
-                      {grade.course.code} · {grade.course.credits} tín chỉ
+                      {grade.course.code}
+                      {grade.classSection ? ` · ${grade.classSection.classCode}` : ''} ·{' '}
+                      {grade.course.credits} tín chỉ
                     </Text>
                     <Text style={[styles.gradeScore, { color: theme.colors.primary }]}>
                       {grade.isExempt

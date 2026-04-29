@@ -26,11 +26,14 @@ type RoomScheduleApiSlot = {
   startTime: string;
   endTime: string;
   status: RoomSlotStatus;
-  source: 'semester' | 'booking' | null;
+  source: 'semester' | 'booking' | 'override' | null;
   title: string | null;
   subtitle: string | null;
   bookingId: string | null;
   classSectionId: string | null;
+  overrideId?: string | null;
+  classMeetingId?: string | null;
+  editable?: boolean;
   bookable: boolean;
 };
 
@@ -99,6 +102,39 @@ export type RoomBookingResponse = {
   status: 'pending' | 'approved' | 'booked' | 'maintenance' | 'rejected' | 'cancelled';
   approvedAt: string | null;
   createdAt: string;
+};
+
+export type AdminRoomRequestSummary = {
+  roomCode: string;
+  buildingCode: string;
+  buildingName: string;
+  pendingRequestCount: number;
+  pendingSlotCount: number;
+};
+
+export type AdminRoomRequestSlot = {
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  timeSlotIds: string[];
+  requestCount: number;
+};
+
+export type AdminSlotRequestsResponse = {
+  roomCode: string;
+  bookingDate: string;
+  timeSlot: {
+    id: string;
+    startTime: string;
+    endTime: string;
+  };
+  requests: Array<RoomBookingResponse & {
+    requester: {
+      id: string;
+      email: string;
+      fullName: string;
+    };
+  }>;
 };
 
 function shouldUseMockRoomBookings() {
@@ -206,6 +242,9 @@ function mapApiScheduleDay(day: RoomScheduleApiDay): RoomScheduleDay | null {
       subtitle: slot.subtitle,
       bookingId: slot.bookingId,
       classSectionId: slot.classSectionId,
+      overrideId: slot.overrideId ?? null,
+      classMeetingId: slot.classMeetingId ?? null,
+      editable: slot.editable ?? Boolean(slot.bookable),
       bookable: slot.bookable,
     })),
   };
@@ -344,5 +383,78 @@ export const roomBookingsApi = {
     return (await apiClient.patch(
       `/room-bookings/${encodeURIComponent(bookingId)}/cancel`,
     )) as RoomBookingResponse;
+  },
+
+  listAdminRequestRooms: async (): Promise<AdminRoomRequestSummary[]> => {
+    return (await apiClient.get('/room-bookings/admin/request-rooms', {
+      params: { status: 'pending' },
+    })) as AdminRoomRequestSummary[];
+  },
+
+  listAdminRoomRequestSlots: async (roomCode: string): Promise<{
+    roomCode: string;
+    slots: AdminRoomRequestSlot[];
+  }> => {
+    return (await apiClient.get(
+      `/room-bookings/admin/rooms/${encodeURIComponent(roomCode)}/request-slots`,
+      { params: { status: 'pending' } },
+    )) as { roomCode: string; slots: AdminRoomRequestSlot[] };
+  },
+
+  getAdminSlotRequests: async (
+    roomCode: string,
+    bookingDate: string,
+    timeSlotId: string,
+  ): Promise<AdminSlotRequestsResponse> => {
+    return (await apiClient.get(
+      `/room-bookings/admin/rooms/${encodeURIComponent(roomCode)}/request-slots/${encodeURIComponent(
+        bookingDate,
+      )}/${encodeURIComponent(timeSlotId)}`,
+    )) as AdminSlotRequestsResponse;
+  },
+
+  approveOneSlotRequest: async (bookingId: string): Promise<RoomBookingResponse> => {
+    return (await apiClient.patch('/room-bookings/admin/request-slots/approve-one', {
+      bookingId,
+    })) as RoomBookingResponse;
+  },
+
+  rejectAllSlotRequests: async (data: {
+    roomCode: string;
+    bookingDate: string;
+    timeSlotIds: string[];
+    reason?: string;
+  }): Promise<{ roomCode: string; slots: AdminRoomRequestSlot[] }> => {
+    return (await apiClient.patch('/room-bookings/admin/request-slots/reject-all', data)) as {
+      roomCode: string;
+      slots: AdminRoomRequestSlot[];
+    };
+  },
+
+  createScheduleOverride: async (data: {
+    roomCode: string;
+    overrideDate: string;
+    timeSlotId: string;
+    type: 'manual' | 'maintenance';
+    title: string;
+    note?: string;
+  }): Promise<{ id: string }> => {
+    return (await apiClient.post('/room-bookings/admin/schedule-overrides', data)) as { id: string };
+  },
+
+  deleteScheduleOverride: async (overrideId: string): Promise<{ id: string; deleted: boolean }> => {
+    return (await apiClient.delete(
+      `/room-bookings/admin/schedule-overrides/${encodeURIComponent(overrideId)}`,
+    )) as { id: string; deleted: boolean };
+  },
+
+  cancelClassMeetingOccurrence: async (
+    classMeetingId: string,
+    data: { overrideDate: string; note?: string },
+  ): Promise<{ id: string }> => {
+    return (await apiClient.post(
+      `/room-bookings/admin/class-meetings/${encodeURIComponent(classMeetingId)}/cancel`,
+      data,
+    )) as { id: string };
   },
 };

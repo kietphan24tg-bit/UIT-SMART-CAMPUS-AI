@@ -10,17 +10,6 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - ".github/workflows/api-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/api/**"
-      - "packages/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - ".github/workflows/api-ci.yml"
 
 jobs:
   api-ci:

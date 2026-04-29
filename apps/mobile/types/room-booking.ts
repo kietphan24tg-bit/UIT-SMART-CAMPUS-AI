@@ -33,11 +33,14 @@ export interface RoomScheduleSlot {
   label: string;
   courseCode?: string;
   statusLabel?: string;
-  source?: 'semester' | 'booking' | null;
+  source?: 'semester' | 'booking' | 'override' | null;
   title?: string | null;
   subtitle?: string | null;
   bookingId?: string | null;
   classSectionId?: string | null;
+  overrideId?: string | null;
+  classMeetingId?: string | null;
+  editable?: boolean;
   bookable?: boolean;
 }
 

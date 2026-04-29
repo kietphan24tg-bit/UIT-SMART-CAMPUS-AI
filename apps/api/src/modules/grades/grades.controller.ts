@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -7,10 +7,18 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { USER_ROLES } from '@smart-campus/shared';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
+import {
+  UpdateGradeWeightsDto,
+  UpsertGradeSheetDto,
+} from './dto/lecturer-grade-entry.dto';
 import { GradesSummaryDto, SemesterGradesDto } from './dto/grades-response.dto';
 import { GradesService } from './grades.service';
 
@@ -82,5 +90,67 @@ export class GradesController {
     @Param('semesterId') semesterId: string,
   ) {
     return this.gradesService.getSemesterGradesById(userId, semesterId);
+  }
+
+  @Get('lecturer/class-sections')
+  @UseGuards(RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get grade-entry class sections manageable by current role' })
+  getLecturerClassSections(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.gradesService.getLecturerClassSections(actorId, actorRole);
+  }
+
+  @Get('class-sections/:id/sheet')
+  @UseGuards(RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Get grade sheet for a class section' })
+  getClassSectionGradeSheet(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.gradesService.getClassSectionGradeSheet(classSectionId, actorId, actorRole);
+  }
+
+  @Put('class-sections/:id/weights')
+  @UseGuards(RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Update grade weights for a class section' })
+  updateClassSectionGradeWeights(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Body() dto: UpdateGradeWeightsDto,
+  ) {
+    return this.gradesService.updateClassSectionGradeWeights(
+      classSectionId,
+      actorId,
+      actorRole,
+      dto,
+    );
+  }
+
+  @Put('class-sections/:id/sheet')
+  @UseGuards(RolesGuard)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Bulk upsert grade sheet for a class section' })
+  upsertClassSectionGradeSheet(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Body() dto: UpsertGradeSheetDto,
+  ) {
+    return this.gradesService.upsertClassSectionGradeSheet(
+      classSectionId,
+      actorId,
+      actorRole,
+      dto,
+    );
   }
 }

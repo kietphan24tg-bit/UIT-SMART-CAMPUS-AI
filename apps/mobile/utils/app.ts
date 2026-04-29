@@ -69,6 +69,10 @@ export function canManageAttendanceRole(role?: string | null) {
   return isLecturerRole(role) || isAdminRole(role);
 }
 
+export function canManageGradesRole(role?: string | null) {
+  return isLecturerRole(role) || isAdminRole(role);
+}
+
 export function canManageCanteenRole(role?: string | null) {
   return isCanteenAdminRole(role) || isAdminRole(role);
 }
@@ -285,6 +289,7 @@ export function getRoleQuickActions(role?: string | null) {
     return [
       { id: 'schedule', label: 'Lịch dạy', icon: 'calendar-outline', route: '/schedule' },
       { id: 'attendance', label: 'Điểm danh QR', icon: 'qr-code-outline', route: '/services/attendance' },
+      { id: 'grades', label: 'Nhập điểm', icon: 'bar-chart-outline', route: '/services/grades/lecturer' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
     ];
@@ -303,28 +308,41 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const adminCategory = 'Công cụ quản trị' as const;
   const isStudentRole = role === USER_ROLES.STUDENT;
   const attendanceManager = canManageAttendanceRole(role);
+  const gradesManager = canManageGradesRole(role);
   const canteenManager = canManageCanteenRole(role);
 
   const entries: ServiceEntry[] = [
     {
       id: 'grades',
-      title: 'Điểm & GPA',
+      title: gradesManager ? 'Nhập điểm' : 'Điểm & GPA',
       summary: isStudentRole
         ? 'Theo dõi bảng điểm theo học kỳ.'
-        : 'Luồng dữ liệu điểm cho vai trò này sẽ được triển khai sau.',
-      category: 'Học vụ',
+        : gradesManager
+          ? 'Nhập điểm theo lớp, cấu hình trọng số và tự tính trung bình.'
+          : 'Luồng dữ liệu điểm cho vai trò này sẽ được triển khai sau.',
+      category: gradesManager ? teachingCategory : 'Học vụ',
       icon: 'bar-chart-outline',
-      supportState: isStudentRole ? 'live' : 'unsupported',
-      isInteractive: isStudentRole,
-      disabledReason: isStudentRole
+      supportState: isStudentRole || gradesManager ? 'live' : 'unsupported',
+      isInteractive: isStudentRole || gradesManager,
+      disabledReason: isStudentRole || gradesManager
         ? undefined
         : 'Vai trò này chưa được hỗ trợ luồng điểm & GPA trong app.',
       lastVerifiedSource: 'grades',
-      primaryAction: isStudentRole ? 'Xem bảng điểm' : 'Theo dõi cập nhật',
-      route: isStudentRole ? '/services/grades' : '/services',
+      primaryAction: isStudentRole
+        ? 'Xem bảng điểm'
+        : gradesManager
+          ? 'Mở bảng nhập điểm'
+          : 'Theo dõi cập nhật',
+      route: isStudentRole
+        ? '/services/grades'
+        : gradesManager
+          ? '/services/grades/lecturer'
+          : '/services',
       description: isStudentRole
         ? 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.'
-        : 'Chức năng xem/nhập điểm cho vai trò này đang ở trạng thái sắp triển khai.',
+        : gradesManager
+          ? 'Giảng viên, admin và super admin có thể nhập điểm theo lớp học phần.'
+          : 'Chức năng xem/nhập điểm cho vai trò này đang ở trạng thái sắp triển khai.',
     },
     {
       id: 'parking',

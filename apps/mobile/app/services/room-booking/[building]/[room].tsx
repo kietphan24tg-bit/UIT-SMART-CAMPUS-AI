@@ -24,6 +24,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import type { RoomScheduleDay, RoomScheduleSlot } from '@/types/room-booking';
 import { useAppTheme } from '@/theme';
+import { isAdminRole } from '@/utils/app';
 
 const DAY_TITLES: Record<RoomScheduleDay['dayKey'], string> = {
   mon: 'Thứ 2:',
@@ -63,11 +64,30 @@ function getUserDisplayName(
   return fullName || user?.email || '';
 }
 
+function buildAdminOverrideNote({
+  purpose,
+  attendeeCount,
+  contactPhone,
+}: {
+  purpose: string;
+  attendeeCount: string;
+  contactPhone: string;
+}) {
+  return [
+    `Mục đích: ${purpose}`,
+    `Số người: ${attendeeCount}`,
+    contactPhone ? `Số điện thoại: ${contactPhone}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export default function RoomDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const isAdmin = isAdminRole(user?.role);
   const params = useLocalSearchParams<{ building?: string; room?: string }>();
   const buildingId = typeof params.building === 'string' ? params.building.toUpperCase() : '';
   const roomId = typeof params.room === 'string' ? params.room.toUpperCase() : '';
@@ -102,6 +122,12 @@ export default function RoomDetailScreen() {
   const [contactPhone, setContactPhone] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
+  const [adminSlot, setAdminSlot] = useState<RoomScheduleSlot | null>(null);
+  const [adminOverrideTitle, setAdminOverrideTitle] = useState('');
+  const [adminOverridePurpose, setAdminOverridePurpose] = useState('');
+  const [adminOverrideAttendeeCount, setAdminOverrideAttendeeCount] = useState('');
+  const [adminOverrideContactPhone, setAdminOverrideContactPhone] = useState('');
+  const [adminOverrideError, setAdminOverrideError] = useState('');
 
   const createBookingMutation = useMutation({
     mutationFn: roomBookingsApi.createRoomBooking,
@@ -118,8 +144,122 @@ export default function RoomDetailScreen() {
     },
   });
 
+  const refreshRoomSchedule = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ['room-bookings', 'room-schedule', roomId],
+    });
+  };
+
+  const resetAdminOverrideForm = () => {
+    setAdminOverrideTitle('');
+    setAdminOverridePurpose('');
+    setAdminOverrideAttendeeCount('');
+    setAdminOverrideContactPhone('');
+    setAdminOverrideError('');
+  };
+
+  const closeAdminSlotModal = () => {
+    setAdminSlot(null);
+    resetAdminOverrideForm();
+  };
+
+  const cancelBookingMutation = useMutation({
+    mutationFn: roomBookingsApi.cancelBooking,
+    onSuccess: async () => {
+      closeAdminSlotModal();
+      await refreshRoomSchedule();
+    },
+  });
+
+  const createOverrideMutation = useMutation({
+    mutationFn: roomBookingsApi.createScheduleOverride,
+    onSuccess: async () => {
+      closeAdminSlotModal();
+      await refreshRoomSchedule();
+    },
+    onError: (error) => {
+      setAdminOverrideError(getErrorMessage(error));
+    },
+  });
+
+  const deleteOverrideMutation = useMutation({
+    mutationFn: roomBookingsApi.deleteScheduleOverride,
+    onSuccess: async () => {
+      closeAdminSlotModal();
+      await refreshRoomSchedule();
+    },
+  });
+
+  const cancelClassMutation = useMutation({
+    mutationFn: ({ classMeetingId, overrideDate }: { classMeetingId: string; overrideDate: string }) =>
+      roomBookingsApi.cancelClassMeetingOccurrence(classMeetingId, {
+        overrideDate,
+        note: 'Admin huy buoi hoc',
+      }),
+    onSuccess: async () => {
+      closeAdminSlotModal();
+      await refreshRoomSchedule();
+    },
+  });
+
   const selectedDay =
     schedule.find((item) => item.dayKey === selectedDayKey) ?? schedule[0] ?? null;
+
+  const openAdminSlotModal = (slot: RoomScheduleSlot) => {
+    setAdminSlot(slot);
+    setAdminOverrideTitle(slot.status === 'free' ? '' : slot.title ?? '');
+    setAdminOverridePurpose('');
+    setAdminOverrideAttendeeCount('');
+    setAdminOverrideContactPhone('');
+    setAdminOverrideError('');
+  };
+
+  const handleSubmitAdminOverride = () => {
+    if (!room) {
+      setAdminOverrideError('Không xác định được phòng tạo lịch.');
+      return;
+    }
+
+    if (!selectedDay || !adminSlot || !selectedDay.dateKey) {
+      setAdminOverrideError('Không xác định được ngày tạo lịch.');
+      return;
+    }
+
+    const normalizedTitle = adminOverrideTitle.trim();
+    const normalizedPurpose = adminOverridePurpose.trim();
+    const normalizedAttendeeCount = adminOverrideAttendeeCount.trim();
+    const normalizedContactPhone = adminOverrideContactPhone.trim();
+    const attendeeNumber = Number.parseInt(normalizedAttendeeCount, 10);
+
+    if (!normalizedTitle) {
+      setAdminOverrideError('Vui lòng nhập tên lịch.');
+      return;
+    }
+
+    if (!normalizedPurpose) {
+      setAdminOverrideError('Vui lòng nhập mục đích sử dụng phòng.');
+      return;
+    }
+
+    if (!Number.isInteger(attendeeNumber) || attendeeNumber < 1) {
+      setAdminOverrideError('Số người phải lớn hơn 0.');
+      return;
+    }
+
+    setAdminOverrideError('');
+    createOverrideMutation.mutate({
+      roomCode: room.code,
+      overrideDate: selectedDay.dateKey,
+      timeSlotId: adminSlot.id,
+      type: 'manual',
+      title: normalizedTitle,
+      note: buildAdminOverrideNote({
+        purpose: normalizedPurpose,
+        attendeeCount: String(attendeeNumber),
+        contactPhone: normalizedContactPhone,
+      }),
+    });
+  };
 
   useEffect(() => {
     if (!hasAvailableWeeks) {
@@ -413,7 +553,13 @@ export default function RoomDetailScreen() {
                       key={slot.id}
                       slot={slot}
                       selected={slot.id === selectedSlotId}
+                      admin={isAdmin}
                       onPress={() => {
+                        if (isAdmin) {
+                          openAdminSlotModal(slot);
+                          return;
+                        }
+
                         if (slot.status !== 'free') {
                           return;
                         }
@@ -448,7 +594,7 @@ export default function RoomDetailScreen() {
 
             <PrimaryButton
               label="Đặt phòng"
-              disabled={!canBook}
+              disabled={!canBook || isAdmin}
               onPress={() => setMode('booking')}
             />
           </View>
@@ -643,7 +789,7 @@ export default function RoomDetailScreen() {
             ) : null}
 
             <PrimaryButton
-              label="Submit"
+              label="Gửi yêu cầu"
               loading={createBookingMutation.isPending}
               disabled={submitted || createBookingMutation.isPending}
               onPress={handleSubmitBooking}
@@ -655,6 +801,129 @@ export default function RoomDetailScreen() {
             />
           </View>
         ) : null}
+
+        <Modal
+          visible={Boolean(adminSlot)}
+          transparent
+          animationType="fade"
+          onRequestClose={closeAdminSlotModal}
+        >
+          <View style={styles.modalContainer}>
+            <Pressable
+              accessibilityRole="button"
+              style={StyleSheet.absoluteFill}
+              onPress={closeAdminSlotModal}
+            />
+            <View
+              style={[
+                styles.modalSheet,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              {adminSlot && selectedDay ? (
+                <>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+                    Quản lý khung giờ phòng
+                  </Text>
+                  <Text style={[styles.modalSubtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+                    {room.code} · {toDisplayDate(selectedDay.dateKey)} · {adminSlot.startTime} - {adminSlot.endTime}
+                  </Text>
+                  <Text style={[styles.noticeText, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                    {adminSlot.title ?? adminSlot.label}
+                  </Text>
+
+                  {adminSlot.source !== 'booking' && adminSlot.source !== 'override' ? (
+                    <View style={styles.formSection}>
+                      <FormField
+                        label="Tên lịch"
+                        value={adminOverrideTitle}
+                        onChangeText={setAdminOverrideTitle}
+                      />
+                      <FormField
+                        label="Mục đích"
+                        value={adminOverridePurpose}
+                        onChangeText={setAdminOverridePurpose}
+                      />
+                      <FormField
+                        label="Số người"
+                        value={adminOverrideAttendeeCount}
+                        onChangeText={setAdminOverrideAttendeeCount}
+                        keyboardType="number-pad"
+                      />
+                      <FormField
+                        label="Số điện thoại"
+                        value={adminOverrideContactPhone}
+                        onChangeText={setAdminOverrideContactPhone}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                  ) : null}
+
+                  {adminOverrideError ? (
+                    <View
+                      style={[
+                        styles.notice,
+                        {
+                          backgroundColor: theme.colors.dangerSurface,
+                          borderColor: theme.colors.danger,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.noticeText,
+                          { color: theme.colors.danger, fontFamily: theme.fonts.semibold },
+                        ]}
+                      >
+                        {adminOverrideError}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {adminSlot.source !== 'booking' && adminSlot.source !== 'override' ? (
+                    <PrimaryButton
+                      label={createOverrideMutation.isPending ? 'Đang tạo...' : 'Tạo lịch sử dụng phòng'}
+                      loading={createOverrideMutation.isPending}
+                      onPress={handleSubmitAdminOverride}
+                    />
+                  ) : null}
+
+                  {adminSlot.source === 'booking' && adminSlot.bookingId ? (
+                    <SecondaryButton
+                      label={cancelBookingMutation.isPending ? 'Đang hủy...' : 'Hủy đặt phòng'}
+                      disabled={cancelBookingMutation.isPending}
+                      onPress={() => cancelBookingMutation.mutate(adminSlot.bookingId as string)}
+                    />
+                  ) : null}
+
+                  {adminSlot.source === 'semester' && adminSlot.classMeetingId ? (
+                    <SecondaryButton
+                      label={cancelClassMutation.isPending ? 'Đang hủy...' : 'Hủy buổi học này'}
+                      disabled={cancelClassMutation.isPending}
+                      onPress={() =>
+                        cancelClassMutation.mutate({
+                          classMeetingId: adminSlot.classMeetingId as string,
+                          overrideDate: selectedDay.dateKey ?? '',
+                        })
+                      }
+                    />
+                  ) : null}
+
+                  {adminSlot.source === 'override' && adminSlot.overrideId ? (
+                    <SecondaryButton
+                      label={deleteOverrideMutation.isPending ? 'Đang xóa...' : 'Xóa lịch admin'}
+                      disabled={deleteOverrideMutation.isPending}
+                      onPress={() => deleteOverrideMutation.mutate(adminSlot.overrideId as string)}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
       </ContentStack>
     </Screen>
   );
@@ -663,10 +932,12 @@ export default function RoomDetailScreen() {
 function ScheduleRow({
   slot,
   selected,
+  admin,
   onPress,
 }: {
   slot: RoomScheduleSlot;
   selected: boolean;
+  admin?: boolean;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
@@ -684,7 +955,7 @@ function ScheduleRow({
       : slot.title ??
         slot.courseCode ??
         (slot.source === 'semester' ? 'Lịch cố định' : 'Đã đặt');
-  const disabled = slot.status !== 'free';
+  const disabled = !admin && slot.status !== 'free';
 
   return (
     <Pressable

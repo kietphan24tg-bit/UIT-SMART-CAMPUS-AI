@@ -1,5 +1,6 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Role } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -88,7 +89,19 @@ describe('GradesService', () => {
         {
           provide: PrismaService,
           useValue: {
-            grade: { findMany: jest.fn() },
+            $transaction: jest.fn((operations: unknown[]) => Promise.all(operations)),
+            classSection: {
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
+            classEnrollment: { findMany: jest.fn() },
+            grade: {
+              count: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
+              upsert: jest.fn(),
+            },
           },
         },
       ],
@@ -207,6 +220,154 @@ describe('GradesService', () => {
         grades: [],
       });
     });
+
+    it('should include current active enrollments even before grades are entered', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'enrollment-1',
+          studentId: 'user-1',
+          classSectionId: 'section-1',
+          classSection: {
+            id: 'section-1',
+            classCode: 'SE346.Q21',
+            sectionCode: 'Q21',
+            courseId: 'course-1',
+            semesterId: 'semester-current',
+            course: { code: 'SE346', name: 'Mobile', credits: 4 },
+            semester: {
+              id: 'semester-current',
+              name: 'HK2 2025-2026',
+              academicYear: '2025-2026',
+              term: 2,
+              startDate: new Date('2026-01-05T00:00:00.000Z'),
+              endDate: new Date('2026-05-31T23:59:59.000Z'),
+              isCurrent: true,
+            },
+          },
+        },
+      ]);
+
+      const result = await service.getCurrentSemesterGrades('user-1');
+
+      expect(result).toMatchObject({
+        id: 'semester-current',
+        isCurrent: true,
+        summary: {
+          gpa: 0,
+          totalCredits: 0,
+          totalEarnedCredits: 0,
+          totalCourses: 0,
+          totalSemesters: 1,
+        },
+        grades: [
+          {
+            id: 'enrollment-enrollment-1',
+            totalScore: null,
+            course: { code: 'SE346', name: 'Mobile', credits: 4 },
+            classSection: {
+              id: 'section-1',
+              classCode: 'SE346.Q21',
+              sectionCode: 'Q21',
+            },
+          },
+        ],
+      });
+    });
+
+    it('should hide current semester grade rows that do not match active enrollments', async () => {
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'mock-grade',
+          userId: 'user-1',
+          courseId: 'mock-course',
+          semesterId: 'semester-current',
+          midterm: 9,
+          finalExam: 9,
+          assignment: 9,
+          processScore: 9,
+          practiceScore: null,
+          midtermScore: 9,
+          finalScore: 9,
+          totalScore: 9,
+          letterGrade: null,
+          gradePoint: 9,
+          earnedCredits: 3,
+          course: { code: 'AI301', name: 'Mock AI', credits: 3 },
+          semester: {
+            id: 'semester-current',
+            name: 'HK2 2025-2026',
+            academicYear: '2025-2026',
+            term: 2,
+            startDate: new Date('2026-01-05T00:00:00.000Z'),
+            endDate: new Date('2026-05-31T23:59:59.000Z'),
+            isCurrent: true,
+          },
+        },
+        {
+          id: 'real-grade',
+          userId: 'user-1',
+          courseId: 'real-course',
+          semesterId: 'semester-current',
+          midterm: 8,
+          finalExam: 8,
+          assignment: 8,
+          processScore: 8,
+          practiceScore: null,
+          midtermScore: 8,
+          finalScore: 8,
+          totalScore: 8,
+          letterGrade: null,
+          gradePoint: 8,
+          earnedCredits: 4,
+          course: { code: 'SE346', name: 'Mobile', credits: 4 },
+          semester: {
+            id: 'semester-current',
+            name: 'HK2 2025-2026',
+            academicYear: '2025-2026',
+            term: 2,
+            startDate: new Date('2026-01-05T00:00:00.000Z'),
+            endDate: new Date('2026-05-31T23:59:59.000Z'),
+            isCurrent: true,
+          },
+        },
+      ]);
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'enrollment-1',
+          studentId: 'user-1',
+          classSectionId: 'section-1',
+          classSection: {
+            id: 'section-1',
+            classCode: 'SE346.Q21',
+            sectionCode: 'Q21',
+            courseId: 'real-course',
+            semesterId: 'semester-current',
+            course: { code: 'SE346', name: 'Mobile', credits: 4 },
+            semester: {
+              id: 'semester-current',
+              name: 'HK2 2025-2026',
+              academicYear: '2025-2026',
+              term: 2,
+              startDate: new Date('2026-01-05T00:00:00.000Z'),
+              endDate: new Date('2026-05-31T23:59:59.000Z'),
+              isCurrent: true,
+            },
+          },
+        },
+      ]);
+
+      const result = await service.getCurrentSemesterGrades('user-1');
+
+      expect(result.grades).toHaveLength(1);
+      expect(result.grades[0]?.course.code).toBe('SE346');
+      expect(result.summary).toMatchObject({
+        gpa: 8,
+        totalCredits: 4,
+        totalEarnedCredits: 4,
+        totalCourses: 1,
+      });
+    });
   });
 
   describe('getSemesterGradesById', () => {
@@ -227,6 +388,140 @@ describe('GradesService', () => {
 
       await expect(service.getSemesterGradesById('user-1', 'missing')).rejects.toThrow(
         NotFoundException,
+      );
+    });
+  });
+
+  describe('lecturer grade entry', () => {
+    const classSection = {
+      id: 'section-1',
+      semesterId: 'semester-1',
+      courseId: 'course-1',
+      lecturerId: 'lecturer-1',
+      classCode: 'SE346.Q21',
+      sectionCode: 'Q21',
+      note: null,
+      capacity: 40,
+      registrationOpen: true,
+      processWeight: 20,
+      practiceWeight: 20,
+      midtermWeight: 20,
+      finalWeight: 40,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      course: { id: 'course-1', code: 'SE346', name: 'Mobile', credits: 4 },
+      semester: {
+        id: 'semester-1',
+        name: 'HK2 2025-2026',
+        academicYear: '2025-2026',
+        term: 2,
+        isCurrent: true,
+      },
+    };
+
+    it('rejects a lecturer who is not assigned to the class section', async () => {
+      (prisma.classSection.findUnique as jest.Mock).mockResolvedValue({
+        ...classSection,
+        lecturerId: 'other-lecturer',
+      });
+
+      await expect(
+        service.getClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects grade weights that do not sum to 100', async () => {
+      await expect(
+        service.updateClassSectionGradeWeights('section-1', 'lecturer-1', Role.lecturer, {
+          processWeight: 25,
+          practiceWeight: 25,
+          midtermWeight: 25,
+          finalWeight: 20,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects grade sheet rows for students outside the class section', async () => {
+      (prisma.classSection.findUnique as jest.Mock).mockResolvedValue(classSection);
+      (prisma.classEnrollment.findMany as jest.Mock).mockResolvedValue([
+        { studentId: 'student-1' },
+      ]);
+
+      await expect(
+        service.upsertClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer, {
+          rows: [
+            {
+              studentId: 'student-2',
+              processScore: 8,
+              practiceScore: 8,
+              midtermScore: 8,
+              finalScore: 8,
+            },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('bulk upserts grades and calculates weighted total score', async () => {
+      (prisma.classSection.findUnique as jest.Mock)
+        .mockResolvedValueOnce(classSection)
+        .mockResolvedValueOnce(classSection);
+      (prisma.classEnrollment.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ studentId: 'student-1' }])
+        .mockResolvedValueOnce([
+          {
+            studentId: 'student-1',
+            student: {
+              id: 'student-1',
+              email: 'student@uit.edu.vn',
+              firstName: 'An',
+              lastName: 'Nguyen',
+              studentId: '21520001',
+            },
+          },
+        ]);
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'grade-1',
+          userId: 'student-1',
+          processScore: 8,
+          practiceScore: 9,
+          midtermScore: 7,
+          finalScore: 8,
+          assignment: 8,
+          midterm: 7,
+          finalExam: 8,
+          totalScore: 8,
+          letterGrade: null,
+          gradePoint: 8,
+          earnedCredits: 4,
+        },
+      ]);
+      (prisma.grade.upsert as jest.Mock).mockResolvedValue({ id: 'grade-1' });
+
+      await service.upsertClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer, {
+        rows: [
+          {
+            studentId: 'student-1',
+            processScore: 8,
+            practiceScore: 9,
+            midtermScore: 7,
+            finalScore: 8,
+          },
+        ],
+      });
+
+      expect(prisma.grade.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            processScore: 8,
+            practiceScore: 9,
+            midtermScore: 7,
+            finalScore: 8,
+            totalScore: 8,
+            earnedCredits: 4,
+          }),
+        }),
       );
     });
   });

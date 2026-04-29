@@ -41,6 +41,7 @@ jest.mock('@/services/api/room-bookings', () => ({
       C: [],
     }),
     listBuildingRooms: jest.fn().mockResolvedValue([]),
+    listAdminRequestRooms: jest.fn().mockResolvedValue([]),
   },
 }));
 

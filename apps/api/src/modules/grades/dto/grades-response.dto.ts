@@ -11,6 +11,17 @@ export class GradeCourseDto {
   credits!: number;
 }
 
+export class GradeClassSectionDto {
+  @ApiProperty({ example: 'section-1' })
+  id!: string;
+
+  @ApiProperty({ example: 'SE346.Q21' })
+  classCode!: string;
+
+  @ApiProperty({ example: 'Q21' })
+  sectionCode!: string;
+}
+
 export class GradesSummaryDto {
   @ApiProperty({ example: 8.4 })
   gpa!: number;
@@ -58,6 +69,9 @@ export class GradeRecordDto {
 
   @ApiProperty({ type: () => GradeCourseDto })
   course!: GradeCourseDto;
+
+  @ApiPropertyOptional({ type: () => GradeClassSectionDto })
+  classSection?: GradeClassSectionDto;
 }
 
 export class SemesterGradesDto {

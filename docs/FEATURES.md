@@ -200,8 +200,11 @@ Hệ thống có **5 vai trò chính thức** với quyền hạn khác nhau:
 - **Acceptance criteria**:
   - [x] API: GET /grades
   - [x] API: GET /grades/gpa
-  - [ ] API: POST /grades (Lecturer/Admin)
-  - [ ] API: PATCH /grades/:id (Lecturer/Admin)
+  - [x] API: GET /grades/lecturer/class-sections (Lecturer/Admin)
+  - [x] API: GET /grades/class-sections/:id/sheet (Lecturer/Admin)
+  - [x] API: PUT /grades/class-sections/:id/weights (Lecturer/Admin)
+  - [x] API: PUT /grades/class-sections/:id/sheet (Lecturer/Admin)
+  - [x] Mobile: Nhập điểm theo lớp cho giảng viên
   - [ ] Mobile: Bảng điểm theo kỳ
   - [ ] Mobile: GPA summary card
   - [ ] Mobile: Filter theo học kỳ

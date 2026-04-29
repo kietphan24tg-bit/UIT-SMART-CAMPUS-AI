@@ -41,6 +41,10 @@ export interface GradeRecord {
   midterm: number | null;
   finalExam: number | null;
   assignment: number | null;
+  processScore?: number | null;
+  practiceScore?: number | null;
+  midtermScore?: number | null;
+  finalScore?: number | null;
   totalScore: number | null;
   letterGrade: string | null;
   gradePoint: number | null;
@@ -50,6 +54,11 @@ export interface GradeRecord {
     code: string;
     name: string;
     credits: number;
+  };
+  classSection?: {
+    id: string;
+    classCode: string;
+    sectionCode: string;
   };
 }
 
