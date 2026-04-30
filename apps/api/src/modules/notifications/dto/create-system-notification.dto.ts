@@ -1,6 +1,35 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { USER_ROLES } from '@smart-campus/shared';
-import { IsArray, IsIn, IsObject, IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+
+const NOTIFICATION_AUDIENCE_SCOPES = ['all', 'roles', 'class_section'] as const;
+
+export class NotificationAudienceDto {
+  @ApiProperty({ enum: NOTIFICATION_AUDIENCE_SCOPES, example: 'roles' })
+  @IsString()
+  @IsIn(NOTIFICATION_AUDIENCE_SCOPES)
+  scope!: (typeof NOTIFICATION_AUDIENCE_SCOPES)[number];
+
+  @ApiPropertyOptional({ isArray: true, enum: Object.values(USER_ROLES) })
+  @IsArray()
+  @IsOptional()
+  @IsIn(Object.values(USER_ROLES), { each: true })
+  roles?: (typeof USER_ROLES)[keyof typeof USER_ROLES][];
+
+  @ApiPropertyOptional({ example: 'class-section-id' })
+  @IsString()
+  @IsOptional()
+  classSectionId?: string;
+}
 
 export class CreateSystemNotificationDto {
   @ApiProperty({ example: 'Campus reminder' })
@@ -22,6 +51,15 @@ export class CreateSystemNotificationDto {
   @IsObject()
   @IsOptional()
   data?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    type: NotificationAudienceDto,
+    example: { scope: 'roles', roles: [USER_ROLES.STUDENT] },
+  })
+  @ValidateNested()
+  @Type(() => NotificationAudienceDto)
+  @IsOptional()
+  audience?: NotificationAudienceDto;
 
   @ApiPropertyOptional({ isArray: true, enum: Object.values(USER_ROLES) })
   @IsArray()

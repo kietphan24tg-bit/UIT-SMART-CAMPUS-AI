@@ -1,9 +1,14 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from 'react-native';
 
+import { NotificationComposeForm } from '@/components/notifications/notification-compose-form';
 import { TaskScreen } from '@/components/tasks';
-import { ContentStack, EmptyState, Screen } from '@/components/ui';
+import { ContentStack, EmptyState, Screen, TopHero } from '@/components/ui';
+import { attendanceApi } from '@/services/api/attendance';
+import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
+import type { BroadcastNotificationRequest } from '@/services/api/notifications';
 import type { ScheduleTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
 import { isLecturerRole } from '@/utils/app';
 import { getPermissionDeniedCopy, getScheduleTaskConfig } from '@/utils/role-ui';
@@ -47,6 +52,10 @@ export default function ScheduleTaskScreen() {
     );
   }
 
+  if (task === 'class-notification') {
+    return <LecturerClassNotificationScreen role={role} />;
+  }
+
   const config = getScheduleTaskConfig(task);
 
   if (!config) {
@@ -83,4 +92,63 @@ export default function ScheduleTaskScreen() {
   };
 
   return <TaskScreen config={config} onActionPress={handleAction} onRecordPress={handleRecord} />;
+}
+
+function LecturerClassNotificationScreen({ role }: { role?: string | null }) {
+  const queryClient = useQueryClient();
+  const classesQuery = useQuery({
+    queryKey: ['attendance', 'lecturer-class-sections'],
+    queryFn: attendanceApi.getLecturerClassSections,
+  });
+  const mutation = useMutation({
+    mutationFn: (payload: BroadcastNotificationRequest) => notificationsApi.broadcast(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    },
+  });
+
+  const handleSubmit = async (payload: BroadcastNotificationRequest) => {
+    try {
+      return await mutation.mutateAsync(payload);
+    } catch (error) {
+      Alert.alert('Không gửi được thông báo lớp', getErrorMessage(error));
+      return undefined;
+    }
+  };
+
+  return (
+    <Screen>
+      <TopHero
+        eyebrow="Thông báo lớp"
+        title="Soạn thông báo lớp"
+        subtitle="Gửi cập nhật học vụ tới sinh viên đang đăng ký trong lớp bạn phụ trách."
+        badge={{ label: 'Lecturer', tone: 'info' }}
+        variant="accent"
+      />
+      <ContentStack narrow>
+        {classesQuery.isError ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Không tải được danh sách lớp"
+            description="Làm mới dữ liệu để chọn lớp nhận thông báo."
+            actionLabel="Thử lại"
+            onActionPress={() => void classesQuery.refetch()}
+          />
+        ) : null}
+        <NotificationComposeForm
+          mode="class"
+          classSections={classesQuery.data ?? []}
+          classesLoading={classesQuery.isLoading}
+          loading={mutation.isPending}
+          onRefreshClasses={() => void classesQuery.refetch()}
+          onSubmit={handleSubmit}
+        />
+      </ContentStack>
+    </Screen>
+  );
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Vui lòng thử lại sau.';
 }

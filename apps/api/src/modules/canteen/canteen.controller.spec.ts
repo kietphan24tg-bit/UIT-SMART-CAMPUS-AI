@@ -7,7 +7,8 @@ import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { CanteenController } from './canteen.controller';
 
 function getMethodRoles(methodName: keyof CanteenController) {
-  return Reflect.getMetadata(ROLES_KEY, CanteenController.prototype[methodName as string]) as string[] | undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(CanteenController.prototype, methodName);
+  return Reflect.getMetadata(ROLES_KEY, descriptor?.value as object) as string[] | undefined;
 }
 
 describe('CanteenController roles', () => {
@@ -52,5 +53,6 @@ describe('CanteenController roles', () => {
   it('keeps student and lecturer in consumer flows only', () => {
     expect(getMethodRoles('createOrder')).toEqual([USER_ROLES.STUDENT, USER_ROLES.LECTURER]);
     expect(getMethodRoles('createPayment')).toEqual([USER_ROLES.STUDENT, USER_ROLES.LECTURER]);
+    expect(getMethodRoles('createSepayPayment')).toEqual([USER_ROLES.STUDENT, USER_ROLES.LECTURER]);
   });
 });

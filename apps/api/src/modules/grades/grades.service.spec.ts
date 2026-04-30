@@ -3,12 +3,14 @@ import { Test } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import { GradesService } from './grades.service';
 
 describe('GradesService', () => {
   let service: GradesService;
   let prisma: jest.Mocked<PrismaService>;
+  let notificationsService: jest.Mocked<Pick<NotificationsService, 'createNotificationsForUsers'>>;
 
   const mockGrades = [
     {
@@ -104,11 +106,18 @@ describe('GradesService', () => {
             },
           },
         },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createNotificationsForUsers: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(GradesService);
     prisma = module.get(PrismaService);
+    notificationsService = module.get(NotificationsService);
   });
 
   describe('getAllSemesterGrades', () => {
@@ -523,6 +532,138 @@ describe('GradesService', () => {
           }),
         }),
       );
+    });
+
+    it('notifies a student when a grade row becomes complete', async () => {
+      (prisma.classSection.findUnique as jest.Mock)
+        .mockResolvedValueOnce(classSection)
+        .mockResolvedValueOnce(classSection);
+      (prisma.classEnrollment.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ studentId: 'student-1' }])
+        .mockResolvedValueOnce([
+          {
+            studentId: 'student-1',
+            student: {
+              id: 'student-1',
+              email: 'student@uit.edu.vn',
+              firstName: 'An',
+              lastName: 'Nguyen',
+              studentId: '21520001',
+            },
+          },
+        ]);
+      (prisma.grade.findMany as jest.Mock)
+        .mockResolvedValueOnce([
+          {
+            id: 'grade-1',
+            userId: 'student-1',
+            totalScore: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'grade-1',
+            userId: 'student-1',
+            processScore: 8,
+            practiceScore: 9,
+            midtermScore: 7,
+            finalScore: 8,
+            assignment: 8,
+            midterm: 7,
+            finalExam: 8,
+            totalScore: 8,
+            letterGrade: null,
+            gradePoint: 8,
+            earnedCredits: 4,
+          },
+        ]);
+      (prisma.grade.upsert as jest.Mock).mockResolvedValue({ id: 'grade-1' });
+      notificationsService.createNotificationsForUsers.mockResolvedValue({
+        count: 1,
+      } as never);
+
+      await service.upsertClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer, {
+        rows: [
+          {
+            studentId: 'student-1',
+            processScore: 8,
+            practiceScore: 9,
+            midtermScore: 7,
+            finalScore: 8,
+          },
+        ],
+      });
+
+      expect(notificationsService.createNotificationsForUsers).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userIds: ['student-1'],
+          type: 'grade_published',
+          data: expect.objectContaining({
+            classSectionId: 'section-1',
+            courseCode: 'SE346',
+            courseName: 'Mobile',
+            semesterId: 'semester-1',
+            gradeId: 'grade-1',
+            totalScore: 8,
+          }),
+        }),
+      );
+    });
+
+    it('does not notify when a grade row is still incomplete', async () => {
+      (prisma.classSection.findUnique as jest.Mock)
+        .mockResolvedValueOnce(classSection)
+        .mockResolvedValueOnce(classSection);
+      (prisma.classEnrollment.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ studentId: 'student-1' }])
+        .mockResolvedValueOnce([]);
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.grade.upsert as jest.Mock).mockResolvedValue({ id: 'grade-1' });
+
+      await service.upsertClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer, {
+        rows: [
+          {
+            studentId: 'student-1',
+            processScore: 8,
+            practiceScore: null,
+            midtermScore: 7,
+            finalScore: 8,
+          },
+        ],
+      });
+
+      expect(notificationsService.createNotificationsForUsers).not.toHaveBeenCalled();
+    });
+
+    it('does not notify when the complete total score did not change', async () => {
+      (prisma.classSection.findUnique as jest.Mock)
+        .mockResolvedValueOnce(classSection)
+        .mockResolvedValueOnce(classSection);
+      (prisma.classEnrollment.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ studentId: 'student-1' }])
+        .mockResolvedValueOnce([]);
+      (prisma.grade.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'grade-1',
+          userId: 'student-1',
+          totalScore: 8,
+        },
+      ]);
+      (prisma.grade.upsert as jest.Mock).mockResolvedValue({ id: 'grade-1' });
+
+      await service.upsertClassSectionGradeSheet('section-1', 'lecturer-1', Role.lecturer, {
+        rows: [
+          {
+            studentId: 'student-1',
+            processScore: 8,
+            practiceScore: 9,
+            midtermScore: 7,
+            finalScore: 8,
+          },
+        ],
+      });
+
+      expect(notificationsService.createNotificationsForUsers).not.toHaveBeenCalled();
     });
   });
 });

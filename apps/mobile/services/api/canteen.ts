@@ -116,6 +116,23 @@ export const canteenApi = {
     };
   },
 
+  createSepayPayment: async (orderId: string) => {
+    return (await apiClient.post(
+      `/canteen/orders/${encodeURIComponent(orderId)}/pay/sepay`,
+    )) as {
+      transactionId: string;
+      provider: 'sepay';
+      mode: 'qr';
+      amount: number;
+      orderId: string;
+      checkoutUrl: string;
+      bankName?: string;
+      accountNumber?: string;
+      accountName?: string;
+      transferDescription?: string;
+    };
+  },
+
   createCategory: async (payload: {
     name: string;
     slug: string;

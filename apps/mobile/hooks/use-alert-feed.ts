@@ -10,7 +10,7 @@ import type {
 } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 
-function getAlertCategoryFromType(type?: string | null): AlertCategory {
+export function getAlertCategoryFromType(type?: string | null): AlertCategory {
   const normalized = (type ?? '').toLowerCase();
 
   if (normalized.includes('fire')) {
@@ -43,8 +43,22 @@ function getAlertCategoryFromType(type?: string | null): AlertCategory {
   return 'general';
 }
 
-function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
+export function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
   const category = getAlertCategoryFromType(item.type);
+  const data = item.data ?? {};
+  const classCode = typeof data.classCode === 'string' ? data.classCode : null;
+  const courseCode = typeof data.courseCode === 'string' ? data.courseCode : null;
+  const courseName = typeof data.courseName === 'string' ? data.courseName : null;
+  const room = typeof data.room === 'string' ? data.room : null;
+  const date = typeof data.date === 'string' ? data.date : null;
+  const totalScore = typeof data.totalScore === 'number' ? data.totalScore : null;
+  const contextParts = [
+    classCode,
+    courseCode,
+    room ? `Phòng ${room}` : null,
+    date,
+    totalScore != null ? `Điểm ${totalScore}` : null,
+  ].filter(Boolean);
 
   return {
     id: item.id,
@@ -60,6 +74,12 @@ function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
           : 'normal',
     category,
     isRead: item.isRead,
+    classCode,
+    courseCode,
+    courseName,
+    room,
+    notificationContext:
+      contextParts.length > 0 ? contextParts.join(' · ') : courseName ?? undefined,
   };
 }
 

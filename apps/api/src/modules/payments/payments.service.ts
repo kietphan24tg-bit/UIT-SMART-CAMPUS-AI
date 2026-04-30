@@ -1,19 +1,22 @@
 import { createHmac } from 'node:crypto';
 
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Prisma } from '@prisma/client';
+import { CanteenOrderStatus, Prisma, Role } from '@prisma/client';
 import type { PaymentCheckout } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 
 const MONTHLY_FEE_VND = 40000;
 const MOMO_SANDBOX_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/create';
+const SEPAY_DEFAULT_API_BASE_URL = 'https://userapi.sepay.vn/v2';
 
 interface MomoConfig {
   partnerCode: string;
@@ -21,6 +24,27 @@ interface MomoConfig {
   secretKey: string;
   redirectUrl: string;
   ipnUrl: string;
+}
+
+interface SepayConfig {
+  apiToken: string;
+  bankAccountUuid: string;
+  webhookApiKey: string;
+  apiBaseUrl: string;
+  vaPrefix: string;
+}
+
+interface SepayOrderData {
+  id?: string;
+  order_code?: string;
+  va_number?: string;
+  amount?: number;
+  status?: string;
+  bank_name?: string;
+  account_holder_name?: string;
+  account_number?: string;
+  qr_code?: string;
+  qr_code_url?: string;
 }
 
 function resolveMonthlyFee(value: number | null | undefined) {
@@ -106,6 +130,89 @@ export class PaymentsService {
     return checkout;
   }
 
+  async createSepayPayment(userId: string, vehicleId: string): Promise<PaymentCheckout> {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      include: { subscription: true },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y xe');
+    }
+
+    if (vehicle.userId !== userId) {
+      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n thanh toÃ¡n cho xe nÃ y');
+    }
+
+    const sepayConfig = this.getSepayConfigOrThrow();
+    const subscription =
+      vehicle.subscription ??
+      (await this.prisma.parkingSubscription.create({
+        data: {
+          vehicleId: vehicle.id,
+          monthlyFee: MONTHLY_FEE_VND,
+          status: 'inactive',
+        },
+      }));
+
+    const amount = resolveMonthlyFee(subscription.monthlyFee);
+    const now = Date.now();
+    const orderId = `SEPAYPARKING${now}${vehicle.id.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    const transaction = await this.prisma.paymentTransaction.create({
+      data: {
+        vehicleId: vehicle.id,
+        subscriptionId: subscription.id,
+        provider: 'sepay',
+        providerOrderId: orderId,
+        requestId: orderId,
+        amount,
+        status: 'pending',
+        requestPayload: {
+          orderId,
+          vehicleId: vehicle.id,
+          plateNumber: vehicle.plateNumber,
+        },
+      },
+    });
+
+    const sepayOrder = await this.createSepayOrder(
+      sepayConfig,
+      orderId,
+      amount,
+      transaction.id,
+      (responseData) =>
+        this.prisma.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'failed',
+            responsePayload: this.asJson(responseData),
+          },
+        }),
+    );
+
+    await this.prisma.paymentTransaction.update({
+      where: { id: transaction.id },
+      data: {
+        checkoutUrl: sepayOrder.checkoutUrl,
+        responsePayload: this.asJson(sepayOrder.responseData),
+      },
+    });
+
+    return {
+      transactionId: transaction.id,
+      provider: 'sepay',
+      mode: 'qr',
+      amount,
+      orderId,
+      checkoutUrl: sepayOrder.checkoutUrl,
+      bankName: sepayOrder.data.bank_name,
+      accountNumber: sepayOrder.data.account_number || sepayOrder.data.va_number,
+      accountName: sepayOrder.data.account_holder_name,
+      transferDescription: orderId,
+    };
+  }
+
   async handleMomoWebhook(payload: Record<string, unknown>) {
     const orderId = String(payload.orderId || payload.requestId || '');
     if (!orderId) {
@@ -155,6 +262,42 @@ export class PaymentsService {
       status: 'failed',
       transactionId: transaction.id,
     };
+  }
+
+  async handleSepayWebhook(payload: Record<string, unknown>, authorization?: string) {
+    this.assertSepayWebhookAuthorization(authorization);
+
+    const orderCode = String(payload.code || '').trim();
+    const transferType = String(payload.transferType || '').trim().toLowerCase();
+    const transferAmount = Number(payload.transferAmount ?? 0);
+    const eventId = this.resolveSepayWebhookEventId(payload);
+
+    if (!orderCode) {
+      throw new BadRequestException('Webhook SePay thiáº¿u mÃ£ giao dá»‹ch');
+    }
+    if (!eventId) {
+      throw new BadRequestException('Webhook SePay thiáº¿u mÃ£ idempotency');
+    }
+    if (transferType !== 'in') {
+      return { success: true, ignored: true };
+    }
+    if (!Number.isFinite(transferAmount) || transferAmount <= 0) {
+      throw new BadRequestException('Webhook SePay cÃ³ sá»‘ tiá»n khÃ´ng há»£p lá»‡');
+    }
+
+    const isNewEvent = await this.recordSepayWebhookEvent(eventId, orderCode, payload);
+    if (!isNewEvent) {
+      return { success: true, duplicate: true };
+    }
+
+    if (orderCode.startsWith('SEPAYPARKING')) {
+      return this.handleSepayParkingWebhook(orderCode, transferAmount, payload);
+    }
+    if (orderCode.startsWith('SEPAYCANTEEN')) {
+      return this.handleSepayCanteenWebhook(orderCode, transferAmount, payload);
+    }
+
+    throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay');
   }
 
   private async createSandboxCheckout(
@@ -283,6 +426,104 @@ export class PaymentsService {
     ]);
   }
 
+  private async handleSepayParkingWebhook(
+    orderCode: string,
+    transferAmount: number,
+    payload: Record<string, unknown>,
+  ) {
+    const transaction = await this.prisma.paymentTransaction.findUnique({
+      where: { providerOrderId: orderCode },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay parking');
+    }
+
+    if (transaction.status === 'paid') {
+      return { success: true, status: transaction.status, transactionId: transaction.id };
+    }
+
+    if (transferAmount < transaction.amount) {
+      await this.prisma.paymentTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'failed',
+          responsePayload: this.asJson(payload),
+        },
+      });
+      return { success: true, status: 'failed', transactionId: transaction.id };
+    }
+
+    await this.markTransactionPaid(transaction.id, payload);
+    return { success: true, status: 'paid', transactionId: transaction.id };
+  }
+
+  private async handleSepayCanteenWebhook(
+    orderCode: string,
+    transferAmount: number,
+    payload: Record<string, unknown>,
+  ) {
+    const transaction = await this.prisma.canteenPaymentTransaction.findUnique({
+      where: { providerOrderId: orderCode },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay canteen');
+    }
+
+    if (transaction.status === 'paid') {
+      return { success: true, status: transaction.status, transactionId: transaction.id };
+    }
+
+    if (transferAmount < transaction.amount) {
+      await this.prisma.$transaction([
+        this.prisma.canteenPaymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'failed',
+            responsePayload: this.asJson(payload),
+          },
+        }),
+        this.prisma.canteenOrder.update({
+          where: { id: transaction.orderId },
+          data: { status: CanteenOrderStatus.payment_failed },
+        }),
+      ]);
+      return { success: true, status: 'failed', transactionId: transaction.id };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const paidTx = await tx.canteenPaymentTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'paid',
+          paidAt: new Date(),
+          responsePayload: this.asJson(payload),
+        },
+      });
+      const paidOrder = await tx.canteenOrder.update({
+        where: { id: transaction.orderId },
+        data: { status: CanteenOrderStatus.paid },
+        include: {
+          createdBy: {
+            select: { id: true },
+          },
+        },
+      });
+      return { paidTx, paidOrder };
+    });
+
+    await this.notifyCanteenOrder(
+      [updated.paidOrder.createdBy.id, ...(await this.getCanteenAdminUserIds())],
+      'canteen',
+      'ÄÆ¡n canteen Ä‘Ã£ thanh toÃ¡n',
+      'Thanh toÃ¡n Ä‘Æ¡n hÃ ng canteen thÃ nh cÃ´ng.',
+      { orderId: updated.paidOrder.id, status: CanteenOrderStatus.paid },
+    );
+
+    return { success: true, status: 'paid', transactionId: updated.paidTx.id };
+  }
+
   private getMomoConfigOrThrow(): MomoConfig {
     const partnerCode = this.configService.get<string>('MOMO_PARTNER_CODE')?.trim();
     const accessKey = this.configService.get<string>('MOMO_ACCESS_KEY')?.trim();
@@ -305,7 +546,153 @@ export class PaymentsService {
     };
   }
 
+  private getSepayConfigOrThrow(): SepayConfig {
+    const apiToken = this.configService.get<string>('SEPAY_API_TOKEN')?.trim();
+    const bankAccountUuid = this.configService.get<string>('SEPAY_BANK_ACCOUNT_UUID')?.trim();
+    const webhookApiKey =
+      this.configService.get<string>('SEPAY_WEBHOOK_API_KEY')?.trim() || apiToken || '';
+    const apiBaseUrl =
+      this.configService.get<string>('SEPAY_API_BASE_URL')?.trim() || SEPAY_DEFAULT_API_BASE_URL;
+    const vaPrefix = this.configService.get<string>('SEPAY_VA_PREFIX')?.trim() || '';
+
+    if (!apiToken || !bankAccountUuid || !webhookApiKey) {
+      throw new InternalServerErrorException(
+        'Cáº¥u hÃ¬nh SePay chÆ°a Ä‘áº§y Ä‘á»§. HÃ£y kiá»ƒm tra cÃ¡c biáº¿n SEPAY_* trÃªn backend.',
+      );
+    }
+
+    return {
+      apiToken,
+      bankAccountUuid,
+      webhookApiKey,
+      apiBaseUrl,
+      vaPrefix,
+    };
+  }
+
+  private async createSepayOrder(
+    config: SepayConfig,
+    orderCode: string,
+    amount: number,
+    transactionId: string,
+    markFailed: (responseData: Record<string, unknown>) => Promise<unknown>,
+  ) {
+    const requestPayload: Record<string, unknown> = {
+      order_code: orderCode,
+      amount,
+      with_qrcode: '1',
+      qrcode_template: 'compact',
+    };
+    if (config.vaPrefix) {
+      requestPayload.va_prefix = config.vaPrefix;
+    }
+
+    const response = await fetch(
+      `${config.apiBaseUrl.replace(/\/$/, '')}/bank-accounts/${config.bankAccountUuid}/orders`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestPayload),
+      },
+    );
+    const responseData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const data = (responseData.data ?? {}) as SepayOrderData;
+    const checkoutUrl = String(data.qr_code_url || data.qr_code || '');
+
+    if (!response.ok || responseData.status !== 'success' || !checkoutUrl) {
+      await markFailed(responseData);
+      throw new InternalServerErrorException(
+        String(responseData.message || 'KhÃ´ng táº¡o Ä‘Æ°á»£c QR SePay'),
+      );
+    }
+
+    return {
+      checkoutUrl,
+      data,
+      responseData: {
+        ...responseData,
+        localTransactionId: transactionId,
+      },
+    };
+  }
+
+  private assertSepayWebhookAuthorization(authorization?: string) {
+    const expectedKey = this.getSepayConfigOrThrow().webhookApiKey;
+    const expectedAuthorization = `Apikey ${expectedKey}`;
+    if (!authorization || authorization.trim() !== expectedAuthorization) {
+      throw new UnauthorizedException('Webhook SePay khÃ´ng há»£p lá»‡');
+    }
+  }
+
+  private resolveSepayWebhookEventId(payload: Record<string, unknown>) {
+    return String(payload.id || payload.referenceCode || '').trim();
+  }
+
+  private async recordSepayWebhookEvent(
+    eventId: string,
+    orderCode: string,
+    payload: Record<string, unknown>,
+  ) {
+    try {
+      await this.prisma.paymentWebhookEvent.create({
+        data: {
+          provider: 'sepay',
+          providerEventId: eventId,
+          providerOrderId: orderCode,
+          payload: this.asJson(payload),
+        },
+      });
+      return true;
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private async getCanteenAdminUserIds() {
+    const users = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: Role.canteen_admin,
+      },
+      select: { id: true },
+    });
+    return users.map((item) => item.id);
+  }
+
+  private async notifyCanteenOrder(
+    userIds: string[],
+    type: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ) {
+    const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+    if (!uniqueUserIds.length) {
+      return;
+    }
+
+    await this.prisma.notification.createMany({
+      data: uniqueUserIds.map((userId) => ({
+        userId,
+        title,
+        body,
+        type,
+        data: data ? this.asJson(data) : undefined,
+      })),
+    });
+  }
+
   private asJson(value: Record<string, unknown>): Prisma.InputJsonValue {
     return value as Prisma.InputJsonValue;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 }

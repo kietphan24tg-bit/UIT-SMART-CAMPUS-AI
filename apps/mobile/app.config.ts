@@ -109,7 +109,8 @@ function loadMobileEnv() {
 loadMobileEnv();
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+const easProjectId =
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'a5f0728d-df60-441d-9144-50b95b977290';
 const trackAsiaMapKey = process.env.EXPO_PUBLIC_TRACK_ASIA_MAP_KEY;
 const trackAsiaStyleUrl = process.env.EXPO_PUBLIC_TRACK_ASIA_STYLE_URL;
 

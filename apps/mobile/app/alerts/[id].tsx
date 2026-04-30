@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
@@ -12,9 +13,45 @@ import {
   TopHero,
 } from '@/components/ui';
 import { useAlertFeed } from '@/hooks/use-alert-feed';
+import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import type { AlertFeedItem, NotificationRecord } from '@/types/app-data';
 import { formatDateTime, getSeverityLabel } from '@/utils/app';
+
+function toNotificationDetail(item: NotificationRecord): AlertFeedItem {
+  const data = item.data ?? {};
+  const classCode = typeof data.classCode === 'string' ? data.classCode : null;
+  const courseCode = typeof data.courseCode === 'string' ? data.courseCode : null;
+  const courseName = typeof data.courseName === 'string' ? data.courseName : null;
+  const room = typeof data.room === 'string' ? data.room : null;
+  const date = typeof data.date === 'string' ? data.date : null;
+  const contextParts = [classCode, courseCode, room ? `Phòng ${room}` : null, date].filter(Boolean);
+
+  return {
+    id: item.id,
+    kind: 'notification',
+    title: item.title,
+    body: item.body,
+    timestamp: item.createdAt,
+    severity: item.type === 'emergency' || item.type === 'fire_alert' ? 'critical' : 'normal',
+    category:
+      item.type === 'academic' ||
+      item.type === 'deadline' ||
+      item.type === 'class_announcement' ||
+      item.type === 'schedule_update' ||
+      item.type === 'grade_published'
+        ? 'academic'
+        : 'general',
+    isRead: item.isRead,
+    classCode,
+    courseCode,
+    courseName,
+    room,
+    notificationContext:
+      contextParts.length > 0 ? contextParts.join(' · ') : courseName ?? undefined,
+  };
+}
 
 export default function AlertDetailScreen() {
   const theme = useAppTheme();
@@ -23,7 +60,27 @@ export default function AlertDetailScreen() {
   const params = useLocalSearchParams<{ id?: string; kind?: string }>();
   const alerts = useAlertFeed(role);
   const feedItems = alerts.data ?? [];
-  const item = feedItems.find((entry) => entry.id === params.id && entry.kind === params.kind);
+  const feedItem = feedItems.find((entry) => entry.id === params.id && entry.kind === params.kind);
+  const fallbackNotification = useQuery({
+    queryKey: ['notification-detail', params.id],
+    queryFn: () => notificationsApi.getNotification(params.id!),
+    enabled: Boolean(params.id && params.kind === 'notification' && !feedItem),
+  });
+  const item = feedItem ?? (fallbackNotification.data ? toNotificationDetail(fallbackNotification.data) : null);
+
+  if (!item && fallbackNotification.isFetching) {
+    return (
+      <Screen>
+        <ContentStack narrow>
+          <EmptyState
+            icon="notifications-outline"
+            title="Đang tải thông báo"
+            description="Đang lấy nội dung chi tiết."
+          />
+        </ContentStack>
+      </Screen>
+    );
+  }
 
   if (!item) {
     return (
@@ -68,16 +125,30 @@ export default function AlertDetailScreen() {
           <InfoRow label="Trạng thái" value={item.isRead ? 'Đã xem' : 'Chưa xem'} />
         </SectionCard>
 
-        <SectionCard title="Nguồn" subtitle="Gateway và thiết bị" variant="outlined">
-          <InfoRow label="Gateway" value={item.gateId || '--'} />
-          <InfoRow label="Thiết bị" value={item.deviceIp || '--'} />
+        <SectionCard
+          title="Nguồn"
+          subtitle={item.kind === 'fire_alert' ? 'Gateway và thiết bị' : 'Ngữ cảnh thông báo'}
+          variant="outlined"
+        >
+          {item.kind === 'fire_alert' ? (
+            <>
+              <InfoRow label="Gateway" value={item.gateId || '--'} />
+              <InfoRow label="Thiết bị" value={item.deviceIp || '--'} />
+            </>
+          ) : (
+            <>
+              <InfoRow label="Lớp" value={item.classCode || '--'} />
+              <InfoRow label="Môn" value={item.courseCode || item.courseName || '--'} />
+              <InfoRow label="Phòng" value={item.room || '--'} />
+            </>
+          )}
           <Text
             style={[
               styles.body,
               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
             ]}
           >
-            {item.sensorContext || 'Không có ngữ cảnh bổ sung.'}
+            {item.sensorContext || item.notificationContext || 'Không có ngữ cảnh bổ sung.'}
           </Text>
         </SectionCard>
 

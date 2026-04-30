@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type { Prisma, RoomBookingStatus, RoomStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type {
   ClassMeetingOverrideDto,
   CreateRoomScheduleOverrideDto,
@@ -297,7 +299,10 @@ function isDateWithinRange(date: Date, startDate: Date, endDate: Date) {
 
 @Injectable()
 export class RoomBookingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+  ) {}
 
   async createRoomBooking(userId: string, dto: CreateRoomBookingDto) {
     const roomCode = String(dto.roomCode || '').trim().toUpperCase();
@@ -1113,11 +1118,11 @@ export class RoomBookingsService {
     const [room, timeSlot] = await Promise.all([
       this.prisma.room.findFirst({
         where: { roomCode: normalizeRoomText(dto.roomCode), status: ACTIVE_ROOM_STATUS },
-        select: { id: true },
+        select: { id: true, roomCode: true },
       }),
       this.prisma.timeSlot.findUnique({
         where: { id: dto.timeSlotId },
-        select: { id: true },
+        select: { id: true, startTime: true, endTime: true },
       }),
     ]);
 
@@ -1140,13 +1145,35 @@ export class RoomBookingsService {
       },
     });
 
+    if (dto.type === 'maintenance') {
+      await this.notifyAffectedClassMeetingsForRoomOverride({
+        roomCode: room.roomCode,
+        overrideDate: override.overrideDate,
+        timeSlotId: override.timeSlotId,
+        overrideType: override.type,
+        roomLabel: room.roomCode,
+        startTime: timeSlot.startTime,
+        endTime: timeSlot.endTime,
+        note: override.note,
+      });
+    }
+
     return this.mapScheduleOverride(override);
   }
 
   async updateScheduleOverride(overrideId: string, dto: UpdateRoomScheduleOverrideDto) {
     const existing = await this.prisma.roomScheduleOverride.findUnique({
       where: { id: overrideId },
-      select: { id: true },
+      select: {
+        id: true,
+        roomId: true,
+        overrideDate: true,
+        timeSlotId: true,
+        type: true,
+        sourceClassMeetingId: true,
+        room: { select: { roomCode: true } },
+        timeSlot: { select: { startTime: true, endTime: true } },
+      },
     });
 
     if (!existing) {
@@ -1160,6 +1187,8 @@ export class RoomBookingsService {
         ...(dto.note != null ? { note: dto.note.trim() || null } : {}),
       },
     });
+
+    await this.notifyScheduleOverrideUpdate(existing, updated.note);
 
     return this.mapScheduleOverride(updated);
   }
@@ -1205,6 +1234,14 @@ export class RoomBookingsService {
       },
     });
 
+    await this.notifyClassScheduleOverride(meeting, {
+      overrideDate,
+      timeSlotId: timeSlot.id,
+      overrideType: 'cancel_class',
+      room: meeting.room,
+      note: override.note,
+    });
+
     return this.mapScheduleOverride(override);
   }
 
@@ -1243,6 +1280,14 @@ export class RoomBookingsService {
         sourceClassMeetingId: meeting.id,
         createdById: adminId,
       },
+    });
+
+    await this.notifyClassScheduleOverride(meeting, {
+      overrideDate,
+      timeSlotId: timeSlot.id,
+      overrideType: 'move_class',
+      room: room.roomCode,
+      note: override.note,
     });
 
     return this.mapScheduleOverride(override);
@@ -1481,6 +1526,199 @@ export class RoomBookingsService {
     return this.mapBooking(booking);
   }
 
+  private async notifyClassScheduleOverride(
+    meeting: {
+      id: string;
+      room: string | null;
+      startTime: string;
+      endTime: string;
+      classSection: {
+        id: string;
+        classCode: string;
+        course: { code: string; name: string };
+      };
+    },
+    override: {
+      overrideDate: Date;
+      timeSlotId: string;
+      overrideType: string;
+      room: string | null;
+      note: string | null;
+    },
+  ) {
+    if (!this.notificationsService) {
+      return;
+    }
+
+    const isMove = override.overrideType === 'move_class';
+    const dateKey = toDateKey(override.overrideDate);
+    const roomLabel = override.room ?? meeting.room ?? '--';
+    await this.notificationsService.createNotificationsForClassSection({
+      classSectionId: meeting.classSection.id,
+      title: isMove
+        ? `Lịch học ${meeting.classSection.course.code} đổi phòng`
+        : `Lịch học ${meeting.classSection.course.code} được cập nhật`,
+      body: isMove
+        ? `${meeting.classSection.classCode} chuyển sang phòng ${roomLabel} ngày ${dateKey}.`
+        : `${meeting.classSection.classCode} có thay đổi lịch ngày ${dateKey}.`,
+      type: 'schedule_update',
+      data: {
+        classSectionId: meeting.classSection.id,
+        courseCode: meeting.classSection.course.code,
+        courseName: meeting.classSection.course.name,
+        classCode: meeting.classSection.classCode,
+        room: roomLabel,
+        date: dateKey,
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+        timeSlotId: override.timeSlotId,
+        overrideType: override.overrideType,
+        classMeetingId: meeting.id,
+        note: override.note,
+      },
+    });
+  }
+
+  private async notifyAffectedClassMeetingsForRoomOverride(input: {
+    roomCode: string;
+    overrideDate: Date;
+    timeSlotId: string;
+    overrideType: string;
+    roomLabel: string;
+    startTime: string;
+    endTime: string;
+    note: string | null;
+  }) {
+    if (!this.notificationsService) {
+      return;
+    }
+
+    const affectedMeetings = await this.findAffectedClassMeetingsForRoomOverride(
+      input.roomCode,
+      input.overrideDate,
+      input.timeSlotId,
+    );
+
+    await Promise.all(
+      affectedMeetings.map((meeting) =>
+        this.notifyClassScheduleOverride(meeting, {
+          overrideDate: input.overrideDate,
+          timeSlotId: input.timeSlotId,
+          overrideType: input.overrideType,
+          room: input.roomLabel,
+          note: input.note,
+        }),
+      ),
+    );
+  }
+
+  private async notifyScheduleOverrideUpdate(
+    existing: {
+      roomId: string;
+      overrideDate: Date;
+      timeSlotId: string;
+      type: string;
+      sourceClassMeetingId: string | null;
+      room: { roomCode: string };
+      timeSlot: { startTime: string; endTime: string };
+    },
+    note: string | null,
+  ) {
+    if (!this.notificationsService) {
+      return;
+    }
+
+    if (existing.sourceClassMeetingId) {
+      const meeting = await this.getClassMeetingForOverride(existing.sourceClassMeetingId);
+      await this.notifyClassScheduleOverride(meeting, {
+        overrideDate: existing.overrideDate,
+        timeSlotId: existing.timeSlotId,
+        overrideType: existing.type,
+        room: existing.room.roomCode,
+        note,
+      });
+      return;
+    }
+
+    if (existing.type === 'maintenance') {
+      await this.notifyAffectedClassMeetingsForRoomOverride({
+        roomCode: existing.room.roomCode,
+        overrideDate: existing.overrideDate,
+        timeSlotId: existing.timeSlotId,
+        overrideType: existing.type,
+        roomLabel: existing.room.roomCode,
+        startTime: existing.timeSlot.startTime,
+        endTime: existing.timeSlot.endTime,
+        note,
+      });
+    }
+  }
+
+  private async findAffectedClassMeetingsForRoomOverride(
+    roomCode: string,
+    overrideDate: Date,
+    timeSlotId: string,
+  ) {
+    const timeSlot = await this.prisma.timeSlot.findUnique({
+      where: { id: timeSlotId },
+      select: {
+        slotNumber: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    if (!timeSlot) {
+      return [];
+    }
+
+    return this.prisma.classMeeting.findMany({
+      where: {
+        room: {
+          equals: normalizeRoomText(roomCode),
+          mode: 'insensitive',
+        },
+        dayOfWeek: getRoomBookingDayOfWeek(overrideDate),
+        classSection: {
+          semester: {
+            startDate: { lte: overrideDate },
+            endDate: { gte: overrideDate },
+          },
+        },
+        OR: [
+          {
+            startPeriod: { not: null, lte: timeSlot.slotNumber },
+            endPeriod: { not: null, gte: timeSlot.slotNumber },
+          },
+          {
+            startPeriod: null,
+            endPeriod: null,
+            startTime: { lte: timeSlot.startTime },
+            endTime: { gte: timeSlot.endTime },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        room: true,
+        startTime: true,
+        endTime: true,
+        classSection: {
+          select: {
+            id: true,
+            classCode: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   private async getRoomByCodeOrThrow(roomCode?: string | null) {
     const normalizedRoomCode = normalizeRoomText(roomCode);
     if (!normalizedRoomCode) {
@@ -1518,7 +1756,14 @@ export class RoomBookingsService {
         endTime: true,
         classSection: {
           select: {
+            id: true,
             classCode: true,
+            course: {
+              select: {
+                code: true,
+                name: true,
+              },
+            },
           },
         },
       },

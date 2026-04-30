@@ -61,8 +61,12 @@ export interface CreateVehicleRequest {
 export interface PaymentCheckout {
   transactionId: string;
   provider: string;
-  mode: 'sandbox';
+  mode: 'sandbox' | 'qr';
   amount: number;
   orderId: string;
   checkoutUrl: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  transferDescription?: string;
 }

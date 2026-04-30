@@ -3,6 +3,9 @@ import type { UserRole } from '../constants/roles';
 export type NotificationType =
   | 'general'
   | 'academic'
+  | 'class_announcement'
+  | 'schedule_update'
+  | 'grade_published'
   | 'payment'
   | 'system'
   | 'deadline'
@@ -16,6 +19,10 @@ export type NotificationAudience =
   | {
       scope: 'roles';
       roles: UserRole[];
+    }
+  | {
+      scope: 'class_section';
+      classSectionId: string;
     };
 
 export interface NotificationBroadcastRequest {
@@ -28,4 +35,10 @@ export interface NotificationBroadcastRequest {
 
 export interface NotificationBroadcastResult {
   count: number;
+  push?: {
+    targetTokens: number;
+    sent: number;
+    failed: number;
+    deactivatedTokens: number;
+  };
 }

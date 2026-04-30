@@ -389,7 +389,7 @@ describe('ScheduleScreen', () => {
     expect(queryByText('SE346')).toBeNull();
   });
 
-  it('renders academic schedule variant for admin while operations mode is disabled', () => {
+  it('renders operations dashboard for admin users', () => {
     mockUseEffectiveRole.mockReturnValue('admin');
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'admin' } };
@@ -406,8 +406,8 @@ describe('ScheduleScreen', () => {
 
     const { getByText } = render(<ScheduleScreen />);
 
-    expect(getByText('Lịch học trong học kỳ')).toBeTruthy();
-    expect(getByText('Chọn kỳ cần xem.')).toBeTruthy();
-    expect(getByText('Theo ngày')).toBeTruthy();
+    expect(getByText('Vận hành')).toBeTruthy();
+    expect(getByText('Điều phối campus')).toBeTruthy();
+    expect(getByText('Broadcast')).toBeTruthy();
   });
 });

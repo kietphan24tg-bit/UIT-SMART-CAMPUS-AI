@@ -165,6 +165,11 @@ export interface AlertFeedItem {
   gateId?: string;
   deviceIp?: string | null;
   sensorContext?: string;
+  classCode?: string | null;
+  courseCode?: string | null;
+  courseName?: string | null;
+  room?: string | null;
+  notificationContext?: string;
 }
 
 export type SupportState = 'live' | 'partial' | 'unsupported';

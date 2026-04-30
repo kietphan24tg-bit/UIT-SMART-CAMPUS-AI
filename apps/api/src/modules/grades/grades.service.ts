@@ -3,10 +3,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EnrollmentStatus, Role } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type {
   UpdateGradeWeightsDto,
   UpsertGradeSheetDto,
@@ -107,7 +109,10 @@ type SemesterGradesGroup = {
 
 @Injectable()
 export class GradesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+  ) {}
 
   private readonly defaultWeights = {
     processWeight: 20,
@@ -462,6 +467,47 @@ export class GradesService {
     return Math.round((total / 100) * 10) / 10;
   }
 
+  private shouldNotifyGradePublished(
+    previousTotalScore: number | null | undefined,
+    nextTotalScore: number | null,
+  ) {
+    return nextTotalScore !== null && previousTotalScore !== nextTotalScore;
+  }
+
+  private async notifyPublishedGrades(
+    classSection: {
+      id: string;
+      classCode: string;
+      course: { code: string; name: string };
+      semester: { id: string };
+    },
+    rows: Array<{ studentId: string; gradeId: string; totalScore: number }>,
+  ) {
+    if (!this.notificationsService || rows.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      rows.map((row) =>
+        this.notificationsService!.createNotificationsForUsers({
+          userIds: [row.studentId],
+          title: `Điểm ${classSection.course.code} đã được cập nhật`,
+          body: `${classSection.course.name}: điểm tổng kết ${row.totalScore}.`,
+          type: 'grade_published',
+          data: {
+            classSectionId: classSection.id,
+            classCode: classSection.classCode,
+            courseCode: classSection.course.code,
+            courseName: classSection.course.name,
+            semesterId: classSection.semester.id,
+            gradeId: row.gradeId,
+            totalScore: row.totalScore,
+          },
+        }),
+      ),
+    );
+  }
+
   async getAllSemesterGrades(userId: string) {
     const [grades, enrollments] = await Promise.all([
       this.loadGrades(userId),
@@ -795,7 +841,27 @@ export class GradesService {
       }
     }
 
-    await this.prisma.$transaction(
+    const existingGrades =
+      enrolled.length === 0
+        ? []
+        : await this.prisma.grade.findMany({
+            where: {
+              userId: { in: enrolled.map((item) => item.studentId) },
+              courseId: classSection.courseId,
+              semesterId: classSection.semesterId,
+            },
+            select: {
+              id: true,
+              userId: true,
+              totalScore: true,
+            },
+          });
+    const existingGradeByStudentId = new Map(
+      existingGrades.map((grade) => [grade.userId, grade]),
+    );
+    const notificationCandidates: Array<{ studentId: string; totalScore: number }> = [];
+
+    const upsertedGrades = await this.prisma.$transaction(
       dto.rows.map((row) => {
         const processScore = row.processScore ?? null;
         const practiceScore = row.practiceScore ?? null;
@@ -807,6 +873,14 @@ export class GradesService {
         );
         const earnedCredits =
           totalScore !== null && totalScore >= 5 ? classSection.course.credits : 0;
+        const previousGrade = existingGradeByStudentId.get(row.studentId);
+
+        if (
+          totalScore !== null &&
+          this.shouldNotifyGradePublished(previousGrade?.totalScore, totalScore)
+        ) {
+          notificationCandidates.push({ studentId: row.studentId, totalScore });
+        }
 
         return this.prisma.grade.upsert({
           where: {
@@ -845,6 +919,22 @@ export class GradesService {
           },
         });
       }),
+    );
+
+    const upsertedGradeByStudentId = new Map(
+      upsertedGrades.map((grade, index) => [dto.rows[index]?.studentId, grade]),
+    );
+    await this.notifyPublishedGrades(
+      classSection,
+      notificationCandidates
+        .map((candidate) => {
+          const grade = upsertedGradeByStudentId.get(candidate.studentId);
+          return grade?.id ? { ...candidate, gradeId: grade.id } : null;
+        })
+        .filter(
+          (candidate): candidate is { studentId: string; gradeId: string; totalScore: number } =>
+            Boolean(candidate),
+        ),
     );
 
     return this.getClassSectionGradeSheet(classSectionId, actorId, actorRole);

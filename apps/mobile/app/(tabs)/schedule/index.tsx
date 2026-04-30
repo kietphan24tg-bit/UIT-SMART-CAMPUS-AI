@@ -221,9 +221,7 @@ export default function ScheduleScreen() {
   const router = useRouter();
   // const role = useAuthStore((state) => state.user?.role);
   const role = useEffectiveRole();
-  // Bypass role-scoped operations view for local demo/testing. Restore this line to show operations for admin roles again.
-  // const isOperationsRole = isAdminRole(role);
-  const isOperationsRole = false && isAdminRole(role);
+  const isOperationsRole = isAdminRole(role);
   const isLecturer = isLecturerRole(role);
   const scheduleState = useScheduleScreenData();
   const operationsState = useOperationsScreenData();
@@ -855,6 +853,14 @@ export default function ScheduleScreen() {
                 badgeLabel="Sắp triển khai"
                 badgeTone="info"
                 onPress={() => router.push('/schedule/grade-sheet')}
+              />
+              <NavigationRow
+                icon="notifications-outline"
+                label="Thông báo lớp"
+                description="Gửi thông báo tới sinh viên trong lớp."
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
+                onPress={() => router.push('/schedule/class-notification')}
               />
             </View>
           </SectionCard>

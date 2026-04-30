@@ -11,11 +11,17 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
+import {
+  configureForegroundNotificationHandler,
+  flushPendingNotificationNavigation,
+  subscribePushNotificationEvents,
+} from '@/services/notifications/push-receiver';
 import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
 import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
+configureForegroundNotificationHandler();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +39,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
   const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
     if (fontsLoaded && isHydrated) {
@@ -44,6 +51,17 @@ export default function RootLayout() {
     const unsubscribe = subscribeExpoPushTokenChanges();
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribePushNotificationEvents(queryClient);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) {
+      flushPendingNotificationNavigation();
+    }
+  }, [isAuthenticated, isHydrated]);
 
   useEffect(() => {
     void useAuthStore.getState().hydrate();

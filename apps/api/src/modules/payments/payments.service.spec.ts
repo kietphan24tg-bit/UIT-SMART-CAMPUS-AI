@@ -1,5 +1,6 @@
 import { ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { createHmac } from 'node:crypto';
 
@@ -18,6 +19,7 @@ describe('PaymentsService', () => {
       findUnique: jest.Mock;
       findFirst: jest.Mock;
     };
+    paymentWebhookEvent: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let configService: { get: jest.Mock };
@@ -30,6 +32,14 @@ describe('PaymentsService', () => {
     MOMO_SECRET_KEY: 'secret-key',
     MOMO_REDIRECT_URL: 'http://192.168.1.7:3000/api/v1/payments/momo/return',
     MOMO_IPN_URL: 'http://192.168.1.7:3000/api/v1/payments/momo/webhook',
+    SEPAY_API_TOKEN: 'sepay-token',
+    SEPAY_BANK_ACCOUNT_UUID: 'bank-account-uuid',
+    SEPAY_API_BASE_URL: 'https://userapi.sepay.vn/v2',
+    SEPAY_BANK_NAME: 'MBBank',
+    SEPAY_ACCOUNT_NUMBER: '123456789',
+    SEPAY_ACCOUNT_NAME: 'SMART CAMPUS',
+    SEPAY_WEBHOOK_API_KEY: 'sepay-secret',
+    SEPAY_QR_BASE_URL: 'https://qr.sepay.vn/img',
   };
 
   beforeEach(async () => {
@@ -46,6 +56,9 @@ describe('PaymentsService', () => {
         update: jest.fn(),
         findUnique: jest.fn(),
         findFirst: jest.fn(),
+      },
+      paymentWebhookEvent: {
+        create: jest.fn(),
       },
       $transaction: jest.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
     };
@@ -181,6 +194,92 @@ describe('PaymentsService', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('creates a SePay QR checkout through the SePay order API', async () => {
+    prisma.vehicle.findUnique.mockResolvedValue({
+      id: 'veh12345',
+      userId: 'user-1',
+      plateNumber: '51F-123.45',
+      subscription: {
+        id: 'sub-1',
+        monthlyFee: 50000,
+        status: 'inactive',
+        startDate: null,
+        endDate: null,
+        lastPaymentAt: null,
+      },
+    });
+
+    prisma.paymentTransaction.create.mockImplementation(async ({ data }) => ({
+      id: 'payment-1',
+      ...data,
+    }));
+    prisma.paymentTransaction.update.mockResolvedValue({});
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: 'success',
+        data: {
+          id: 'sepay-order-1',
+          order_code: 'SEPAYPARKING1730000000000veh12345',
+          va_number: '963NQDORDER123',
+          amount: 50000,
+          status: 'Pending',
+          bank_name: 'MBBank',
+          account_holder_name: 'SMART CAMPUS',
+          account_number: '123456789',
+          qr_code_url: 'https://qr.sepay.vn/img?acc=123456789',
+        },
+      }),
+    } as never);
+
+    const result = await service.createSepayPayment('user-1', 'veh12345');
+
+    expect(result).toEqual({
+      transactionId: 'payment-1',
+      provider: 'sepay',
+      mode: 'qr',
+      amount: 50000,
+      orderId: 'SEPAYPARKING1730000000000veh12345',
+      checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+      bankName: 'MBBank',
+      accountNumber: '123456789',
+      accountName: 'SMART CAMPUS',
+      transferDescription: 'SEPAYPARKING1730000000000veh12345',
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://userapi.sepay.vn/v2/bank-accounts/bank-account-uuid/orders',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sepay-token',
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          order_code: 'SEPAYPARKING1730000000000veh12345',
+          amount: 50000,
+          with_qrcode: '1',
+          qrcode_template: 'compact',
+        }),
+      }),
+    );
+    expect(prisma.paymentTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'sepay',
+          providerOrderId: 'SEPAYPARKING1730000000000veh12345',
+        }),
+      }),
+    );
+    expect(prisma.paymentTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'payment-1' },
+        data: expect.objectContaining({
+          checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+        }),
+      }),
+    );
+  });
+
   it('rejects payment creation for a vehicle that belongs to another user', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({
       id: 'veh12345',
@@ -302,6 +401,83 @@ describe('PaymentsService', () => {
       status: 'paid',
       transactionId: 'payment-1',
     });
+    expect(prisma.paymentTransaction.update).not.toHaveBeenCalled();
+    expect(prisma.parkingSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it('records SePay webhook events before marking a transaction paid', async () => {
+    prisma.paymentWebhookEvent.create.mockResolvedValue({});
+    prisma.paymentTransaction.findUnique.mockResolvedValue({
+      id: 'payment-1',
+      status: 'pending',
+      providerOrderId: 'SEPAYPARKING1730000000000veh12345',
+      requestId: 'SEPAYPARKING1730000000000veh12345',
+      amount: 50000,
+      subscriptionId: 'sub-1',
+      subscription: {
+        startDate: null,
+        endDate: null,
+      },
+    });
+    prisma.paymentTransaction.update.mockResolvedValue({});
+    prisma.parkingSubscription.update.mockResolvedValue({});
+
+    const result = await service.handleSepayWebhook(
+      {
+        id: 92704,
+        code: 'SEPAYPARKING1730000000000veh12345',
+        transferType: 'in',
+        transferAmount: 50000,
+      },
+      'Apikey sepay-secret',
+    );
+
+    expect(result).toEqual({
+      success: true,
+      status: 'paid',
+      transactionId: 'payment-1',
+    });
+    expect(prisma.paymentWebhookEvent.create).toHaveBeenCalledWith({
+      data: {
+        provider: 'sepay',
+        providerEventId: '92704',
+        providerOrderId: 'SEPAYPARKING1730000000000veh12345',
+        payload: {
+          id: 92704,
+          code: 'SEPAYPARKING1730000000000veh12345',
+          transferType: 'in',
+          transferAmount: 50000,
+        },
+      },
+    });
+    expect(prisma.paymentTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'payment-1' },
+        data: expect.objectContaining({ status: 'paid' }),
+      }),
+    );
+  });
+
+  it('returns success without processing duplicate SePay webhook events', async () => {
+    prisma.paymentWebhookEvent.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '6.1.0',
+      }),
+    );
+
+    const result = await service.handleSepayWebhook(
+      {
+        id: 92704,
+        code: 'SEPAYPARKING1730000000000veh12345',
+        transferType: 'in',
+        transferAmount: 50000,
+      },
+      'Apikey sepay-secret',
+    );
+
+    expect(result).toEqual({ success: true, duplicate: true });
+    expect(prisma.paymentTransaction.findUnique).not.toHaveBeenCalled();
     expect(prisma.paymentTransaction.update).not.toHaveBeenCalled();
     expect(prisma.parkingSubscription.update).not.toHaveBeenCalled();
   });

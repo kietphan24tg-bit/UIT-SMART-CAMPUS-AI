@@ -7,13 +7,17 @@ describe('PaymentsController', () => {
   let controller: PaymentsController;
   let paymentsService: {
     createMomoPayment: jest.Mock;
+    createSepayPayment: jest.Mock;
     handleMomoWebhook: jest.Mock;
+    handleSepayWebhook: jest.Mock;
   };
 
   beforeEach(async () => {
     paymentsService = {
       createMomoPayment: jest.fn(),
+      createSepayPayment: jest.fn(),
       handleMomoWebhook: jest.fn(),
+      handleSepayWebhook: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -52,6 +56,29 @@ describe('PaymentsController', () => {
     expect(paymentsService.createMomoPayment).toHaveBeenCalledWith('user-1', 'vehicle-1');
   });
 
+  it('delegates SePay payment creation to the service', async () => {
+    paymentsService.createSepayPayment.mockResolvedValue({
+      transactionId: 'payment-1',
+      provider: 'sepay',
+      mode: 'qr',
+      amount: 40000,
+      orderId: 'SEPAY-PARKING-1',
+      checkoutUrl: 'https://qr.sepay.vn/img?acc=123&bank=MBBank&amount=40000&des=SEPAY-PARKING-1',
+    });
+
+    const result = await controller.createSepayPayment('user-1', 'vehicle-1');
+
+    expect(result).toEqual({
+      transactionId: 'payment-1',
+      provider: 'sepay',
+      mode: 'qr',
+      amount: 40000,
+      orderId: 'SEPAY-PARKING-1',
+      checkoutUrl: 'https://qr.sepay.vn/img?acc=123&bank=MBBank&amount=40000&des=SEPAY-PARKING-1',
+    });
+    expect(paymentsService.createSepayPayment).toHaveBeenCalledWith('user-1', 'vehicle-1');
+  });
+
   it('delegates MoMo webhook callbacks to the service', async () => {
     paymentsService.handleMomoWebhook.mockResolvedValue({
       acknowledged: true,
@@ -73,6 +100,37 @@ describe('PaymentsController', () => {
       orderId: 'ORDER-1',
       resultCode: 0,
     });
+  });
+
+  it('delegates SePay webhook callbacks to the service', async () => {
+    paymentsService.handleSepayWebhook.mockResolvedValue({
+      success: true,
+      status: 'paid',
+      transactionId: 'payment-1',
+    });
+
+    const result = await controller.handleSepayWebhook(
+      {
+        code: 'SEPAY-PARKING-1',
+        transferType: 'in',
+        transferAmount: 40000,
+      },
+      'Apikey secret',
+    );
+
+    expect(result).toEqual({
+      success: true,
+      status: 'paid',
+      transactionId: 'payment-1',
+    });
+    expect(paymentsService.handleSepayWebhook).toHaveBeenCalledWith(
+      {
+        code: 'SEPAY-PARKING-1',
+        transferType: 'in',
+        transferAmount: 40000,
+      },
+      'Apikey secret',
+    );
   });
 
   it('returns a redirect landing message for MoMo returns', () => {

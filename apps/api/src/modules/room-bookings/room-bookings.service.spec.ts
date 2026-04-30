@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { NotificationsService } from '../notifications/notifications.service';
+
 import { RoomBookingsService } from './room-bookings.service';
 
 const slot1 = {
@@ -35,6 +37,8 @@ describe('RoomBookingsService', () => {
   let prisma: {
     timeSlot: {
       findMany: jest.Mock;
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
     };
     room: {
       findFirst: jest.Mock;
@@ -56,12 +60,22 @@ describe('RoomBookingsService', () => {
     classMeeting: {
       findFirst: jest.Mock;
       findMany: jest.Mock;
+      findUnique: jest.Mock;
+    };
+    roomScheduleOverride: {
+      findFirst: jest.Mock;
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      delete: jest.Mock;
     };
     building: {
       findMany: jest.Mock;
     };
     $transaction: jest.Mock;
   };
+  let notificationsService: jest.Mocked<Pick<NotificationsService, 'createNotificationsForClassSection'>>;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -69,6 +83,8 @@ describe('RoomBookingsService', () => {
     prisma = {
       timeSlot: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       room: {
         findFirst: jest.fn(),
@@ -90,14 +106,28 @@ describe('RoomBookingsService', () => {
       classMeeting: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      roomScheduleOverride: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
       },
       building: {
         findMany: jest.fn(),
       },
       $transaction: jest.fn(),
     };
+    prisma.roomScheduleOverride.findFirst.mockResolvedValue(null);
+    prisma.roomScheduleOverride.findMany.mockResolvedValue([]);
+    notificationsService = {
+      createNotificationsForClassSection: jest.fn(),
+    };
 
-    service = new RoomBookingsService(prisma as never);
+    service = new RoomBookingsService(prisma as never, notificationsService as never);
   });
 
   afterEach(() => {
@@ -169,7 +199,7 @@ describe('RoomBookingsService', () => {
           roomId: 'room-1',
           userId: 'user-1',
           bookingDate: new Date('2026-04-29T00:00:00.000Z'),
-          timeSlotId: 'slot-1',
+          timeSlotId: null,
           startTime: '07:30',
           endTime: '09:00',
           title: 'SE346 Team Meeting',
@@ -451,7 +481,7 @@ describe('RoomBookingsService', () => {
         buildingName: 'Tòa B',
         weekStart: '2026-05-04',
       });
-      expect(result.days[0]?.slots[0]).toEqual({
+      expect(result.days[0]?.slots[0]).toMatchObject({
         timeSlotId: 'slot-1',
         slotNumber: 1,
         label: 'Tiết 1',
@@ -506,6 +536,9 @@ describe('RoomBookingsService', () => {
         },
         timeSlot: {
           findMany: jest.fn().mockResolvedValue([slot1, slot2]),
+        },
+        roomScheduleOverride: {
+          findFirst: jest.fn().mockResolvedValue(null),
         },
       };
       prisma.roomBooking.findUnique.mockResolvedValue({
@@ -570,6 +603,69 @@ describe('RoomBookingsService', () => {
         },
       });
       expect(result).toEqual({ id: 'booking-1', status: 'approved' });
+    });
+  });
+
+  describe('class schedule overrides', () => {
+    it('notifies enrolled students when an admin cancels a class meeting occurrence', async () => {
+      const meeting = {
+        id: 'meeting-1',
+        dayOfWeek: 2,
+        room: 'B1.02',
+        startPeriod: 1,
+        endPeriod: 2,
+        startTime: '07:30',
+        endTime: '09:00',
+        classSection: {
+          id: 'section-1',
+          classCode: 'SE346.Q21',
+          course: {
+            code: 'SE346',
+            name: 'Mobile',
+          },
+        },
+      };
+      prisma.classMeeting.findUnique.mockResolvedValue(meeting);
+      prisma.timeSlot.findFirst.mockResolvedValue({ id: 'slot-1' });
+      prisma.room.findFirst.mockResolvedValue({ id: 'room-1', roomCode: 'B1.02' });
+      prisma.roomScheduleOverride.create.mockResolvedValue({
+        id: 'override-1',
+        roomId: 'room-1',
+        overrideDate: new Date('2026-05-04T00:00:00.000Z'),
+        timeSlotId: 'slot-1',
+        type: 'cancel_class',
+        title: 'SE346.Q21',
+        note: 'Phòng bảo trì',
+        sourceClassMeetingId: 'meeting-1',
+        createdById: 'admin-1',
+        createdAt: new Date('2026-04-30T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-30T00:00:00.000Z'),
+      });
+      notificationsService.createNotificationsForClassSection.mockResolvedValue({
+        count: 2,
+      } as never);
+
+      await service.cancelClassMeetingOccurrence(
+        'meeting-1',
+        { overrideDate: '2026-05-04', note: 'Phòng bảo trì' },
+        'admin-1',
+      );
+
+      expect(notificationsService.createNotificationsForClassSection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classSectionId: 'section-1',
+          type: 'schedule_update',
+          data: expect.objectContaining({
+            classSectionId: 'section-1',
+            courseCode: 'SE346',
+            courseName: 'Mobile',
+            classCode: 'SE346.Q21',
+            date: '2026-05-04',
+            overrideType: 'cancel_class',
+            classMeetingId: 'meeting-1',
+          }),
+        }),
+      );
     });
   });
 });

@@ -1,5 +1,10 @@
 import { apiClient } from './client';
 
+import type {
+  NotificationAudience,
+  NotificationBroadcastResult,
+  NotificationType,
+} from '@smart-campus/shared';
 import type { NotificationRecord, NotificationsPayload } from '@/types/app-data';
 
 export interface RegisterPushTokenRequest {
@@ -10,6 +15,14 @@ export interface RegisterPushTokenRequest {
 
 export interface RemovePushTokenRequest {
   expoPushToken: string;
+}
+
+export interface BroadcastNotificationRequest {
+  title: string;
+  body: string;
+  type?: NotificationType;
+  data?: Record<string, unknown>;
+  audience: NotificationAudience;
 }
 
 export const notificationsApi = {
@@ -23,12 +36,20 @@ export const notificationsApi = {
     return apiClient.get('/notifications/unread-count') as Promise<number>;
   },
 
+  getNotification: async (id: string): Promise<NotificationRecord> => {
+    return apiClient.get(`/notifications/${encodeURIComponent(id)}`) as Promise<NotificationRecord>;
+  },
+
   markAsRead: async (id: string): Promise<NotificationRecord> => {
     return apiClient.patch(`/notifications/${id}/read`) as Promise<NotificationRecord>;
   },
 
   markAllAsRead: async (): Promise<{ count: number }> => {
     return apiClient.patch('/notifications/read-all') as Promise<{ count: number }>;
+  },
+
+  broadcast: async (payload: BroadcastNotificationRequest): Promise<NotificationBroadcastResult> => {
+    return apiClient.post('/notifications', payload) as Promise<NotificationBroadcastResult>;
   },
 
   registerPushToken: async (payload: RegisterPushTokenRequest) => {

@@ -187,8 +187,13 @@ Response `data`:
 | Method | Endpoint | Auth |
 | --- | --- | --- |
 | POST | `/parking/subscriptions/:vehicleId/payments/momo` | Yes |
+| POST | `/parking/subscriptions/:vehicleId/payments/sepay` | Yes |
+| POST | `/canteen/orders/:id/pay/sepay` | Yes |
 | POST | `/payments/momo/webhook` | No |
+| POST | `/payments/sepay/webhook` | `Authorization: Apikey <SEPAY_WEBHOOK_API_KEY>` |
 | GET | `/payments/momo/mock-success/:transactionId` | No |
+
+SePay payment creation calls SePay VA Order API v2 with `Authorization: Bearer <SEPAY_API_TOKEN>` and requires `SEPAY_BANK_ACCOUNT_UUID`. The webhook key may reuse the same token value when configured that way in SePay.
 
 ### IoT
 

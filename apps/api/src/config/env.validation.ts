@@ -139,6 +139,26 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  SEPAY_API_TOKEN = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_BANK_ACCOUNT_UUID = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_API_BASE_URL = 'https://userapi.sepay.vn/v2';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_VA_PREFIX = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_WEBHOOK_API_KEY = '';
+
+  @IsString()
+  @IsOptional()
   AVATAR_STORAGE_BUCKET = '';
 
   @IsString()

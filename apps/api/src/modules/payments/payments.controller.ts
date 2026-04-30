@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -26,10 +26,30 @@ export class PaymentsController {
     return this.paymentsService.createMomoPayment(userId, vehicleId);
   }
 
+  @Post('parking/subscriptions/:vehicleId/payments/sepay')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a SePay QR payment for parking subscription' })
+  createSepayPayment(
+    @CurrentUser('id') userId: string,
+    @Param('vehicleId') vehicleId: string,
+  ) {
+    return this.paymentsService.createSepayPayment(userId, vehicleId);
+  }
+
   @Post('payments/momo/webhook')
   @ApiOperation({ summary: 'Handle MoMo webhook callback' })
   handleMomoWebhook(@Body() payload: Record<string, unknown>) {
     return this.paymentsService.handleMomoWebhook(payload);
+  }
+
+  @Post('payments/sepay/webhook')
+  @ApiOperation({ summary: 'Handle SePay webhook callback' })
+  handleSepayWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.paymentsService.handleSepayWebhook(payload, authorization);
   }
 
   @Get('payments/momo/return')

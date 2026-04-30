@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { USER_ROLES } from '@smart-campus/shared';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -30,15 +31,20 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
-  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiOperation({ summary: 'Broadcast a system notification' })
-  createNotification(@Body() dto: CreateSystemNotificationDto) {
+  createNotification(
+    @Body() dto: CreateSystemNotificationDto,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
     return this.notificationsService.createSystemNotifications(
       dto.title,
       dto.body,
       dto.type,
       dto.data,
-      dto.roles,
+      dto.audience ?? dto.roles,
+      { id: actorId, role: actorRole },
     );
   }
 
@@ -58,6 +64,12 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Get unread notification count' })
   getUnreadCount(@CurrentUser('id') userId: string) {
     return this.notificationsService.getUnreadCount(userId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get notification detail' })
+  getNotification(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.notificationsService.getNotification(id, userId);
   }
 
   @Patch(':id/read')

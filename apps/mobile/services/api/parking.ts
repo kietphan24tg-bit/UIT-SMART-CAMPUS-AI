@@ -29,4 +29,10 @@ export const parkingApi = {
       `/parking/subscriptions/${vehicleId}/payments/momo`,
     ) as Promise<PaymentCheckout>;
   },
+
+  createSepayPayment: async (vehicleId: string): Promise<PaymentCheckout> => {
+    return apiClient.post(
+      `/parking/subscriptions/${vehicleId}/payments/sepay`,
+    ) as Promise<PaymentCheckout>;
+  },
 };

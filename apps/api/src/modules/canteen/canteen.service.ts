@@ -21,6 +21,7 @@ import type {
 } from './dto/canteen.dto';
 
 const MOMO_SANDBOX_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/create';
+const SEPAY_DEFAULT_API_BASE_URL = 'https://userapi.sepay.vn/v2';
 
 interface MomoConfig {
   partnerCode: string;
@@ -28,6 +29,27 @@ interface MomoConfig {
   secretKey: string;
   redirectUrl: string;
   ipnUrl: string;
+}
+
+interface SepayConfig {
+  apiToken: string;
+  bankAccountUuid: string;
+  webhookApiKey: string;
+  apiBaseUrl: string;
+  vaPrefix: string;
+}
+
+interface SepayOrderData {
+  id?: string;
+  order_code?: string;
+  va_number?: string;
+  amount?: number;
+  status?: string;
+  bank_name?: string;
+  account_holder_name?: string;
+  account_number?: string;
+  qr_code?: string;
+  qr_code_url?: string;
 }
 
 function toInputJson(value: Record<string, unknown>) {
@@ -380,6 +402,83 @@ export class CanteenService {
     return checkout;
   }
 
+  async createSepayPayment(userId: string, orderId: string) {
+    const order = await this.prisma.canteenOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+    }
+    if (order.createdById !== userId) {
+      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n thanh toÃ¡n Ä‘Æ¡n hÃ ng nÃ y');
+    }
+    const payableStatuses: CanteenOrderStatus[] = [
+      CanteenOrderStatus.pending_payment,
+      CanteenOrderStatus.payment_failed,
+    ];
+    if (!payableStatuses.includes(order.status)) {
+      throw new BadRequestException('ÄÆ¡n hÃ ng khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i cho phÃ©p thanh toÃ¡n');
+    }
+
+    const sepayConfig = this.getSepayConfigOrThrow();
+    const now = Date.now();
+    const providerOrderId = `SEPAYCANTEEN${now}${order.id.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    const transaction = await this.prisma.canteenPaymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: 'sepay',
+        providerOrderId,
+        requestId: providerOrderId,
+        amount: order.totalAmount,
+        status: 'pending',
+        requestPayload: toInputJson({
+          orderId: order.id,
+          orderCode: order.orderCode,
+        }),
+      },
+    });
+
+    const sepayOrder = await this.createSepayOrder(
+      sepayConfig,
+      providerOrderId,
+      order.totalAmount,
+      transaction.id,
+      (responseData) =>
+        this.prisma.canteenPaymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'failed',
+            responsePayload: toInputJson(responseData),
+          },
+        }),
+    );
+
+    await this.prisma.canteenPaymentTransaction.update({
+      where: { id: transaction.id },
+      data: {
+        checkoutUrl: sepayOrder.checkoutUrl,
+        responsePayload: toInputJson(sepayOrder.responseData),
+      },
+    });
+
+    return {
+      transactionId: transaction.id,
+      provider: 'sepay',
+      mode: 'qr',
+      amount: order.totalAmount,
+      orderId: providerOrderId,
+      checkoutUrl: sepayOrder.checkoutUrl,
+      bankName: sepayOrder.data.bank_name,
+      accountNumber: sepayOrder.data.account_number || sepayOrder.data.va_number,
+      accountName: sepayOrder.data.account_holder_name,
+      transferDescription: providerOrderId,
+    };
+  }
+
   async handleMomoWebhook(payload: Record<string, unknown>) {
     const orderToken = String(payload.orderId || payload.requestId || '').trim();
     if (!orderToken) {
@@ -676,6 +775,78 @@ export class CanteenService {
       secretKey,
       redirectUrl,
       ipnUrl,
+    };
+  }
+
+  private getSepayConfigOrThrow(): SepayConfig {
+    const apiToken = this.configService.get<string>('SEPAY_API_TOKEN')?.trim();
+    const bankAccountUuid = this.configService.get<string>('SEPAY_BANK_ACCOUNT_UUID')?.trim();
+    const webhookApiKey =
+      this.configService.get<string>('SEPAY_WEBHOOK_API_KEY')?.trim() || apiToken || '';
+    const apiBaseUrl =
+      this.configService.get<string>('SEPAY_API_BASE_URL')?.trim() || SEPAY_DEFAULT_API_BASE_URL;
+    const vaPrefix = this.configService.get<string>('SEPAY_VA_PREFIX')?.trim() || '';
+
+    if (!apiToken || !bankAccountUuid || !webhookApiKey) {
+      throw new InternalServerErrorException(
+        'Cáº¥u hÃ¬nh SePay chÆ°a Ä‘áº§y Ä‘á»§ cho canteen. HÃ£y kiá»ƒm tra cÃ¡c biáº¿n SEPAY_*.',
+      );
+    }
+    return {
+      apiToken,
+      bankAccountUuid,
+      webhookApiKey,
+      apiBaseUrl,
+      vaPrefix,
+    };
+  }
+
+  private async createSepayOrder(
+    config: SepayConfig,
+    orderCode: string,
+    amount: number,
+    transactionId: string,
+    markFailed: (responseData: Record<string, unknown>) => Promise<unknown>,
+  ) {
+    const requestPayload: Record<string, unknown> = {
+      order_code: orderCode,
+      amount,
+      with_qrcode: '1',
+      qrcode_template: 'compact',
+    };
+    if (config.vaPrefix) {
+      requestPayload.va_prefix = config.vaPrefix;
+    }
+
+    const response = await fetch(
+      `${config.apiBaseUrl.replace(/\/$/, '')}/bank-accounts/${config.bankAccountUuid}/orders`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestPayload),
+      },
+    );
+    const responseData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const data = (responseData.data ?? {}) as SepayOrderData;
+    const checkoutUrl = String(data.qr_code_url || data.qr_code || '');
+
+    if (!response.ok || responseData.status !== 'success' || !checkoutUrl) {
+      await markFailed(responseData);
+      throw new InternalServerErrorException(
+        String(responseData.message || 'KhÃ´ng táº¡o Ä‘Æ°á»£c QR SePay'),
+      );
+    }
+
+    return {
+      checkoutUrl,
+      data,
+      responseData: {
+        ...responseData,
+        localTransactionId: transactionId,
+      },
     };
   }
 }

@@ -1,10 +1,14 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from 'react-native';
 
+import { NotificationComposeForm } from '@/components/notifications/notification-compose-form';
 import { TaskScreen } from '@/components/tasks';
-import { ContentStack, EmptyState, Screen } from '@/components/ui';
+import { ContentStack, EmptyState, Screen, TopHero } from '@/components/ui';
 import { useOperationsScreenData } from '@/hooks/use-schedule-screen';
+import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
+import type { BroadcastNotificationRequest } from '@/services/api/notifications';
 import type { OperationsTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 import { getOperationsTaskConfig, getPermissionDeniedCopy } from '@/utils/role-ui';
@@ -49,6 +53,10 @@ export default function OperationsTaskScreen() {
     );
   }
 
+  if (task === 'notifications') {
+    return <AdminNotificationBroadcastScreen role={role} />;
+  }
+
   const config = getOperationsTaskConfig(task, role, operationsState.data);
 
   if (!config) {
@@ -85,4 +93,47 @@ export default function OperationsTaskScreen() {
   };
 
   return <TaskScreen config={config} onActionPress={handleAction} onRecordPress={handleRecord} />;
+}
+
+function AdminNotificationBroadcastScreen({ role }: { role?: string | null }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (payload: BroadcastNotificationRequest) => notificationsApi.broadcast(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    },
+  });
+
+  const handleSubmit = async (payload: BroadcastNotificationRequest) => {
+    try {
+      return await mutation.mutateAsync(payload);
+    } catch (error) {
+      Alert.alert('Không gửi được thông báo', getErrorMessage(error));
+      return undefined;
+    }
+  };
+
+  return (
+    <Screen>
+      <TopHero
+        eyebrow="Vận hành"
+        title="Broadcast thông báo"
+        subtitle="Gửi thông báo in-app và push notification cho toàn trường hoặc theo vai trò."
+        badge={{ label: 'Admin', tone: 'info' }}
+        variant="accent"
+      />
+      <ContentStack narrow>
+        <NotificationComposeForm
+          mode="admin"
+          loading={mutation.isPending}
+          onSubmit={handleSubmit}
+        />
+      </ContentStack>
+    </Screen>
+  );
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Vui lòng thử lại sau.';
 }

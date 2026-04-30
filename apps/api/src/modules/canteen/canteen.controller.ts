@@ -83,6 +83,15 @@ export class CanteenController {
     return this.canteenService.createMomoPayment(userId, orderId);
   }
 
+  @Post('orders/:id/pay/sepay')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.STUDENT, USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create SePay QR checkout for canteen order' })
+  createSepayPayment(@CurrentUser('id') userId: string, @Param('id') orderId: string) {
+    return this.canteenService.createSepayPayment(userId, orderId);
+  }
+
   @Post('payments/momo/webhook')
   @ApiOperation({ summary: 'Handle MoMo webhook for canteen orders' })
   handleMomoWebhook(@Body() payload: Record<string, unknown>) {
