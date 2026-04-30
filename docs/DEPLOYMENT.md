@@ -4,19 +4,20 @@
 
 | Thành phần | Nơi deploy | Chi phí |
 |---|---|---|
-| Backend API | Docker + VPS (DigitalOcean/AWS) | ~$12/tháng |
-| Database | Supabase hoặc Neon (PostgreSQL managed) | Free tier |
-| Mobile App | Expo EAS Build | Free tier (30 builds/tháng) |
-| Push Notifications | Firebase Cloud Messaging | Miễn phí |
-| CI/CD | GitHub Actions | Miễn phí (public repo) |
+| Backend API | Docker + VPS hoặc runtime tương đương | tuỳ hạ tầng |
+| Database | PostgreSQL managed hoặc self-hosted | tuỳ hạ tầng |
+| Redis | managed Redis hoặc self-hosted | tuỳ hạ tầng |
+| Mobile App | Expo EAS Build | theo gói Expo |
+| Push Notifications | Expo Push / Firebase stack phụ trợ | tuỳ cấu hình |
+| CI/CD | GitHub Actions | theo gói GitHub |
 
 ## Backend Deployment
 
 ### Phương án 1: Docker + VPS
 
 #### 1. Setup VPS
-- Tạo VPS trên DigitalOcean (Droplet $12/tháng) hoặc AWS EC2 (free tier)
-- OS: Ubuntu 22.04 LTS
+- Tạo VPS trên DigitalOcean, AWS, Hetzner hoặc nền tảng tương đương
+- OS: Ubuntu 22.04 LTS hoặc tương đương
 - Cài đặt Docker và Docker Compose
 
 #### 2. Build Docker image
@@ -26,24 +27,26 @@ docker build -t smart-campus-api .
 ```
 
 #### 3. Docker Compose Production
-Sử dụng file `infrastructure/docker/docker-compose.prod.yml`:
-```bash
-cd infrastructure/docker
-docker compose -f docker-compose.prod.yml up -d
-```
+Repo hiện commit file local ở `apps/api/docker-compose.yml` cho development.  
+Khi deploy production, nên có compose hoặc manifest riêng cho:
+
+- API
+- PostgreSQL
+- Redis
+- object storage / MinIO hoặc dịch vụ tương đương
 
 #### 4. Nginx Reverse Proxy
-Cấu hình Nginx để proxy requests từ domain đến Docker container:
+Cấu hình Nginx để proxy requests từ domain đến API:
 - HTTP → HTTPS redirect
 - SSL certificate (Let's Encrypt)
 - Proxy pass to port 3000
 
-### Phương án 2: Supabase (Database + Auth)
-Nếu muốn đơn giản hơn, có thể dùng Supabase cho:
-- PostgreSQL database (free tier: 500MB)
-- Authentication (tuỳ chọn)
-- File Storage
-- Realtime subscriptions
+### Phương án 2: Managed Services
+Nếu muốn đơn giản hơn, có thể dùng:
+- Managed PostgreSQL
+- Managed Redis
+- S3-compatible object storage cho avatar
+- VPS/container runtime chỉ chạy API
 
 ## Mobile Deployment
 
@@ -59,7 +62,7 @@ eas login
 ```bash
 cd apps/mobile
 
-# Android APK cho testing
+# Android APK/AAB cho testing
 eas build --platform android --profile preview
 
 # iOS (cần Apple Developer account)
@@ -68,10 +71,10 @@ eas build --platform ios --profile preview
 
 #### 3. Build cho production
 ```bash
-# Android (AAB cho Google Play)
+# Android
 eas build --platform android --profile production
 
-# iOS (IPA cho App Store)
+# iOS
 eas build --platform ios --profile production
 ```
 
@@ -95,37 +98,49 @@ eas submit --platform ios
 
 #### CD — Backend (khi merge vào main)
 1. Build Docker image
-2. Push lên Container Registry
-3. Deploy lên VPS (SSH)
+2. Push lên registry
+3. Deploy lên VPS hoặc platform tương đương
+4. Chạy `pnpm db:migrate:prod` cho backend nếu cần
 
-#### CD — Mobile (khi tạo release tag)
+#### CD — Mobile
 1. Trigger EAS Build
 2. Build Android + iOS
-3. (Tuỳ chọn) Auto submit lên store
+3. (Tuỳ chọn) Submit lên store
 
 ## Biến môi trường
 
 ### Development
-- Copy `.env.example` thành `.env.local` trong `apps/api/`
+- Copy `apps/api/.env.example` thành `apps/api/.env.local`
+- Copy `apps/mobile/.env.example` thành `apps/mobile/.env.local`
 - Không commit file `.env.local`
 
 ### Staging
-- Sử dụng GitHub Secrets cho CI/CD
-- Database: Supabase/Neon staging instance
+- Sử dụng GitHub Secrets hoặc secret manager của hạ tầng
+- Database/Redis/object storage nên tách riêng với dev
 
 ### Production
-- Tất cả secrets lưu trong GitHub Secrets hoặc VPS environment
-- Database: Managed PostgreSQL (Supabase/Neon/AWS RDS)
-- Thay đổi `JWT_SECRET` khác với dev!
+- Tất cả secrets lưu trong secret manager hoặc VPS environment
+- Database: PostgreSQL managed hoặc self-hosted
+- Cần cấu hình đúng cho:
+  - `JWT_SECRET`
+  - `DATABASE_URL`
+  - `REDIS_URL`
+  - `SMTP_*`
+  - `MOMO_*`
+  - `SEPAY_*`
+  - `AVATAR_STORAGE_*`
+  - `TRACK_ASIA_*`
+  - `IOT_SHARED_SECRET`
+  - `OPEN_LIBRARY_USER_AGENT`
 
 ## Cài đặt SSL/Domain
 
 ### Domain
-1. Mua domain (Namecheap, Cloudflare, ...)
-2. Trỏ DNS A record về IP của VPS
+1. Mua domain hoặc dùng domain tổ chức
+2. Trỏ DNS A/AAAA record về IP của VPS
 3. Sub-domain gợi ý:
    - `api.smartcampus.uit.edu.vn` — Backend API
-   - `smartcampus.uit.edu.vn` — Landing page (tuỳ chọn)
+   - `smartcampus.uit.edu.vn` — Landing page hoặc website giới thiệu
 
 ### SSL Certificate
 Sử dụng Certbot (Let's Encrypt) để tạo SSL miễn phí:
@@ -133,3 +148,10 @@ Sử dụng Certbot (Let's Encrypt) để tạo SSL miễn phí:
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d api.smartcampus.uit.edu.vn
 ```
+
+## Ghi chú triển khai hiện tại
+
+- Payment webhook phải public và map đúng vào backend
+- Avatar upload hiện cần object storage compatible với S3/MinIO
+- Password reset production cần SMTP thật, nếu không sẽ chỉ phù hợp local preview
+- Mobile schedule có fallback preview, nên staging/prod cần giám sát API để tránh che khuất lỗi backend

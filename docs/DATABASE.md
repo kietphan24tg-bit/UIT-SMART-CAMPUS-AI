@@ -8,7 +8,7 @@
 - Migrations: `apps/api/prisma/migrations/*`
 - Seed dữ liệu demo thật: `apps/api/prisma/seed.ts`
 
-Mục tiêu demo hiện tại: mọi luồng chính dùng dữ liệu thật từ DB qua API, không dùng mock fallback trong mobile demo flow.
+Mục tiêu demo hiện tại: đa số luồng chính dùng dữ liệu thật từ DB qua API. Tuy vậy, mobile schedule hiện vẫn còn preview fallback nếu request backend lỗi.
 
 ## Lệnh nhanh cho môi trường demo
 
@@ -36,6 +36,7 @@ Lệnh này sẽ:
 
 - `student`
 - `lecturer`
+- `canteen_admin`
 - `admin`
 - `super_admin`
 
@@ -66,6 +67,7 @@ Ràng buộc nghiệp vụ:
 - `rooms`
 - `time_slots`
 - `room_bookings`
+- `room_schedule_overrides`
 
 `room_bookings.status`:
 
@@ -76,7 +78,7 @@ Ràng buộc nghiệp vụ:
 - `rejected`
 - `cancelled`
 
-Các trạng thái chiếm phòng khi render lịch: `approved`, `booked`, `maintenance`.
+Các trạng thái chiếm phòng khi render lịch: `approved`, `booked`, `maintenance`, cộng thêm các override admin.
 
 ### 5) Events & Community
 
@@ -99,6 +101,12 @@ Các trạng thái chiếm phòng khi render lịch: `approved`, `booked`, `main
 - `telemetry_snapshots`
 - `fire_alerts`
 
+### 7) Library + Canteen + SOS
+
+- nhóm bảng thư viện cho sách / bản sao / mượn-trả / reservation
+- nhóm bảng canteen cho category / product / order / thanh toán
+- nhóm bảng SOS cho yêu cầu khẩn cấp
+
 ## Tài khoản seed demo
 
 Mật khẩu chung: `Password123`
@@ -114,7 +122,8 @@ Seed hiện tạo dữ liệu liên kết giữa:
 - enrollment student,
 - schedule items theo enrollment active,
 - events + registrations,
-- room bookings + timeslots + buildings/rooms.
+- room bookings + timeslots + buildings/rooms,
+- dữ liệu grades / attendance / notifications / parking / library / canteen cho demo.
 
 ## Quy tắc migration
 
@@ -142,12 +151,12 @@ pnpm db:seed
 ## Ghi chú RBAC ở mức dữ liệu/API
 
 - `registrations/*`: chỉ `student`.
-- `attendance/session/start|stop|history|records|lecturer/class-sections`: chỉ `lecturer`.
+- `attendance/session/start|stop|history|records|lecturer/class-sections`: `lecturer`, `admin`, `super_admin`.
 - `attendance/checkin|me/history`: chỉ `student`.
 - `catalog/*`: `admin`, `super_admin`.
-- `room-bookings` queue duyệt (`GET ?status=pending`, `approve/reject`): `admin`, `super_admin`.
-- `events` create/update: `lecturer`, `admin`, `super_admin`.
-- `events/:id/register`: chỉ `student`.
+- `room-bookings` queue duyệt và override: `admin`, `super_admin`.
+- `grades` lecturer entry flow: `lecturer`, `admin`, `super_admin`.
+- `notifications` broadcast: `lecturer`, `admin`, `super_admin`.
 
 ## Kiểm tra nhanh sau reset seed
 
@@ -158,7 +167,9 @@ pnpm db:seed
 2. Lecturer đăng nhập:
    - thấy lớp được gán,
    - mở/đóng session QR,
-   - xem records/history.
+   - xem records/history,
+   - nhập điểm theo class section.
 3. Admin/Super Admin:
    - quản trị catalog,
-   - duyệt room booking pending.
+   - duyệt room booking pending,
+   - thao tác override lịch phòng nếu cần.
