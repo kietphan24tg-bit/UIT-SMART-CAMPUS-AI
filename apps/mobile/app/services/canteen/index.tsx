@@ -1,9 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import { USER_ROLES } from '@smart-campus/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   ContentStack,
@@ -24,6 +25,7 @@ import { useAppTheme } from '@/theme';
 import { canManageCanteenRole, formatCurrency, getRoleLabel } from '@/utils/app';
 
 type CartMap = Record<string, number>;
+type ActiveQrPayment = Awaited<ReturnType<typeof canteenApi.createSepayPayment>>;
 
 function isConsumerRole(role?: string | null) {
   return role === USER_ROLES.STUDENT || role === USER_ROLES.LECTURER;
@@ -38,6 +40,9 @@ export default function CanteenScreen() {
   const canManageCanteen = canManageCanteenRole(role);
   const [cart, setCart] = useState<CartMap>({});
   const [note, setNote] = useState('');
+  const [activeQrOrderId, setActiveQrOrderId] = useState<string | null>(null);
+  const [activeQrPayments, setActiveQrPayments] = useState<Record<string, ActiveQrPayment>>({});
+  const hasActiveQrPayments = Object.keys(activeQrPayments).length > 0;
 
   const catalogQuery = useQuery({
     queryKey: ['canteen', 'catalog'],
@@ -47,6 +52,7 @@ export default function CanteenScreen() {
     queryKey: ['canteen', 'orders', 'me'],
     queryFn: () => canteenApi.getMyOrders(),
     enabled: consumer,
+    refetchInterval: hasActiveQrPayments ? 5000 : false,
   });
 
   const createOrderMutation = useMutation({
@@ -65,24 +71,60 @@ export default function CanteenScreen() {
       await queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] });
     },
   });
-  const payMutation = useMutation({
-    mutationFn: (orderId: string) => canteenApi.createPayment(orderId),
-    onSuccess: async (checkout) => {
-      await Linking.openURL(checkout.checkoutUrl);
+  const qrPayMutation = useMutation({
+    onMutate: (orderId: string) => {
+      setActiveQrOrderId(orderId);
+    },
+    mutationFn: (orderId: string) => canteenApi.createSepayPayment(orderId),
+    onSuccess: async (checkout, orderId) => {
+      setActiveQrPayments((prev) => ({
+        ...prev,
+        [orderId]: checkout,
+      }));
       await queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] });
+    },
+    onSettled: () => {
+      setActiveQrOrderId(null);
     },
   });
 
-  const categories = catalogQuery.data ?? [];
   const allProducts = useMemo(
-    () => categories.flatMap((category) => category.products.map((product) => ({ ...product, category }))),
-    [categories],
+    () => (catalogQuery.data ?? []).flatMap((category) => category.products.map((product) => ({ ...product, category }))),
+    [catalogQuery.data],
   );
+  const categories = catalogQuery.data ?? [];
   const cartItems = allProducts
     .map((product) => ({ ...product, quantity: cart[product.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const cartAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  useEffect(() => {
+    if (!ordersQuery.data || !hasActiveQrPayments) {
+      return;
+    }
+
+    const pendingOrderIds = new Set(
+      ordersQuery.data
+        .filter((order) => order.status === 'pending_payment')
+        .map((order) => order.id),
+    );
+
+    setActiveQrPayments((prev) => {
+      let changed = false;
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([orderId]) => {
+          const keep = pendingOrderIds.has(orderId);
+          if (!keep) {
+            changed = true;
+          }
+          return keep;
+        }),
+      ) as Record<string, ActiveQrPayment>;
+
+      return changed ? next : prev;
+    });
+  }, [hasActiveQrPayments, ordersQuery.data]);
 
   if (canManageCanteen) {
     return (
@@ -113,7 +155,7 @@ export default function CanteenScreen() {
       <TopHero
         eyebrow="Dịch vụ campus"
         title="Canteen"
-        subtitle="Đặt món, thanh toán online và theo dõi lịch sử đơn."
+        subtitle="Đặt món, thanh toán bằng QR và theo dõi lịch sử đơn."
         showBrand
         variant="accent"
       />
@@ -222,8 +264,15 @@ export default function CanteenScreen() {
                 <OrderCard
                   key={order.id}
                   order={order}
-                  paying={payMutation.isPending}
-                  onPay={() => payMutation.mutate(order.id)}
+                  qrPaying={qrPayMutation.isPending && activeQrOrderId === order.id}
+                  qrPayment={activeQrPayments[order.id] ?? null}
+                  onPayQr={() => qrPayMutation.mutate(order.id)}
+                  onHideQr={() => {
+                    setActiveQrPayments((prev) => {
+                      const { [order.id]: _, ...rest } = prev;
+                      return rest;
+                    });
+                  }}
                 />
               ))}
             </View>
@@ -312,14 +361,20 @@ function IconButton({ icon, onPress }: { icon: 'add' | 'remove'; onPress: () => 
 
 function OrderCard({
   order,
-  paying,
-  onPay,
+  qrPaying,
+  qrPayment,
+  onPayQr,
+  onHideQr,
 }: {
   order: CanteenOrderRecord;
-  paying: boolean;
-  onPay: () => void;
+  qrPaying: boolean;
+  qrPayment: ActiveQrPayment | null;
+  onPayQr: () => void;
+  onHideQr: () => void;
 }) {
   const theme = useAppTheme();
+  const showPaymentActions = order.status === 'pending_payment' || order.status === 'payment_failed';
+
   return (
     <View
       style={[
@@ -341,13 +396,30 @@ function OrderCard({
         />
       </View>
       <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-        Tổng tiền: {formatCurrency(order.totalAmount)}đ · {order.items.length} dòng món
+        Tổng tiền: {formatCurrency(order.totalAmount)}đ
       </Text>
-      <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-        Cập nhật: {new Date(order.updatedAt).toLocaleString('vi-VN')}
-      </Text>
-      {order.status === 'pending_payment' || order.status === 'payment_failed' ? (
-        <PrimaryButton label="Thanh toán MoMo" loading={paying} onPress={onPay} />
+      {showPaymentActions ? (
+        <View style={styles.stack}>
+          <PrimaryButton label={qrPayment ? 'Làm mới QR' : 'Thanh toán QR'} loading={qrPaying} onPress={onPayQr} />
+          {qrPayment ? (
+            <View
+              style={[
+                styles.qrPanel,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                },
+              ]}
+            >
+              <Pressable accessibilityRole="button" onPress={onHideQr} style={styles.qrDismiss}>
+                <Text style={[styles.qrLink, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                  Ẩn QR
+                </Text>
+              </Pressable>
+              <Image source={{ uri: qrPayment.checkoutUrl }} style={styles.qrImage} contentFit="contain" />
+            </View>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -459,5 +531,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     gap: 8,
+  },
+  qrPanel: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+    alignItems: 'center',
+  },
+  qrDismiss: {
+    alignSelf: 'stretch',
+    alignItems: 'flex-end',
+  },
+  qrLink: {
+    fontSize: 13,
+  },
+  qrImage: {
+    width: 180,
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
 });
