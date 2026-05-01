@@ -159,6 +159,22 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  SEPAY_BANK_NAME = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_ACCOUNT_NUMBER = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_ACCOUNT_NAME = '';
+
+  @IsString()
+  @IsOptional()
+  SEPAY_QR_BASE_URL = 'https://qr.sepay.vn/img';
+
+  @IsString()
+  @IsOptional()
   AVATAR_STORAGE_BUCKET = '';
 
   @IsString()

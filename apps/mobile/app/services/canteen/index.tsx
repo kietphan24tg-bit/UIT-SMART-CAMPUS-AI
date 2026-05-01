@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   ContentStack,
@@ -82,6 +82,9 @@ export default function CanteenScreen() {
         [orderId]: checkout,
       }));
       await queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] });
+    },
+    onError: (error) => {
+      Alert.alert('Thanh toán QR', getErrorMessage(error));
     },
     onSettled: () => {
       setActiveQrOrderId(null);
@@ -453,6 +456,27 @@ function getOrderStatusTone(status: CanteenOrderRecord['status']) {
     default:
       return 'warning' as const;
   }
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    if (Array.isArray(message) && message.length > 0) {
+      const flattened = message.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+      if (flattened.length > 0) {
+        return flattened.join('\n');
+      }
+    }
+  }
+
+  return 'Không thể tạo mã QR thanh toán lúc này. Vui lòng thử lại.';
 }
 
 const styles = StyleSheet.create({

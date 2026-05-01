@@ -194,7 +194,7 @@ describe('PaymentsService', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('creates a SePay QR checkout through the SePay order API', async () => {
+  it('creates a SePay QR checkout URL without calling the SePay order API', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({
       id: 'veh12345',
       userId: 'user-1',
@@ -214,24 +214,6 @@ describe('PaymentsService', () => {
       ...data,
     }));
     prisma.paymentTransaction.update.mockResolvedValue({});
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        status: 'success',
-        data: {
-          id: 'sepay-order-1',
-          order_code: 'SEPAYPARKING1730000000000veh12345',
-          va_number: '963NQDORDER123',
-          amount: 50000,
-          status: 'Pending',
-          bank_name: 'MBBank',
-          account_holder_name: 'SMART CAMPUS',
-          account_number: '123456789',
-          qr_code_url: 'https://qr.sepay.vn/img?acc=123456789',
-        },
-      }),
-    } as never);
-
     const result = await service.createSepayPayment('user-1', 'veh12345');
 
     expect(result).toEqual({
@@ -240,28 +222,14 @@ describe('PaymentsService', () => {
       mode: 'qr',
       amount: 50000,
       orderId: 'SEPAYPARKING1730000000000veh12345',
-      checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+      checkoutUrl:
+        'https://qr.sepay.vn/img?acc=123456789&bank=MBBank&amount=50000&des=SEPAYPARKING1730000000000veh12345',
       bankName: 'MBBank',
       accountNumber: '123456789',
       accountName: 'SMART CAMPUS',
       transferDescription: 'SEPAYPARKING1730000000000veh12345',
     });
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://userapi.sepay.vn/v2/bank-accounts/bank-account-uuid/orders',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer sepay-token',
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
-          order_code: 'SEPAYPARKING1730000000000veh12345',
-          amount: 50000,
-          with_qrcode: '1',
-          qrcode_template: 'compact',
-        }),
-      }),
-    );
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(prisma.paymentTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -274,7 +242,8 @@ describe('PaymentsService', () => {
       expect.objectContaining({
         where: { id: 'payment-1' },
         data: expect.objectContaining({
-          checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+          checkoutUrl:
+            'https://qr.sepay.vn/img?acc=123456789&bank=MBBank&amount=50000&des=SEPAYPARKING1730000000000veh12345',
         }),
       }),
     );
@@ -456,6 +425,55 @@ describe('PaymentsService', () => {
         data: expect.objectContaining({ status: 'paid' }),
       }),
     );
+  });
+
+  it('falls back to transfer content when SePay webhook code is null', async () => {
+    prisma.paymentWebhookEvent.create.mockResolvedValue({});
+    prisma.paymentTransaction.findUnique.mockResolvedValue({
+      id: 'payment-1',
+      status: 'pending',
+      providerOrderId: 'SEPAYPARKING1730000000000veh12345',
+      requestId: 'SEPAYPARKING1730000000000veh12345',
+      amount: 50000,
+      subscriptionId: 'sub-1',
+      subscription: {
+        startDate: null,
+        endDate: null,
+      },
+    });
+    prisma.paymentTransaction.update.mockResolvedValue({});
+    prisma.parkingSubscription.update.mockResolvedValue({});
+
+    const result = await service.handleSepayWebhook(
+      {
+        id: 92705,
+        code: null,
+        content: 'Thanh toan don SEPAYPARKING1730000000000veh12345',
+        transferType: 'in',
+        transferAmount: 50000,
+      },
+      'Apikey sepay-secret',
+    );
+
+    expect(result).toEqual({
+      success: true,
+      status: 'paid',
+      transactionId: 'payment-1',
+    });
+    expect(prisma.paymentWebhookEvent.create).toHaveBeenCalledWith({
+      data: {
+        provider: 'sepay',
+        providerEventId: '92705',
+        providerOrderId: 'SEPAYPARKING1730000000000veh12345',
+        payload: {
+          id: 92705,
+          code: null,
+          content: 'Thanh toan don SEPAYPARKING1730000000000veh12345',
+          transferType: 'in',
+          transferAmount: 50000,
+        },
+      },
+    });
   });
 
   it('returns success without processing duplicate SePay webhook events', async () => {

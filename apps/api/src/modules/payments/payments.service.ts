@@ -17,6 +17,7 @@ import { PrismaService } from '../../database/prisma.service';
 const MONTHLY_FEE_VND = 40000;
 const MOMO_SANDBOX_ENDPOINT = 'https://test-payment.momo.vn/v2/gateway/api/create';
 const SEPAY_DEFAULT_API_BASE_URL = 'https://userapi.sepay.vn/v2';
+const SEPAY_DEFAULT_QR_BASE_URL = 'https://qr.sepay.vn/img';
 
 interface MomoConfig {
   partnerCode: string;
@@ -29,9 +30,13 @@ interface MomoConfig {
 interface SepayConfig {
   apiToken: string;
   bankAccountUuid: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
   webhookApiKey: string;
   apiBaseUrl: string;
   vaPrefix: string;
+  qrBaseUrl: string;
 }
 
 interface SepayOrderData {
@@ -158,6 +163,7 @@ export class PaymentsService {
     const amount = resolveMonthlyFee(subscription.monthlyFee);
     const now = Date.now();
     const orderId = `SEPAYPARKING${now}${vehicle.id.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '')}`;
+    const checkoutUrl = this.buildSepayCheckoutUrl(sepayConfig, amount, orderId);
 
     const transaction = await this.prisma.paymentTransaction.create({
       data: {
@@ -172,30 +178,25 @@ export class PaymentsService {
           orderId,
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
+          bankName: sepayConfig.bankName,
+          accountNumber: sepayConfig.accountNumber,
+          transferDescription: orderId,
         },
       },
     });
 
-    const sepayOrder = await this.createSepayOrder(
-      sepayConfig,
-      orderId,
-      amount,
-      transaction.id,
-      (responseData) =>
-        this.prisma.paymentTransaction.update({
-          where: { id: transaction.id },
-          data: {
-            status: 'failed',
-            responsePayload: this.asJson(responseData),
-          },
-        }),
-    );
-
     await this.prisma.paymentTransaction.update({
       where: { id: transaction.id },
       data: {
-        checkoutUrl: sepayOrder.checkoutUrl,
-        responsePayload: this.asJson(sepayOrder.responseData),
+        checkoutUrl,
+        responsePayload: this.asJson({
+          checkoutUrl,
+          bankName: sepayConfig.bankName,
+          accountNumber: sepayConfig.accountNumber,
+          accountName: sepayConfig.accountName,
+          transferDescription: orderId,
+          generatedAt: new Date().toISOString(),
+        }),
       },
     });
 
@@ -205,10 +206,10 @@ export class PaymentsService {
       mode: 'qr',
       amount,
       orderId,
-      checkoutUrl: sepayOrder.checkoutUrl,
-      bankName: sepayOrder.data.bank_name,
-      accountNumber: sepayOrder.data.account_number || sepayOrder.data.va_number,
-      accountName: sepayOrder.data.account_holder_name,
+      checkoutUrl,
+      bankName: sepayConfig.bankName,
+      accountNumber: sepayConfig.accountNumber,
+      accountName: sepayConfig.accountName,
       transferDescription: orderId,
     };
   }
@@ -267,7 +268,7 @@ export class PaymentsService {
   async handleSepayWebhook(payload: Record<string, unknown>, authorization?: string) {
     this.assertSepayWebhookAuthorization(authorization);
 
-    const orderCode = String(payload.code || '').trim();
+    const orderCode = this.resolveSepayOrderCode(payload);
     const transferType = String(payload.transferType || '').trim().toLowerCase();
     const transferAmount = Number(payload.transferAmount ?? 0);
     const eventId = this.resolveSepayWebhookEventId(payload);
@@ -549,25 +550,49 @@ export class PaymentsService {
   private getSepayConfigOrThrow(): SepayConfig {
     const apiToken = this.configService.get<string>('SEPAY_API_TOKEN')?.trim();
     const bankAccountUuid = this.configService.get<string>('SEPAY_BANK_ACCOUNT_UUID')?.trim();
+    const bankName = this.configService.get<string>('SEPAY_BANK_NAME')?.trim();
+    const accountNumber = this.configService.get<string>('SEPAY_ACCOUNT_NUMBER')?.trim();
+    const accountName = this.configService.get<string>('SEPAY_ACCOUNT_NAME')?.trim() || '';
     const webhookApiKey =
       this.configService.get<string>('SEPAY_WEBHOOK_API_KEY')?.trim() || apiToken || '';
     const apiBaseUrl =
       this.configService.get<string>('SEPAY_API_BASE_URL')?.trim() || SEPAY_DEFAULT_API_BASE_URL;
     const vaPrefix = this.configService.get<string>('SEPAY_VA_PREFIX')?.trim() || '';
+    const qrBaseUrl =
+      this.configService.get<string>('SEPAY_QR_BASE_URL')?.trim() || SEPAY_DEFAULT_QR_BASE_URL;
 
-    if (!apiToken || !bankAccountUuid || !webhookApiKey) {
+    if (!bankName || !accountNumber || !webhookApiKey) {
       throw new InternalServerErrorException(
-        'Cáº¥u hÃ¬nh SePay chÆ°a Ä‘áº§y Ä‘á»§. HÃ£y kiá»ƒm tra cÃ¡c biáº¿n SEPAY_* trÃªn backend.',
+        'Cấu hình SePay chưa đầy đủ. Hãy kiểm tra SEPAY_BANK_NAME, SEPAY_ACCOUNT_NUMBER và SEPAY_WEBHOOK_API_KEY trên backend.',
       );
     }
 
     return {
-      apiToken,
-      bankAccountUuid,
+      apiToken: apiToken || '',
+      bankAccountUuid: bankAccountUuid || '',
+      bankName,
+      accountNumber,
+      accountName,
       webhookApiKey,
       apiBaseUrl,
       vaPrefix,
+      qrBaseUrl,
     };
+  }
+
+  private buildSepayCheckoutUrl(
+    config: SepayConfig,
+    amount: number,
+    transferDescription: string,
+  ) {
+    const params = new URLSearchParams({
+      acc: config.accountNumber,
+      bank: config.bankName,
+      amount: String(amount),
+      des: transferDescription,
+    });
+
+    return `${config.qrBaseUrl.replace(/\/$/, '')}?${params.toString()}`;
   }
 
   private async createSepayOrder(
@@ -629,6 +654,26 @@ export class PaymentsService {
 
   private resolveSepayWebhookEventId(payload: Record<string, unknown>) {
     return String(payload.id || payload.referenceCode || '').trim();
+  }
+
+  private resolveSepayOrderCode(payload: Record<string, unknown>) {
+    const directCode = String(payload.code || '').trim();
+    if (directCode) {
+      return directCode;
+    }
+
+    const textCandidates = [payload.content, payload.description]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean);
+
+    for (const candidate of textCandidates) {
+      const match = candidate.match(/SEPAY(?:PARKING|CANTEEN)[A-Za-z0-9]+/i);
+      if (match?.[0]) {
+        return match[0];
+      }
+    }
+
+    return '';
   }
 
   private async recordSepayWebhookEvent(

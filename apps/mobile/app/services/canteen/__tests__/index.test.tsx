@@ -2,6 +2,7 @@ import { USER_ROLES } from '@smart-campus/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import CanteenScreen from '../index';
 
@@ -76,6 +77,7 @@ describe('CanteenScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockCanteenApi.getCatalog.mockResolvedValue([]);
     mockCanteenApi.getMyOrders.mockResolvedValue([]);
     mockCanteenApi.createSepayPayment.mockResolvedValue({
@@ -162,6 +164,26 @@ describe('CanteenScreen', () => {
     await waitFor(() => {
       expect(mockCanteenApi.createSepayPayment).toHaveBeenCalledWith('order-1');
       expect(getByText('Ẩn QR')).toBeTruthy();
+    });
+  });
+
+  it('shows an error alert when QR payment creation fails', async () => {
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+      selector({
+        user: { id: 'student-1', role: USER_ROLES.STUDENT },
+      }),
+    );
+    mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
+    mockCanteenApi.createSepayPayment.mockRejectedValue({ message: 'Cấu hình SePay chưa đầy đủ.' });
+
+    const { getByText, queryByText } = renderWithClient(<CanteenScreen />);
+
+    await waitFor(() => expect(getByText('ORD-001')).toBeTruthy());
+    fireEvent.press(getByText('Thanh toán QR'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('Thanh toán QR', 'Cấu hình SePay chưa đầy đủ.');
+      expect(queryByText('Ẩn QR')).toBeNull();
     });
   });
 

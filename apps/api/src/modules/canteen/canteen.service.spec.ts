@@ -38,23 +38,7 @@ describe('CanteenService', () => {
       };
       return values[key];
     });
-    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        status: 'success',
-        data: {
-          id: 'sepay-order-1',
-          order_code: 'SEPAYCANTEEN1730000000000order123',
-          va_number: '963NQDORDER123',
-          amount: 45000,
-          status: 'Pending',
-          bank_name: 'MBBank',
-          account_holder_name: 'SMART CAMPUS',
-          account_number: '123456789',
-          qr_code_url: 'https://qr.sepay.vn/img?acc=123456789',
-        },
-      }),
-    } as never);
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as never);
     service = new CanteenService(prisma, configService as never);
   });
 
@@ -113,28 +97,14 @@ describe('CanteenService', () => {
       mode: 'qr',
       amount: 45000,
       orderId: 'SEPAYCANTEEN1730000000000order123',
-      checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+      checkoutUrl:
+        'https://qr.sepay.vn/img?acc=123456789&bank=MBBank&amount=45000&des=SEPAYCANTEEN1730000000000order123',
       bankName: 'MBBank',
       accountNumber: '123456789',
       accountName: 'SMART CAMPUS',
       transferDescription: 'SEPAYCANTEEN1730000000000order123',
     });
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://userapi.sepay.vn/v2/bank-accounts/bank-account-uuid/orders',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer sepay-token',
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({
-          order_code: 'SEPAYCANTEEN1730000000000order123',
-          amount: 45000,
-          with_qrcode: '1',
-          qrcode_template: 'compact',
-        }),
-      }),
-    );
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(prisma.canteenPaymentTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -147,7 +117,8 @@ describe('CanteenService', () => {
       expect.objectContaining({
         where: { id: 'canteen-payment-1' },
         data: expect.objectContaining({
-          checkoutUrl: 'https://qr.sepay.vn/img?acc=123456789',
+          checkoutUrl:
+            'https://qr.sepay.vn/img?acc=123456789&bank=MBBank&amount=45000&des=SEPAYCANTEEN1730000000000order123',
         }),
       }),
     );
