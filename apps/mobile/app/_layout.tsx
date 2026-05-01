@@ -8,9 +8,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
+import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
 import {
   configureForegroundNotificationHandler,
   flushPendingNotificationNavigation,
@@ -22,6 +23,8 @@ import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 configureForegroundNotificationHandler();
+
+const STARTUP_MINIMUM_MS = 1500;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,12 +43,30 @@ export default function RootLayout() {
   });
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [isStartupScreenVisible, setIsStartupScreenVisible] = useState(true);
+  const hasHiddenNativeSplashRef = useRef(false);
+  const minimumVisibleUntilRef = useRef(Date.now() + STARTUP_MINIMUM_MS);
+  const isAppReady = fontsLoaded && isHydrated;
 
   useEffect(() => {
-    if (fontsLoaded && isHydrated) {
-      void SplashScreen.hideAsync();
+    if (!isStartupScreenVisible || !isAppReady) {
+      return;
     }
-  }, [fontsLoaded, isHydrated]);
+
+    const remaining = minimumVisibleUntilRef.current - Date.now();
+    if (remaining <= 0) {
+      setIsStartupScreenVisible(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setIsStartupScreenVisible(false);
+    }, remaining);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isAppReady, isStartupScreenVisible]);
 
   useEffect(() => {
     const unsubscribe = subscribeExpoPushTokenChanges();
@@ -67,28 +88,52 @@ export default function RootLayout() {
     void useAuthStore.getState().hydrate();
   }, []);
 
-  if (!fontsLoaded || !isHydrated) {
-    return null;
-  }
+  useEffect(() => {
+    if (isStartupScreenVisible || hasHiddenNativeSplashRef.current) {
+      return;
+    }
+
+    hasHiddenNativeSplashRef.current = true;
+    void SplashScreen.hideAsync();
+  }, [isStartupScreenVisible]);
+
+  const handleStartupScreenReady = () => {
+    if (hasHiddenNativeSplashRef.current) {
+      return;
+    }
+
+    hasHiddenNativeSplashRef.current = true;
+    void SplashScreen.hideAsync();
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemePreferenceProvider>
         <ParkingRealtimeProvider>
-          <RootNavigator />
+          <>
+            <RootNavigator isStartupScreenVisible={isStartupScreenVisible} />
+            {isStartupScreenVisible ? (
+              <StartupLoadingScreen onReadyToDisplay={handleStartupScreenReady} />
+            ) : null}
+          </>
         </ParkingRealtimeProvider>
       </ThemePreferenceProvider>
     </QueryClientProvider>
   );
 }
 
-function RootNavigator() {
+function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boolean }) {
   const colorScheme = useResolvedThemeMode();
+  const statusBarStyle = isStartupScreenVisible
+    ? 'dark'
+    : colorScheme === 'dark'
+      ? 'light'
+      : 'dark';
 
   return (
     <>
       <AuthNavigationGate />
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={statusBarStyle} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />

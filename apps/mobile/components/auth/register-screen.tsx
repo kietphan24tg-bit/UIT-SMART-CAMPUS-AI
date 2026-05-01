@@ -255,11 +255,15 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     alignItems: 'center',
+    paddingHorizontal: 8,
+    width: '100%',
   },
   footerText: {
+    flexShrink: 1,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
+    width: '100%',
   },
   footerTextStrong: {
     fontSize: 15,

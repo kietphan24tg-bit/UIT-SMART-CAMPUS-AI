@@ -10,8 +10,20 @@ import type {
 } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 
+function repairMojibakeText(value?: string | null) {
+  if (!value || !/[ÃÂÄÆ]/.test(value)) {
+    return value ?? '';
+  }
+
+  try {
+    return Buffer.from(value, 'latin1').toString('utf8');
+  } catch {
+    return value;
+  }
+}
+
 export function getAlertCategoryFromType(type?: string | null): AlertCategory {
-  const normalized = (type ?? '').toLowerCase();
+  const normalized = repairMojibakeText(type).toLowerCase();
 
   if (normalized.includes('fire')) {
     return 'emergency';
@@ -55,7 +67,7 @@ export function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
   const contextParts = [
     classCode,
     courseCode,
-    room ? `Phòng ${room}` : null,
+    room ? `Phòng ${repairMojibakeText(room)}` : null,
     date,
     totalScore != null ? `Điểm ${totalScore}` : null,
   ].filter(Boolean);
@@ -63,8 +75,8 @@ export function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
   return {
     id: item.id,
     kind: 'notification',
-    title: item.title,
-    body: item.body,
+    title: repairMojibakeText(item.title),
+    body: repairMojibakeText(item.body),
     timestamp: item.createdAt,
     severity:
       category === 'emergency'
@@ -76,29 +88,35 @@ export function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
     isRead: item.isRead,
     classCode,
     courseCode,
-    courseName,
-    room,
+    courseName: courseName ? repairMojibakeText(courseName) : null,
+    room: room ? repairMojibakeText(room) : null,
     notificationContext:
-      contextParts.length > 0 ? contextParts.join(' · ') : courseName ?? undefined,
+      contextParts.length > 0
+        ? contextParts.map((part) => repairMojibakeText(String(part))).join(' · ')
+        : courseName
+          ? repairMojibakeText(courseName)
+          : undefined,
   };
 }
 
 function toFireAlertFeed(item: FireAlertRecord): AlertFeedItem {
   const sensorContext = item.telemetrySnapshot
-    ? `Gateway ${item.gateId} · IP ${item.telemetrySnapshot.deviceIp || 'Chưa xác định'}`
-    : `Gateway ${item.gateId}`;
+    ? `Gateway ${repairMojibakeText(item.gateId)} · IP ${repairMojibakeText(item.telemetrySnapshot.deviceIp || 'Chưa xác định')}`
+    : `Gateway ${repairMojibakeText(item.gateId)}`;
 
   return {
     id: item.id,
     kind: 'fire_alert',
     title: 'Cảnh báo cháy bãi xe',
-    body: item.message,
+    body: repairMojibakeText(item.message),
     timestamp: item.reportedAt,
     severity: item.isResolved ? 'warning' : 'critical',
     category: 'emergency',
     isRead: item.isResolved,
-    gateId: item.gateId,
-    deviceIp: item.telemetrySnapshot?.deviceIp ?? null,
+    gateId: repairMojibakeText(item.gateId),
+    deviceIp: item.telemetrySnapshot?.deviceIp
+      ? repairMojibakeText(item.telemetrySnapshot.deviceIp)
+      : null,
     sensorContext,
   };
 }

@@ -114,6 +114,15 @@ jest.mock('expo-notifications', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  ...(() => {
+    const React = jest.requireActual('react');
+    const Stack = ({ children }: { children?: React.ReactNode }) => children;
+    Stack.Screen = () => null;
+    const Tabs = ({ children }: { children?: React.ReactNode }) => children;
+    Tabs.Screen = () => null;
+
+    return { React, Stack, Tabs };
+  })(),
   router: {
     push: jest.fn(),
     replace: jest.fn(),
@@ -125,14 +134,9 @@ jest.mock('expo-router', () => ({
     back: jest.fn(),
   }),
   useLocalSearchParams: () => ({}),
+  useRootNavigationState: () => ({ key: 'root' }),
   useSegments: () => [],
   Link: ({ children }: { children: React.ReactNode }) => children,
-  Stack: {
-    Screen: () => null,
-  },
-  Tabs: {
-    Screen: () => null,
-  },
 }));
 
 jest.mock('expo-constants', () => ({

@@ -6,6 +6,7 @@ import type { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'UIT Smart Campus',
   slug: 'smart-campus',
+  owner: 'uit-smart-campus',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/brand/icon.png',
@@ -13,7 +14,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   splash: {
-    image: './assets/brand/splash.png',
+    image: './assets/brand/splash-blank.png',
     resizeMode: 'contain',
     backgroundColor: '#FFFFFF',
   },
@@ -110,7 +111,7 @@ loadMobileEnv();
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 const easProjectId =
-  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'a5f0728d-df60-441d-9144-50b95b977290';
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'b2923cbc-a879-4209-98cd-f0b14ad11c80';
 const trackAsiaMapKey = process.env.EXPO_PUBLIC_TRACK_ASIA_MAP_KEY;
 const trackAsiaStyleUrl = process.env.EXPO_PUBLIC_TRACK_ASIA_STYLE_URL;
 

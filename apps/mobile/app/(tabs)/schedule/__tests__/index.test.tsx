@@ -3,6 +3,7 @@ import React from 'react';
 
 import ScheduleScreen, {
   buildSubjectColorIndex,
+  filterScheduleForLecturer,
   getSemesterColorByStatus,
   getSubjectColorByCode,
 } from '../index';
@@ -173,6 +174,28 @@ describe('ScheduleScreen', () => {
     expect(subjectColorIndex.size).toBe(2);
     expect(se346).toEqual(getSubjectColorByCode(mockColorTheme, 'SE346', subjectColorIndex));
     expect(se346.accent).not.toBe(cs312.accent);
+  });
+
+  it('filters lecturer schedules by normalized full name', () => {
+    const filtered = filterScheduleForLecturer(
+      [
+        {
+          ...makeScheduleRecord('SE346'),
+          instructor: 'Nguyen Hoang Phuc',
+        },
+        {
+          ...makeScheduleRecord('CS312'),
+          instructor: 'Phạm Thu Hà',
+        },
+      ],
+      {
+        firstName: 'Hoàng Phúc',
+        lastName: 'Nguyễn',
+      },
+    );
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.classCode).toBe('SE346');
   });
 
   it('renders academic schedule for student', () => {

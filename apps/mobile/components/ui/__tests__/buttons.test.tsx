@@ -10,6 +10,11 @@ describe('PrimaryButton', () => {
         expect(getByText('Đăng nhập')).toBeTruthy();
     });
 
+    it('keeps the primary label on a single line', () => {
+        const { getByText } = render(<PrimaryButton label="Đăng nhập" />);
+        expect(getByText('Đăng nhập').props.numberOfLines).toBe(1);
+    });
+
     it('shows a loading indicator and hides label when loading', () => {
         const { queryByText } = render(
             <PrimaryButton label="Đăng nhập" loading />,
@@ -48,6 +53,11 @@ describe('SecondaryButton', () => {
     it('renders the label text', () => {
         const { getByText } = render(<SecondaryButton label="Hủy" />);
         expect(getByText('Hủy')).toBeTruthy();
+    });
+
+    it('keeps the secondary label on a single line', () => {
+        const { getByText } = render(<SecondaryButton label="Quay lại" />);
+        expect(getByText('Quay lại').props.numberOfLines).toBe(1);
     });
 
     it('shows a loading indicator and hides label when loading', () => {

@@ -24,6 +24,11 @@ describe('LoginRoute', () => {
 
     expect(getByText('Hello!')).toBeTruthy();
     expect(getByText('Chào mừng đến với UIT Campus')).toBeTruthy();
+    expect(
+      getByText(
+        'Tiếp tục với email sinh viên để sử dụng trọn bộ tiện ích học tập và đời sống tại Campus.',
+      ),
+    ).toBeTruthy();
     expect(getByPlaceholderText('student@gm.uit.edu.vn')).toBeTruthy();
     expect(getByPlaceholderText('Nhập mật khẩu')).toBeTruthy();
   });

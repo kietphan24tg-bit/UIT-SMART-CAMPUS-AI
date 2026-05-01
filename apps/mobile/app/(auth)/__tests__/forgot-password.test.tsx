@@ -28,6 +28,7 @@ describe('ForgotPasswordRoute', () => {
     const { getByText, getByPlaceholderText } = render(<ForgotPasswordRoute />);
 
     expect(getByText('Khôi Phục')).toBeTruthy();
+    expect(getByText('Lấy lại quyền truy cập UIT Campus chỉ với 3 bước')).toBeTruthy();
     expect(getByText('Quên mật khẩu')).toBeTruthy();
     expect(getByPlaceholderText('student@gm.uit.edu.vn')).toBeTruthy();
   });

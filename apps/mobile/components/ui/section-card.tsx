@@ -56,6 +56,8 @@ export function SectionCard({
 }: SectionCardProps) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
+  const hasHeaderExtras = Boolean(actionLabel || headerAccessory);
+  const shouldStackHeader = !layout.isTablet && Boolean(subtitle) && hasHeaderExtras;
   const accentColor =
     tone === 'campus'
       ? theme.colors.accentCampus
@@ -152,8 +154,11 @@ export function SectionCard({
           ]}
         />
       ) : null}
-      <View style={[styles.header, layout.isCompact ? styles.headerStacked : null]}>
-        <View style={styles.titleWrap}>
+      <View
+        testID="section-card-header"
+        style={[styles.header, shouldStackHeader ? styles.headerStacked : null]}
+      >
+        <View style={[styles.titleWrap, shouldStackHeader ? styles.titleWrapStacked : null]}>
           <View style={styles.titleRow}>
             {icon ? (
               <View
@@ -194,13 +199,25 @@ export function SectionCard({
           </View>
         </View>
         {actionLabel || headerAccessory ? (
-          <View style={styles.actions}>
-            {headerAccessory ? <View style={styles.headerAccessory}>{headerAccessory}</View> : null}
+          <View
+            testID="section-card-actions"
+            style={[styles.actions, shouldStackHeader ? styles.actionsStacked : null]}
+          >
+            {headerAccessory ? (
+              <View
+                style={[
+                  styles.headerAccessory,
+                  shouldStackHeader ? styles.headerAccessoryStacked : null,
+                ]}
+              >
+                {headerAccessory}
+              </View>
+            ) : null}
             {actionLabel && onActionPress ? (
               <SecondaryButton
                 label={actionLabel}
                 onPress={onActionPress}
-                style={layout.isCompact ? styles.actionButton : undefined}
+                style={shouldStackHeader || layout.isCompact ? styles.actionButton : undefined}
               />
             ) : null}
           </View>
@@ -216,6 +233,8 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     overflow: 'hidden',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   header: {
     flexDirection: 'row',
@@ -228,6 +247,11 @@ const styles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0,
+  },
+  titleWrapStacked: {
+    flex: 0,
+    width: '100%',
   },
   titleRow: {
     flexDirection: 'row',
@@ -251,8 +275,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 10,
   },
+  actionsStacked: {
+    width: '100%',
+    alignItems: 'flex-start',
+  },
   headerAccessory: {
     alignItems: 'flex-end',
+  },
+  headerAccessoryStacked: {
+    alignItems: 'flex-start',
   },
   actionButton: {
     alignSelf: 'flex-start',

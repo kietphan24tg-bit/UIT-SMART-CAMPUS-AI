@@ -30,13 +30,14 @@ export function PrimaryButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: theme.colors.primary,
-          borderColor: theme.colors.border,
-          opacity: disabled || loading ? 0.56 : pressed ? 0.9 : 1,
+          backgroundColor: disabled ? theme.colors.primaryMuted : theme.colors.primary,
+          borderColor: disabled ? theme.colors.primaryMuted : theme.colors.border,
+          opacity: loading ? 0.72 : pressed ? 0.9 : 1,
         },
         resolvePressableStyle(style, { pressed, hovered: false }),
       ]}
@@ -46,7 +47,16 @@ export function PrimaryButton({
       {!loading ? (
         <View style={styles.row}>
           {icon}
-          <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.primaryLabel,
+              { color: theme.colors.onPrimary, fontFamily: theme.fonts.semibold },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.92}
+            allowFontScaling={false}
+          >
             {label}
           </Text>
         </View>
@@ -68,14 +78,15 @@ export function SecondaryButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: theme.colors.surfaceSubtle,
-          borderColor: theme.colors.border,
+          backgroundColor: disabled ? theme.colors.surfaceTinted : theme.colors.surfaceSubtle,
+          borderColor: disabled ? theme.colors.inputBorder : theme.colors.border,
           borderWidth: 1,
-          opacity: disabled || loading ? 0.56 : pressed ? 0.84 : 1,
+          opacity: loading ? 0.72 : pressed ? 0.84 : 1,
         },
         resolvePressableStyle(style, { pressed, hovered: false }),
       ]}
@@ -85,7 +96,16 @@ export function SecondaryButton({
       {!loading ? (
         <View style={styles.row}>
           {icon}
-          <Text style={[styles.secondaryLabel, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.secondaryLabel,
+              { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.92}
+            allowFontScaling={false}
+          >
             {label}
           </Text>
         </View>
@@ -109,11 +129,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minWidth: 0,
+    width: '100%',
   },
   primaryLabel: {
+    flexShrink: 1,
+    flexGrow: 1,
     fontSize: 15,
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   secondaryLabel: {
+    flexShrink: 1,
+    flexGrow: 1,
     fontSize: 15,
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
 });

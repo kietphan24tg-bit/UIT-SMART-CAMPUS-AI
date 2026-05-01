@@ -48,7 +48,7 @@ export function LoginScreen() {
       displayTitle="Hello!"
       displaySubtitle="Chào mừng đến với UIT Campus"
       panelTitle="Đăng nhập"
-      panelSubtitle="Tiếp tục với email sinh viên để sử dụng trọn bộ tiện ích học tập và đời sống trong campus."
+      panelSubtitle="Tiếp tục với email sinh viên để sử dụng trọn bộ tiện ích học tập và đời sống tại Campus."
       footer={
         <Pressable
           accessibilityRole="link"
@@ -155,18 +155,25 @@ const styles = StyleSheet.create({
   inlineLink: {
     alignSelf: 'center',
     marginTop: -2,
+    paddingHorizontal: 8,
+    width: '100%',
   },
   inlineLinkText: {
     fontSize: 15,
     textDecorationLine: 'underline',
+    textAlign: 'center',
   },
   footerLink: {
     alignItems: 'center',
+    paddingHorizontal: 8,
+    width: '100%',
   },
   footerText: {
+    flexShrink: 1,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
+    width: '100%',
   },
   footerTextStrong: {
     fontSize: 15,

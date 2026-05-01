@@ -144,11 +144,11 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       url: redisUrl,
       ...(isTestEnvironment
         ? {
-            socket: {
-              connectTimeout: 1000,
-              reconnectStrategy: false,
-            },
-          }
+          socket: {
+            connectTimeout: 1000,
+            reconnectStrategy: false,
+          },
+        }
         : {}),
     });
   }
@@ -723,12 +723,12 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       expiredSessions,
       latestSession: latestSession
         ? {
-            id: latestSession.id,
-            status: latestSession.status,
-            startedAt: latestSession.startedAt,
-            expiresAt: latestSession.expiresAt,
-            checkedInCount: latestSession._count.records,
-          }
+          id: latestSession.id,
+          status: latestSession.status,
+          startedAt: latestSession.startedAt,
+          expiresAt: latestSession.expiresAt,
+          checkedInCount: latestSession._count.records,
+        }
         : null,
     };
   }
@@ -1181,7 +1181,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       });
     });
 
-    const footerRowNumber = worksheet.lastRow.number + 2;
+    const footerRowNumber = worksheet.lastRow!.number + 2;
     worksheet.mergeCells(`A${footerRowNumber}:${lastColumnLetter}${footerRowNumber}`);
     const footerCell = worksheet.getCell(`A${footerRowNumber}`);
     footerCell.value =
@@ -1532,10 +1532,10 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   private isUniqueConstraintError(error: unknown): boolean {
     return Boolean(
       error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        typeof (error as { code?: unknown }).code === 'string' &&
-        (error as { code: string }).code === 'P2002',
+      typeof error === 'object' &&
+      'code' in error &&
+      typeof (error as { code?: unknown }).code === 'string' &&
+      (error as { code: string }).code === 'P2002',
     );
   }
 }

@@ -69,9 +69,17 @@ export function AuthShell({
   const phoneTopPadding = isCompactPhone ? 10 : 14;
   const phoneBottomPadding = isCompactPhone ? 18 : 22;
   const panelTitleSize = isSplit ? 28 : isCompactPhone ? 24 : 26;
+  const panelSubtitleFontSize = isSplit ? 15 : isCompactPhone ? 14 : 15;
+  const panelSubtitleLineHeight = isSplit ? 22 : isCompactPhone ? 21 : 22;
   const titleLetterSpacing = isSplit ? -1.4 : layout.isCompact ? -0.3 : -0.5;
   const titleLineHeight = Math.round(titleSize * (isSplit ? 0.95 : 1.12));
+  const subtitleLineHeight = Math.round(subtitleSize * (isPhone ? 1.24 : 1.14));
   const titleVerticalPadding = Platform.OS === 'android' && isPhone ? 4 : 0;
+  const heroTitleColor = theme.isDark ? '#F8FBFF' : '#FFFFFF';
+  const heroSubtitleColor = theme.isDark ? 'rgba(248, 251, 255, 0.96)' : '#FFFFFF';
+  const heroTextShadowColor = theme.isDark
+    ? 'rgba(3, 11, 24, 0.56)'
+    : 'rgba(12, 40, 92, 0.34)';
 
   useEffect(() => {
     if (!useBrowserScroll || typeof document === 'undefined') {
@@ -215,17 +223,23 @@ export function AuthShell({
                 ]}
               >
                 <View style={[styles.heroTop, isPhone ? styles.heroTopPhone : null]}>
-                  <View
-                    style={[
-                      styles.brandBadge,
-                      isPhone ? styles.brandBadgePhone : null,
-                      {
-                        backgroundColor: theme.colors.glassStrong,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <BrandLockup compact showSubtitle={isSplit} />
+                    <View
+                      style={[
+                        styles.brandBadge,
+                        isPhone ? styles.brandBadgePhone : null,
+                        {
+                          backgroundColor: theme.colors.glassStrong,
+                          borderColor: theme.colors.border,
+                          maxWidth: '100%',
+                        },
+                      ]}
+                    >
+                    <BrandLockup
+                      compact
+                      showSubtitle={isSplit}
+                      emphasis="flat"
+                      compactDensity={isPhone ? 'tight' : 'default'}
+                    />
                   </View>
                   {heroLabel ? (
                     <View
@@ -255,7 +269,7 @@ export function AuthShell({
                     style={[
                       styles.displayTitle,
                       {
-                        color: theme.palette.text.inverse,
+                        color: heroTitleColor,
                         fontFamily: theme.fonts.bold,
                         fontSize: titleSize,
                         lineHeight: titleLineHeight,
@@ -263,6 +277,9 @@ export function AuthShell({
                         paddingTop: titleVerticalPadding,
                         paddingBottom: titleVerticalPadding,
                         includeFontPadding: true,
+                        textShadowColor: heroTextShadowColor,
+                        textShadowOffset: { width: 0, height: 2 },
+                        textShadowRadius: 10,
                       },
                     ]}
                   >
@@ -273,10 +290,13 @@ export function AuthShell({
                       styles.displaySubtitle,
                       isPhone ? styles.displaySubtitlePhone : null,
                       {
-                        color: theme.palette.text.inverse,
+                        color: heroSubtitleColor,
                         fontFamily: theme.fonts.semibold,
                         fontSize: subtitleSize,
-                        lineHeight: subtitleSize * 1.1,
+                        lineHeight: subtitleLineHeight,
+                        textShadowColor: heroTextShadowColor,
+                        textShadowOffset: { width: 0, height: 1 },
+                        textShadowRadius: 8,
                       },
                     ]}
                   >
@@ -316,7 +336,12 @@ export function AuthShell({
               <Text
                 style={[
                   styles.panelSubtitle,
-                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                  {
+                    color: theme.colors.textMuted,
+                    fontFamily: theme.fonts.regular,
+                    fontSize: panelSubtitleFontSize,
+                    lineHeight: panelSubtitleLineHeight,
+                  },
                 ]}
               >
                 {panelSubtitle}
@@ -401,6 +426,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
+    width: '100%',
   },
   heroTopPhone: {
     flexDirection: 'column',
@@ -414,10 +440,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     alignSelf: 'flex-start',
+    minWidth: 0,
   },
   brandBadgePhone: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    alignSelf: 'stretch',
+    width: '100%',
   },
   heroLabel: {
     borderRadius: 999,
@@ -437,19 +466,21 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     gap: 10,
+    maxWidth: '100%',
   },
   heroCopyPhone: {
-    gap: 6,
-    marginTop: 8,
+    gap: 8,
+    marginTop: 10,
   },
   displayTitle: {
     flexShrink: 1,
+    maxWidth: '100%',
   },
   displaySubtitle: {
     maxWidth: 520,
   },
   displaySubtitlePhone: {
-    maxWidth: '88%',
+    maxWidth: '100%',
   },
   panel: {
     borderRadius: 28,

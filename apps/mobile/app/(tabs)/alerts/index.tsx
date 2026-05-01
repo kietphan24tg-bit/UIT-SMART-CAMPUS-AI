@@ -45,6 +45,7 @@ const CATEGORY_TONES: Record<AlertCategory, 'info' | 'warning' | 'danger'> = {
 
 const CATEGORY_ORDER: AlertCategory[] = ['emergency', 'payment', 'academic', 'general'];
 const EMPTY_FEED_ITEMS: AlertFeedItem[] = [];
+const ALERT_FEED_GAP = 12;
 
 export default function AlertsScreen() {
   const theme = useAppTheme();
@@ -54,9 +55,15 @@ export default function AlertsScreen() {
   const alerts = useAlertFeed(role);
   const feedItems = alerts.data ?? EMPTY_FEED_ITEMS;
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [feedWidth, setFeedWidth] = useState(0);
 
   const cardColumns = layout.isTablet ? 2 : 1;
-  const cardWidth = layout.getGridItemWidth({ columns: cardColumns, gap: 12 });
+  const cardWidth =
+    cardColumns === 1
+      ? '100%'
+      : feedWidth > 0
+        ? Math.max((feedWidth - ALERT_FEED_GAP * (cardColumns - 1)) / cardColumns, 0)
+        : '100%';
   const unreadCount = feedItems.filter((item) => !item.isRead).length;
 
   const filteredItems = useMemo(() => {
@@ -148,7 +155,15 @@ export default function AlertsScreen() {
                 />
               }
             >
-              <View style={styles.feed}>
+              <View
+                style={styles.feed}
+                onLayout={({ nativeEvent }) => {
+                  const nextWidth = nativeEvent.layout.width;
+                  if (nextWidth !== feedWidth) {
+                    setFeedWidth(nextWidth);
+                  }
+                }}
+              >
                 {items.map((item) => (
                   <AlertRow
                     key={`${item.kind}-${item.id}`}
@@ -222,7 +237,7 @@ function AlertRow({
   onPress,
 }: {
   item: AlertFeedItem;
-  width: number;
+  width: number | '100%';
   onPress: () => void;
 }) {
   const theme = useAppTheme();
@@ -237,6 +252,7 @@ function AlertRow({
   return (
     <TouchableOpacity
       accessibilityRole="button"
+      testID={`alert-row-${item.id}`}
       onPress={onPress}
       style={[
         styles.alertRow,
@@ -301,7 +317,8 @@ const styles = StyleSheet.create({
   feed: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: ALERT_FEED_GAP,
+    width: '100%',
   },
   alertRow: {
     borderRadius: 20,

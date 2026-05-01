@@ -27,7 +27,6 @@ import {
   getRoleQuickActions,
   getTelemetryHealthLabel,
   isAdminRole,
-  isLecturerRole,
 } from '@/utils/app';
 
 const QUICK_COPY: Record<string, string> = {
@@ -57,7 +56,6 @@ export default function HomeScreen() {
 
   const quickActions = getRoleQuickActions(user?.role);
   const isOperationsRole = isAdminRole(user?.role);
-  const isLecturer = isLecturerRole(user?.role);
   const isStudent = user?.role === USER_ROLES.STUDENT;
   const shouldShowParkingHealth =
     snapshot.telemetryHealth !== 'online' && snapshot.telemetryHealth !== 'no-data';

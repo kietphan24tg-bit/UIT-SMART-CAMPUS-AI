@@ -8,22 +8,25 @@ interface BrandLockupProps {
   compact?: boolean;
   showSubtitle?: boolean;
   emphasis?: 'auto' | 'flat' | 'backplate';
+  compactDensity?: 'default' | 'tight';
 }
 
 export function BrandLockup({
   compact = false,
   showSubtitle = true,
   emphasis = 'auto',
+  compactDensity = 'default',
 }: BrandLockupProps) {
   const theme = useAppTheme();
   const useBackplate = emphasis === 'backplate' || (emphasis === 'auto' && theme.isDark);
   const markBackplateColor = theme.isDark ? '#FFFFFF' : theme.colors.primarySurface;
+  const useTightCompact = compact && compactDensity === 'tight';
 
   return (
     <View
       style={[
         styles.root,
-        compact ? styles.rootCompact : styles.rootFull,
+        compact ? (useTightCompact ? styles.rootCompactTight : styles.rootCompact) : styles.rootFull,
         useBackplate ? styles.rootBackplate : styles.rootFlat,
         {
           backgroundColor: useBackplate ? theme.colors.surfaceGlassStrong : 'transparent',
@@ -37,7 +40,7 @@ export function BrandLockup({
       <View
         style={[
           styles.mark,
-          compact ? styles.markCompact : styles.markFull,
+          compact ? (useTightCompact ? styles.markCompactTight : styles.markCompact) : styles.markFull,
           {
             backgroundColor: markBackplateColor,
             borderColor: theme.isDark ? '#FFFFFF' : theme.colors.border,
@@ -56,12 +59,18 @@ export function BrandLockup({
         <Text
           style={[
             styles.wordmark,
-            compact ? styles.wordmarkCompact : styles.wordmarkFull,
+            compact
+              ? useTightCompact
+                ? styles.wordmarkCompactTight
+                : styles.wordmarkCompact
+              : styles.wordmarkFull,
             {
               color: theme.colors.text,
               fontFamily: theme.fonts.semibold,
             },
           ]}
+          numberOfLines={1}
+          allowFontScaling={false}
         >
           UIT Smart Campus
         </Text>
@@ -72,6 +81,7 @@ export function BrandLockup({
               { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
             ]}
             numberOfLines={2}
+            allowFontScaling={false}
           >
             Trường Đại học Công nghệ Thông tin
           </Text>
@@ -86,9 +96,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    maxWidth: '100%',
+    minWidth: 0,
   },
   rootCompact: {
     gap: 10,
+  },
+  rootCompactTight: {
+    gap: 8,
   },
   rootFull: {
     gap: 12,
@@ -114,6 +129,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
   },
+  markCompactTight: {
+    width: 36,
+    height: 36,
+  },
   markFull: {
     width: 48,
     height: 48,
@@ -123,15 +142,23 @@ const styles = StyleSheet.create({
     height: '68%',
   },
   copy: {
+    flexGrow: 1,
     flexShrink: 1,
     gap: 2,
+    minWidth: 0,
   },
   wordmark: {
+    flexShrink: 1,
     letterSpacing: 0.2,
   },
   wordmarkCompact: {
     fontSize: 15,
     lineHeight: 18,
+  },
+  wordmarkCompactTight: {
+    fontSize: 14,
+    lineHeight: 17,
+    letterSpacing: 0.1,
   },
   wordmarkFull: {
     fontSize: 17,

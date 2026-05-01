@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
@@ -36,6 +37,30 @@ function getRootRouteName(routeName: string) {
   return routeName.split('/')[0] ?? routeName;
 }
 
+export function getTabBarLabel(rootName: string, role?: string | null) {
+  if (rootName === 'home') {
+    return 'Trang';
+  }
+
+  if (rootName === 'schedule') {
+    return getRoleScopedTabTitle(role);
+  }
+
+  if (rootName === 'services') {
+    return 'Dịch vụ';
+  }
+
+  if (rootName === 'alerts') {
+    return 'Cảnh báo';
+  }
+
+  if (rootName === 'profile') {
+    return 'Cá nhân';
+  }
+
+  return rootName;
+}
+
 export default function TabLayout() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
@@ -69,11 +94,22 @@ export default function TabLayout() {
             paddingTop: 8,
             ...theme.elevation.level2,
           },
-          tabBarLabelStyle: {
-            fontSize: isCompactTabBar ? 11 : 12,
-            fontFamily: theme.fonts.semibold,
-            marginTop: 2,
-          },
+          tabBarLabel: ({ color }) => (
+            <Text
+              style={[
+                styles.tabLabel,
+                {
+                  color,
+                  fontFamily: theme.fonts.semibold,
+                  fontSize: isCompactTabBar ? 11 : 12,
+                },
+              ]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              {getTabBarLabel(rootName, role)}
+            </Text>
+          ),
           tabBarItemStyle: {
             paddingTop: 2,
             paddingBottom: 2,
@@ -134,3 +170,13 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabLabel: {
+    marginTop: 2,
+    textAlign: 'center',
+    width: '100%',
+    lineHeight: 16,
+    includeFontPadding: false,
+  },
+});

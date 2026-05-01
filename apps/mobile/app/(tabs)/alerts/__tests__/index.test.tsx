@@ -49,7 +49,7 @@ describe('AlertsScreen', () => {
   });
 
   it('should render category sections and filter chips', () => {
-    const { getByText, getAllByText } = render(<AlertsScreen />);
+    const { getByText, getAllByText, getByTestId } = render(<AlertsScreen />);
 
     expect(getByText('Bộ lọc')).toBeTruthy();
     expect(getByText('Tất cả')).toBeTruthy();
@@ -61,5 +61,6 @@ describe('AlertsScreen', () => {
     expect(getByText('Canh bao chay bai xe')).toBeTruthy();
     expect(getByText('Lich hoc thay doi')).toBeTruthy();
     expect(getByText('Đọc tất cả')).toBeTruthy();
+    expect(getByTestId('alert-row-fire-1')).toHaveStyle({ width: '100%' });
   });
 });

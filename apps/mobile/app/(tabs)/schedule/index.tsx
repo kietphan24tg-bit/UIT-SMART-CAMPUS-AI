@@ -12,10 +12,9 @@ import {
   StatusBadge,
   TopHero,
 } from '@/components/ui';
+import { useEffectiveRole, useEffectiveUser } from '@/hooks/use-effective-role';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
-// import { useAuthStore } from '@/stores/auth-store';
-import { useEffectiveRole } from '@/hooks/use-effective-role';
 import { useAppTheme } from '@/theme';
 import type { FireAlertRecord, ScheduleRecord, SemesterRecord } from '@/types/app-data';
 import {
@@ -215,12 +214,54 @@ function getNextOccurrence(item: ScheduleRecord) {
   return date;
 }
 
+function normalizeName(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildLecturerNameCandidates(user?: {
+  firstName?: string | null;
+  lastName?: string | null;
+} | null) {
+  const firstName = normalizeName(user?.firstName);
+  const lastName = normalizeName(user?.lastName);
+
+  return Array.from(
+    new Set(
+      [`${lastName} ${firstName}`.trim(), `${firstName} ${lastName}`.trim()].filter(Boolean),
+    ),
+  );
+}
+
+export function filterScheduleForLecturer(
+  schedule: ScheduleRecord[],
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null,
+) {
+  const nameCandidates = buildLecturerNameCandidates(user);
+
+  if (nameCandidates.length === 0) {
+    return [] as ScheduleRecord[];
+  }
+
+  return schedule.filter((item) => {
+    const instructor = normalizeName(item.instructor);
+    return nameCandidates.some((candidate) => instructor.includes(candidate));
+  });
+}
+
 export default function ScheduleScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const router = useRouter();
-  // const role = useAuthStore((state) => state.user?.role);
   const role = useEffectiveRole();
+  const effectiveUser = useEffectiveUser();
   const isOperationsRole = isAdminRole(role);
   const isLecturer = isLecturerRole(role);
   const scheduleState = useScheduleScreenData();
@@ -561,7 +602,9 @@ export default function ScheduleScreen() {
   const selectedSemester = scheduleState.semesters.find(
     (item) => item.id === scheduleState.resolvedSemesterId,
   );
-  const resolvedSchedule = scheduleState.schedule;
+  const resolvedSchedule = isLecturer
+    ? filterScheduleForLecturer(scheduleState.schedule, effectiveUser)
+    : scheduleState.schedule;
   const groupedSchedule = groupScheduleByDay(resolvedSchedule);
   const subjectColorIndex = buildSubjectColorIndex(resolvedSchedule);
   const nextClass = getNextClass(resolvedSchedule);

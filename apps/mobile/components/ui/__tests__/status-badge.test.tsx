@@ -72,4 +72,14 @@ describe('StatusBadge', () => {
         expect(queryByText('●')).toBeNull();
         expect(queryByText('Offline')).toBeTruthy();
     });
+
+    it('uses anti-truncation text props for longer labels', () => {
+        const { getByText } = render(<StatusBadge label="Quản trị hệ thống" tone="info" />);
+        const label = getByText('Quản trị hệ thống');
+
+        expect(label.props.numberOfLines).toBe(1);
+        expect(label.props.allowFontScaling).toBe(false);
+        expect(label.props.adjustsFontSizeToFit).toBe(true);
+        expect(label.props.minimumFontScale).toBe(0.78);
+    });
 });

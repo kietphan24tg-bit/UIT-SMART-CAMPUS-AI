@@ -11,7 +11,7 @@ import { AttendanceService } from './attendance.service';
 function getMethodRoles(methodName: keyof AttendanceController) {
   return Reflect.getMetadata(
     ROLES_KEY,
-    AttendanceController.prototype[methodName as string],
+    (AttendanceController.prototype as any)[methodName],
   ) as string[] | undefined;
 }
 

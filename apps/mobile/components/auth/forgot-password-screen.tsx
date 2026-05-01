@@ -407,9 +407,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   footerText: {
+    flexShrink: 1,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
+    width: '100%',
   },
   footerTextStrong: {
     fontSize: 15,

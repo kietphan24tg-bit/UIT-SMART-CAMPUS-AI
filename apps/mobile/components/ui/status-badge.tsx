@@ -104,6 +104,9 @@ export function StatusBadge({
             { color: labelColor, fontFamily: theme.fonts.semibold },
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          allowFontScaling={false}
         >
           {label}
         </Text>
@@ -115,8 +118,11 @@ export function StatusBadge({
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
+    maxWidth: '100%',
+    minWidth: 0,
     borderRadius: 999,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   badgeSm: {
     paddingHorizontal: 10,
@@ -130,6 +136,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    maxWidth: '100%',
+    minWidth: 0,
   },
   iconWrap: {
     alignItems: 'center',
@@ -137,6 +145,9 @@ const styles = StyleSheet.create({
   },
   label: {
     letterSpacing: 0.1,
+    flexShrink: 1,
+    minWidth: 0,
+    includeFontPadding: false,
   },
   labelSm: {
     fontSize: 11,

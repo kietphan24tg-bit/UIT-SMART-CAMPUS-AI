@@ -7,8 +7,7 @@ import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { CanteenController } from './canteen.controller';
 
 function getMethodRoles(methodName: keyof CanteenController) {
-  const descriptor = Object.getOwnPropertyDescriptor(CanteenController.prototype, methodName);
-  return Reflect.getMetadata(ROLES_KEY, descriptor?.value as object) as string[] | undefined;
+  return Reflect.getMetadata(ROLES_KEY, (CanteenController.prototype as any)[methodName]) as string[] | undefined;
 }
 
 describe('CanteenController roles', () => {

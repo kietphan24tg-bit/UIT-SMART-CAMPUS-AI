@@ -1,4 +1,4 @@
-import { getTabBarMetrics } from '../_layout';
+import { getTabBarLabel, getTabBarMetrics } from '../_layout';
 
 describe('tab layout metrics', () => {
   it('keeps the tab bar above the gesture inset', () => {
@@ -13,5 +13,17 @@ describe('tab layout metrics', () => {
       height: 72,
       paddingBottom: 10,
     });
+  });
+
+  it('uses mobile-safe labels for the main tabs', () => {
+    expect(getTabBarLabel('home', 'student')).toBe('Trang');
+    expect(getTabBarLabel('schedule', 'student')).toBe('Lịch');
+    expect(getTabBarLabel('services', 'student')).toBe('Dịch vụ');
+    expect(getTabBarLabel('alerts', 'student')).toBe('Cảnh báo');
+    expect(getTabBarLabel('profile', 'student')).toBe('Cá nhân');
+  });
+
+  it('keeps the schedule tab role-aware for admin users', () => {
+    expect(getTabBarLabel('schedule', 'admin')).toBe('Vận hành');
   });
 });
