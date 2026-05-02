@@ -29,6 +29,7 @@ const config: ExpoConfig = {
     },
     package: 'vn.edu.uit.smartcampus',
     softwareKeyboardLayoutMode: 'resize',
+    usesCleartextTraffic: true,
   },
   plugins: [
     'expo-router',

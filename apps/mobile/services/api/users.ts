@@ -15,10 +15,6 @@ export const usersApi = {
       type: mimeType,
     } as unknown as Blob);
 
-    return apiClient.post('/users/me/avatar', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }) as Promise<UserProfile>;
+    return apiClient.post('/users/me/avatar', formData) as Promise<UserProfile>;
   },
 };

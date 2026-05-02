@@ -51,6 +51,33 @@ function resolveFileName(fileName?: string | null, mimeType?: string | null) {
   return `avatar.${extension}`;
 }
 
+function resolveAvatarErrorMessage(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return 'Khong the cap nhat anh dai dien.';
+  }
+
+  const maybeError = error as {
+    message?: unknown;
+    error?: { message?: unknown } | unknown;
+  };
+
+  if (typeof maybeError.message === 'string' && maybeError.message.trim()) {
+    return maybeError.message;
+  }
+
+  if (
+    maybeError.error &&
+    typeof maybeError.error === 'object' &&
+    'message' in maybeError.error &&
+    typeof maybeError.error.message === 'string' &&
+    maybeError.error.message.trim()
+  ) {
+    return maybeError.error.message;
+  }
+
+  return 'Khong the cap nhat anh dai dien.';
+}
+
 export default function ProfileScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -122,8 +149,8 @@ export default function ProfileScreen() {
       }
 
       await refreshProfile();
-    } catch {
-      setAvatarError('Không thể cập nhật ảnh đại diện.');
+    } catch (error) {
+      setAvatarError(resolveAvatarErrorMessage(error));
     } finally {
       setIsUploadingAvatar(false);
     }
