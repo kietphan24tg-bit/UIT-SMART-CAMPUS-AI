@@ -9,8 +9,10 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ContentStack,
   EmptyState,
+  FormField,
   PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionCard,
   StatusBadge,
   TopHero,
@@ -41,6 +43,7 @@ export default function CanteenScreen() {
   const [cart, setCart] = useState<CartMap>({});
   const [note, setNote] = useState('');
   const [activeQrOrderId, setActiveQrOrderId] = useState<string | null>(null);
+  const [activeDeleteOrderId, setActiveDeleteOrderId] = useState<string | null>(null);
   const [activeQrPayments, setActiveQrPayments] = useState<Record<string, ActiveQrPayment>>({});
   const hasActiveQrPayments = Object.keys(activeQrPayments).length > 0;
 
@@ -88,6 +91,28 @@ export default function CanteenScreen() {
     },
     onSettled: () => {
       setActiveQrOrderId(null);
+    },
+  });
+  const deleteOrderMutation = useMutation({
+    onMutate: (orderId: string) => {
+      setActiveDeleteOrderId(orderId);
+    },
+    mutationFn: (orderId: string) => canteenApi.deleteOrder(orderId),
+    onSuccess: async (_deletedOrder, orderId) => {
+      setActiveQrPayments((prev) => {
+        const { [orderId]: _, ...rest } = prev;
+        return rest;
+      });
+      if (activeQrOrderId === orderId) {
+        setActiveQrOrderId(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] });
+    },
+    onError: (error) => {
+      Alert.alert('Xóa đơn', getErrorMessage(error, 'Không thể xóa đơn lúc này. Vui lòng thử lại.'));
+    },
+    onSettled: () => {
+      setActiveDeleteOrderId(null);
     },
   });
 
@@ -164,51 +189,6 @@ export default function CanteenScreen() {
       />
 
       <ContentStack overlapHero={false}>
-        <SectionCard
-          title="Giỏ hàng"
-          subtitle={`${cartCount} món · ${formatCurrency(cartAmount)}đ`}
-          variant="highlight"
-          tone="campus"
-          headerAccessory={<StatusBadge label={consumer ? 'Có thể thanh toán' : 'Chỉ xem'} tone={consumer ? 'success' : 'info'} />}
-        >
-          <View style={styles.stack}>
-            {!consumer ? (
-              <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                Vai trò hiện tại chỉ có quyền xem menu và lịch sử đơn, không thể tạo thanh toán.
-              </Text>
-            ) : null}
-            <Text style={[styles.noteLabel, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-              Ghi chú đơn: {note || 'Không có'}
-            </Text>
-            {consumer ? (
-              <View style={styles.row}>
-                <PrimaryButton
-                  label="Tạo đơn hàng"
-                  loading={createOrderMutation.isPending}
-                  disabled={cartCount === 0}
-                  onPress={() => createOrderMutation.mutate()}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setNote(note ? '' : 'Không hành, ít đá, giao nhanh giúp em.')}
-                  style={({ pressed }) => [
-                    styles.inlineButton,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.surfaceSubtle,
-                      opacity: pressed ? 0.84 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.inlineButtonText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
-                    Ghi chú mẫu
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        </SectionCard>
-
         <SectionCard title="Menu hôm nay" subtitle={`${allProducts.length} sản phẩm`} variant="glass" tone="academic">
           {catalogQuery.isLoading ? (
             <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
@@ -250,6 +230,85 @@ export default function CanteenScreen() {
           )}
         </SectionCard>
 
+        <SectionCard title="Giỏ hàng" subtitle="Kiểm tra món trước khi tạo đơn" variant="highlight" tone="campus">
+          <View style={styles.stack}>
+            <View
+              style={[
+                styles.cartSummary,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                },
+              ]}
+            >
+              <View style={styles.cartSummaryItem}>
+                <Text style={[styles.cartSummaryValue, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  {cartCount}
+                </Text>
+                <Text style={[styles.cartSummaryLabel, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+                  Món đã chọn
+                </Text>
+              </View>
+              <View style={[styles.cartSummaryDivider, { backgroundColor: theme.colors.border }]} />
+              <View style={styles.cartSummaryItem}>
+                <Text style={[styles.cartSummaryValue, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  {formatCurrency(cartAmount)}đ
+                </Text>
+                <Text style={[styles.cartSummaryLabel, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+                  Tạm tính
+                </Text>
+              </View>
+            </View>
+
+            {!consumer ? (
+              <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                Vai trò hiện tại chỉ có quyền xem menu và lịch sử đơn, không thể tạo thanh toán.
+              </Text>
+            ) : null}
+
+            <View style={[styles.notePanel, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSubtle }]}>
+              <FormField
+                label="Ghi chú đơn"
+                value={note}
+                onChangeText={setNote}
+                placeholder="Ví dụ: Ít đá, không hành, giao nhanh giúp em."
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                style={styles.noteInput}
+                hint="Ghi chú sẽ được gửi cùng đơn hàng."
+              />
+            </View>
+
+            {consumer ? (
+              <View style={styles.cartActions}>
+                <PrimaryButton
+                  label="Tạo đơn hàng"
+                  loading={createOrderMutation.isPending}
+                  disabled={cartCount === 0}
+                  onPress={() => createOrderMutation.mutate()}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setNote(note ? '' : 'Không hành, ít đá, giao nhanh giúp em.')}
+                  style={({ pressed }) => [
+                    styles.inlineButton,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.surfaceSubtle,
+                      opacity: pressed ? 0.84 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.inlineButtonText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                    {note ? 'Xóa ghi chú' : 'Thêm ghi chú mẫu'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </SectionCard>
+
         <SectionCard title="Lịch sử hóa đơn" subtitle="Theo dõi thanh toán và trạng thái đơn." variant="outlined">
           {!consumer ? (
             <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
@@ -268,8 +327,10 @@ export default function CanteenScreen() {
                   key={order.id}
                   order={order}
                   qrPaying={qrPayMutation.isPending && activeQrOrderId === order.id}
+                  deleting={deleteOrderMutation.isPending && activeDeleteOrderId === order.id}
                   qrPayment={activeQrPayments[order.id] ?? null}
                   onPayQr={() => qrPayMutation.mutate(order.id)}
+                  onDelete={() => deleteOrderMutation.mutate(order.id)}
                   onHideQr={() => {
                     setActiveQrPayments((prev) => {
                       const { [order.id]: _, ...rest } = prev;
@@ -319,12 +380,29 @@ function CategoryBlock({
             >
               <View style={styles.rowBetween}>
                 <View style={styles.productMeta}>
-                  <Text style={[styles.productName, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
-                    {product.name}
-                  </Text>
-                  <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                    {formatCurrency(product.price)}đ · Tồn {product.stock}
-                  </Text>
+                  <View
+                    style={[
+                      styles.productImageWrap,
+                      {
+                        borderColor: theme.colors.border,
+                        backgroundColor: theme.colors.surface,
+                      },
+                    ]}
+                  >
+                    {product.imageUrl ? (
+                      <Image source={{ uri: product.imageUrl }} style={styles.productImage} contentFit="cover" />
+                    ) : (
+                      <Ionicons name="image-outline" size={22} color={theme.colors.textSoft} />
+                    )}
+                  </View>
+                  <View style={styles.productText}>
+                    <Text style={[styles.productName, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+                      {product.name}
+                    </Text>
+                    <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                      {formatCurrency(product.price)}đ · Tồn {product.stock}
+                    </Text>
+                  </View>
                 </View>
                 <View style={styles.qtyWrap}>
                   <IconButton icon="remove" onPress={() => onChangeQty(product.id, -1)} />
@@ -365,14 +443,18 @@ function IconButton({ icon, onPress }: { icon: 'add' | 'remove'; onPress: () => 
 function OrderCard({
   order,
   qrPaying,
+  deleting,
   qrPayment,
   onPayQr,
+  onDelete,
   onHideQr,
 }: {
   order: CanteenOrderRecord;
   qrPaying: boolean;
+  deleting: boolean;
   qrPayment: ActiveQrPayment | null;
   onPayQr: () => void;
+  onDelete: () => void;
   onHideQr: () => void;
 }) {
   const theme = useAppTheme();
@@ -388,42 +470,68 @@ function OrderCard({
         },
       ]}
     >
-      <View style={styles.rowBetween}>
-        <Text style={[styles.productName, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-          {order.orderCode}
-        </Text>
-        <StatusBadge
-          label={getOrderStatusLabel(order.status)}
-          tone={getOrderStatusTone(order.status)}
-          size="sm"
-        />
+      <View style={styles.orderHeader}>
+        <View style={styles.orderCodeWrap}>
+          <Text style={[styles.orderCode, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+            {order.orderCode}
+          </Text>
+        </View>
+        <View style={styles.orderStatusWrap}>
+          <StatusBadge
+            label={getOrderStatusLabel(order.status)}
+            tone={getOrderStatusTone(order.status)}
+            size="sm"
+          />
+        </View>
       </View>
       <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
         Tổng tiền: {formatCurrency(order.totalAmount)}đ
       </Text>
-      {showPaymentActions ? (
-        <View style={styles.stack}>
-          <PrimaryButton label={qrPayment ? 'Làm mới QR' : 'Thanh toán QR'} loading={qrPaying} onPress={onPayQr} />
-          {qrPayment ? (
-            <View
+      <View style={styles.stack}>
+        {showPaymentActions ? (
+          <View style={styles.orderActionsRow}>
+            <PrimaryButton
+              label={qrPayment ? 'Làm mới QR' : 'Thanh toán QR'}
+              loading={qrPaying}
+              disabled={deleting}
+              onPress={onPayQr}
+              style={styles.orderActionButton}
+            />
+            <SecondaryButton
+              label="Xóa đơn"
+              loading={deleting}
+              disabled={qrPaying}
+              onPress={onDelete}
               style={[
-                styles.qrPanel,
+                styles.orderActionButton,
                 {
-                  borderColor: theme.colors.border,
-                  backgroundColor: theme.colors.surface,
+                  borderColor: deleting || qrPaying ? theme.colors.inputBorder : theme.colors.danger,
+                  backgroundColor: deleting || qrPaying ? theme.colors.surfaceTinted : theme.colors.dangerSurface,
                 },
               ]}
-            >
-              <Pressable accessibilityRole="button" onPress={onHideQr} style={styles.qrDismiss}>
-                <Text style={[styles.qrLink, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
-                  Ẩn QR
-                </Text>
-              </Pressable>
-              <Image source={{ uri: qrPayment.checkoutUrl }} style={styles.qrImage} contentFit="contain" />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+              labelStyle={{ color: theme.colors.danger }}
+            />
+          </View>
+        ) : null}
+        {showPaymentActions && qrPayment ? (
+          <View
+            style={[
+              styles.qrPanel,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
+              },
+            ]}
+          >
+            <Pressable accessibilityRole="button" onPress={onHideQr} style={styles.qrDismiss}>
+              <Text style={[styles.qrLink, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                Ẩn QR
+              </Text>
+            </Pressable>
+            <Image source={{ uri: qrPayment.checkoutUrl }} style={styles.qrImage} contentFit="contain" />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -458,7 +566,7 @@ function getOrderStatusTone(status: CanteenOrderRecord['status']) {
   }
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback?: string) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
@@ -476,7 +584,7 @@ function getErrorMessage(error: unknown) {
     }
   }
 
-  return 'Không thể tạo mã QR thanh toán lúc này. Vui lòng thử lại.';
+  return fallback ?? 'Không thể tạo mã QR thanh toán lúc này. Vui lòng thử lại.';
 }
 
 const styles = StyleSheet.create({
@@ -487,6 +595,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
+  },
+  cartActions: {
+    gap: 10,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -499,17 +610,52 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   inlineButton: {
-    minHeight: 46,
+    minHeight: 42,
     borderRadius: 14,
     borderWidth: 1,
     justifyContent: 'center',
     paddingHorizontal: 14,
+    alignItems: 'center',
   },
   inlineButtonText: {
     fontSize: 14,
   },
-  noteLabel: {
+  cartSummary: {
+    borderWidth: 1,
+    borderRadius: 14,
+    minHeight: 78,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  cartSummaryItem: {
+    flex: 1,
+    gap: 2,
+    alignItems: 'center',
+  },
+  cartSummaryDivider: {
+    width: 1,
+    height: 36,
+  },
+  cartSummaryValue: {
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  cartSummaryLabel: {
     fontSize: 12,
+  },
+  notePanel: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  noteHeading: {
+    fontSize: 12,
+  },
+  noteInput: {
+    minHeight: 72,
   },
   categoryBlock: {
     gap: 8,
@@ -524,9 +670,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   productMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
     minWidth: 0,
-    gap: 3,
+  },
+  productImageWrap: {
+    width: 70,
+    height: 70,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   productName: {
     fontSize: 14,
@@ -555,6 +722,39 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     gap: 8,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  orderCodeWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  orderCode: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  orderStatusWrap: {
+    minWidth: 88,
+    maxWidth: '100%',
+    alignItems: 'flex-end',
+  },
+  orderActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  orderActionButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   qrPanel: {
     borderWidth: 1,

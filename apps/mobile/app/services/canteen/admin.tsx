@@ -1,10 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { USER_ROLES } from '@smart-campus/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import {
   ContentStack,
@@ -116,6 +130,64 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
   isActive: true,
 };
 
+function resolveProductImageMimeType(mimeType?: string | null) {
+  if (mimeType === 'image/png' || mimeType === 'image/webp') {
+    return mimeType;
+  }
+
+  return 'image/jpeg';
+}
+
+function resolveProductImageFileName(fileName?: string | null, mimeType?: string | null) {
+  if (fileName) {
+    return fileName;
+  }
+
+  const extension =
+    mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+
+  return `product.${extension}`;
+}
+
+function resolveProductImageErrorMessage(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return 'Không thể tải ảnh sản phẩm lúc này.';
+  }
+
+  const maybeError = error as {
+    code?: unknown;
+    message?: unknown;
+    error?: { message?: unknown } | unknown;
+  };
+
+  const normalizedMessage =
+    typeof maybeError.message === 'string' ? maybeError.message.trim().toLowerCase() : '';
+
+  if (normalizedMessage === 'network error' || normalizedMessage.includes('network')) {
+    return Platform.select({
+      ios: 'KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c backend upload. Náº¿u Ä‘ang dÃ¹ng iPhone/iPad vÃ  backend lÃ  http, hÃ£y kiá»ƒm tra ATS hoáº·c chuyá»ƒn sang https.',
+      default:
+        'KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c backend upload. HÃ£y kiá»ƒm tra láº¡i IP API, restart Expo sau khi Ä‘á»•i .env, vÃ  xem log `[apiClient] request failed` Ä‘á»ƒ biáº¿t request Ä‘ang gá»i host nÃ o.',
+    });
+  }
+
+  if (typeof maybeError.message === 'string' && maybeError.message.trim()) {
+    return maybeError.message;
+  }
+
+  if (
+    maybeError.error &&
+    typeof maybeError.error === 'object' &&
+    'message' in maybeError.error &&
+    typeof maybeError.error.message === 'string' &&
+    maybeError.error.message.trim()
+  ) {
+    return maybeError.error.message;
+  }
+
+  return 'Không thể tải ảnh sản phẩm lúc này.';
+}
+
 export default function CanteenAdminScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -150,6 +222,8 @@ export default function CanteenAdminScreen() {
   const [productSheetVisible, setProductSheetVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminCanteenProductRecord | null>(null);
   const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
+  const [isUploadingProductImage, setIsUploadingProductImage] = useState(false);
+  const [productImageError, setProductImageError] = useState<string | null>(null);
 
   const [categoryStatusOpen, setCategoryStatusOpen] = useState(false);
   const [productStatusOpen, setProductStatusOpen] = useState(false);
@@ -309,6 +383,8 @@ export default function CanteenAdminScreen() {
     if (!productSheetVisible) {
       return;
     }
+
+    setProductImageError(null);
 
     if (editingProduct) {
       setProductForm({
@@ -814,18 +890,87 @@ export default function CanteenAdminScreen() {
             textAlignVertical="top"
             style={styles.multilineInput}
           />
-          <FormField
-            label="Ảnh URL"
-            value={productForm.imageUrl}
-            onChangeText={(value) => setProductForm((prev) => ({ ...prev, imageUrl: value }))}
-            autoCapitalize="none"
-            placeholder="https://..."
-          />
+          <View style={styles.imageUploadField}>
+            <Text
+              style={[styles.filterLabel, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}
+            >
+              Ảnh sản phẩm
+            </Text>
+            <View
+              style={[
+                styles.imageUploadCard,
+                {
+                  backgroundColor: theme.colors.surfaceSubtle,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              {!productForm.imageUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải ảnh"
+                  onPress={() => void handlePickProductImage()}
+                  disabled={isUploadingProductImage}
+                  style={({ pressed }) => [
+                    styles.imageUploadDropzone,
+                    {
+                      borderColor: theme.colors.border,
+                      opacity: isUploadingProductImage ? 0.56 : pressed ? 0.84 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.primary} />
+                  <Text style={[styles.itemMeta, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+                    Tải ảnh
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.imageUploadPreviewWrap}>
+                  <Image source={{ uri: productForm.imageUrl }} style={styles.imageUploadPreviewImage} contentFit="cover" />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Xóa ảnh"
+                    onPress={() => {
+                      setProductImageError(null);
+                      setProductForm((prev) => ({ ...prev, imageUrl: '' }));
+                    }}
+                    disabled={isUploadingProductImage}
+                    style={({ pressed }) => [
+                      styles.imageRemoveButton,
+                      {
+                        backgroundColor: theme.colors.surfaceElevated,
+                        borderColor: theme.colors.border,
+                        opacity: isUploadingProductImage ? 0.56 : pressed ? 0.84 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="close" size={14} color={theme.colors.text} />
+                  </Pressable>
+                </View>
+              )}
+              {isUploadingProductImage ? (
+                <View style={styles.imageUploadProgress}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={[styles.itemMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
+                    Đang tải ảnh...
+                  </Text>
+                </View>
+              ) : null}
+              {productImageError ? (
+                <Text
+                  style={[styles.imageUploadError, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}
+                >
+                  {productImageError}
+                </Text>
+              ) : null}
+            </View>
+          </View>
           <View style={styles.sheetActionRow}>
             <SecondaryButton label="Đóng" onPress={closeProductSheet} style={styles.flexButton} />
             <PrimaryButton
               label={editingProduct ? 'Lưu thay đổi' : 'Thêm sản phẩm'}
-              loading={createProductMutation.isPending || updateProductMutation.isPending}
+              loading={createProductMutation.isPending || updateProductMutation.isPending || isUploadingProductImage}
+              disabled={isUploadingProductImage}
               onPress={handleSubmitProduct}
               style={styles.flexButton}
             />
@@ -891,12 +1036,64 @@ export default function CanteenAdminScreen() {
   function closeProductSheet() {
     setProductSheetVisible(false);
     setEditingProduct(null);
+    setProductImageError(null);
     setProductForm({
       ...EMPTY_PRODUCT_FORM,
       categoryId: categories[0]?.id ?? '',
     });
     setProductFormCategoryOpen(false);
     setProductFormStatusOpen(false);
+  }
+
+  async function handlePickProductImage() {
+    try {
+      setProductImageError(null);
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Can quyen truy cap', 'Hay cho phep ung dung truy cap thu vien anh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploadingProductImage(true);
+
+      const processedAsset = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1200, height: 1200 } }],
+        {
+          compress: 0.82,
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
+      );
+
+      const uploaded = await canteenApi.uploadProductImage(
+        processedAsset.uri,
+        resolveProductImageFileName(asset.fileName, 'image/jpeg'),
+        resolveProductImageMimeType('image/jpeg'),
+      );
+
+      setProductForm((prev) => ({ ...prev, imageUrl: uploaded.imageUrl }));
+    } catch (error) {
+      console.error('[canteen] uploadProductImage failed', error);
+      const message = resolveProductImageErrorMessage(error);
+      setProductImageError(message);
+      Alert.alert('Ảnh sản phẩm', message);
+    } finally {
+      setIsUploadingProductImage(false);
+    }
   }
 
   function handleSubmitCategory() {
@@ -1437,6 +1634,50 @@ function SelectDropdown({
   );
 }
 
+function ProductImageThumbnail({
+  imageUrl,
+  size,
+  showLabel = false,
+}: {
+  imageUrl?: string | null;
+  size: number;
+  showLabel?: boolean;
+}) {
+  const theme = useAppTheme();
+
+  return (
+    <View
+      style={[
+        styles.productImageFrame,
+        {
+          width: size,
+          height: size,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+        },
+      ]}
+    >
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.productImageAsset} contentFit="cover" />
+      ) : (
+        <View style={styles.productImagePlaceholder}>
+          <Ionicons name="image-outline" size={showLabel ? 22 : 18} color={theme.colors.textSoft} />
+          {showLabel ? (
+            <Text
+              style={[
+                styles.productImagePlaceholderText,
+                { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+              ]}
+            >
+              Chưa có ảnh
+            </Text>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function CategoryRow({
   category,
   onEdit,
@@ -1512,6 +1753,9 @@ function ProductRow({
         { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border },
       ]}
     >
+      <View style={styles.productCardHeader}>
+        <ProductImageThumbnail imageUrl={product.imageUrl} size={88} />
+        <View style={styles.productCardBody}>
       <View style={styles.rowBetween}>
         <View style={styles.flexWrap}>
           <Text style={[styles.itemTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
@@ -1543,6 +1787,8 @@ function ProductRow({
           style={styles.compactActionButton}
         />
       </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -1570,10 +1816,18 @@ function OrderRow({
       ]}
     >
       <View style={styles.rowBetween}>
-        <Text style={[styles.itemTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-          {order.orderCode}
-        </Text>
-        <StatusBadge label={getOrderStatusLabel(order.status)} tone={getOrderStatusTone(order.status)} size="sm" />
+        <View style={styles.flexWrap}>
+          <Text style={[styles.itemTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+            {order.orderCode}
+          </Text>
+        </View>
+        <View style={styles.badgeWrap}>
+          <StatusBadge
+            label={getOrderStatusLabel(order.status)}
+            tone={getOrderStatusTone(order.status)}
+            size="sm"
+          />
+        </View>
       </View>
       <Text style={[styles.itemMeta, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
         {order.requestedBy.fullName}
@@ -2068,6 +2322,39 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  productCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  productCardBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  productImageFrame: {
+    borderWidth: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productImageAsset: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 8,
+  },
+  productImagePlaceholderText: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
   panel: {
     borderWidth: 1,
     borderRadius: 18,
@@ -2095,11 +2382,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 10,
+    flexWrap: 'wrap',
   },
   flexWrap: {
     flex: 1,
     minWidth: 0,
     gap: 4,
+  },
+  badgeWrap: {
+    minWidth: 88,
+    maxWidth: '100%',
+    alignItems: 'flex-end',
   },
   itemTitle: {
     fontSize: 15,
@@ -2181,6 +2474,53 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 84,
     paddingTop: 14,
+  },
+  imageUploadField: {
+    gap: 8,
+  },
+  imageUploadCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 10,
+  },
+  imageUploadDropzone: {
+    minHeight: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  imageUploadPreviewWrap: {
+    position: 'relative',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  imageUploadPreviewImage: {
+    width: '100%',
+    aspectRatio: 1,
+  },
+  imageRemoveButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageUploadProgress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  imageUploadError: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   sheetActionRow: {
     flexDirection: 'row',
