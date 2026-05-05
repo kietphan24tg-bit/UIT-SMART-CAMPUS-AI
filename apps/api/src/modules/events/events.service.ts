@@ -19,6 +19,10 @@ const MAX_LIMIT = 100;
 type CachedList = {
   items: UitListEventItem[];
   expiresAt: number;
+  isPartial: boolean;
+  loadedPages: number;
+  lastRefreshStartedAt: number | null;
+  lastRefreshCompletedAt: number | null;
 };
 
 type CachedDetail = {
@@ -30,6 +34,7 @@ type CachedDetail = {
 export class EventsService {
   private readonly detailCache = new Map<string, CachedDetail>();
   private listCache: CachedList | null = null;
+  private listRefreshPromise: Promise<void> | null = null;
 
   constructor(
     private readonly configService: ConfigService,
@@ -86,7 +91,13 @@ export class EventsService {
   }
 
   private getCacheTtlMs() {
-    return this.configService.get<number>('UIT_EVENTS_CACHE_TTL_MS', 86_400_000);
+    return this.configService.get<number>('UIT_EVENTS_CACHE_TTL_MS', 3_600_000);
+  }
+
+  private getInitialPages() {
+    const initialPages = this.configService.get<number>('UIT_EVENTS_INITIAL_PAGES', 2);
+    const maxPages = this.uitEventsScraper.getMaxPages();
+    return Math.max(1, Math.min(maxPages, Math.trunc(initialPages)));
   }
 
   private async getCachedList() {
@@ -96,18 +107,79 @@ export class EventsService {
     }
 
     try {
-      const items = await this.uitEventsScraper.fetchAggregatedList();
+      const initialPages = this.getInitialPages();
+      const maxPages = this.uitEventsScraper.getMaxPages();
+      const items = await this.uitEventsScraper.fetchListRange(1, initialPages);
       this.listCache = {
         items,
-        expiresAt: now + this.getCacheTtlMs(),
+        expiresAt: Date.now() + this.getCacheTtlMs(),
+        isPartial: initialPages < maxPages,
+        loadedPages: initialPages,
+        lastRefreshStartedAt: null,
+        lastRefreshCompletedAt: null,
       };
+      this.startBackgroundRefreshIfNeeded();
       return items;
-    } catch (error) {
+    } catch {
       if (this.listCache?.items.length) {
         return this.listCache.items;
       }
 
       throw new ServiceUnavailableException('Không thể tải danh sách sự kiện từ UIT.');
+    }
+  }
+
+  private startBackgroundRefreshIfNeeded() {
+    if (!this.listCache?.isPartial || this.listRefreshPromise) {
+      return;
+    }
+
+    this.listCache = {
+      ...this.listCache,
+      lastRefreshStartedAt: Date.now(),
+    };
+
+    const refreshPromise = this.refreshRemainingPages();
+    this.listRefreshPromise = refreshPromise;
+    void refreshPromise.finally(() => {
+      if (this.listRefreshPromise === refreshPromise) {
+        this.listRefreshPromise = null;
+      }
+    });
+  }
+
+  private async refreshRemainingPages() {
+    const snapshot = this.listCache;
+    if (!snapshot?.isPartial) {
+      return;
+    }
+
+    const maxPages = this.uitEventsScraper.getMaxPages();
+    const startPage = snapshot.loadedPages + 1;
+    if (startPage > maxPages) {
+      this.listCache = {
+        ...snapshot,
+        isPartial: false,
+        loadedPages: maxPages,
+        lastRefreshCompletedAt: Date.now(),
+      };
+      return;
+    }
+
+    try {
+      const remainingItems = await this.uitEventsScraper.fetchListRange(startPage, maxPages);
+      const currentCache = this.listCache ?? snapshot;
+      const mergedItems = this.uitEventsScraper.mergeListItems(currentCache.items, remainingItems);
+      this.listCache = {
+        ...currentCache,
+        items: mergedItems,
+        expiresAt: Date.now() + this.getCacheTtlMs(),
+        isPartial: false,
+        loadedPages: maxPages,
+        lastRefreshCompletedAt: Date.now(),
+      };
+    } catch {
+      // Keep the latest snapshot available; the next TTL miss can try again.
     }
   }
 

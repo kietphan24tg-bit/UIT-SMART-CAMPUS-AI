@@ -16,6 +16,7 @@ import type {
   SemesterRecord,
   TelemetrySnapshotRecord,
 } from '@/types/app-data';
+import { isAdminRole } from '@/utils/app';
 
 export function useScheduleScreenData(selectedSemesterId?: string) {
   const allSemestersQuery = useQuery({
@@ -57,24 +58,33 @@ export function useScheduleScreenData(selectedSemesterId?: string) {
   };
 }
 
-export function useOperationsScreenData() {
+export function useOperationsScreenData(role?: string | null) {
   const connectionState = useParkingRealtimeStore(
     (state) => state.connectionState,
   );
+  const canViewTelemetry = isAdminRole(role);
+  const canViewFireAlerts = isAdminRole(role);
 
   return useQuery({
-    queryKey: ['operations-summary'],
+    queryKey: ['operations-summary', role],
     queryFn: async (): Promise<OperationsSummaryState> => {
       const [parking, telemetry, fireAlerts, unreadCount, gpa] = await Promise.all([
         parkingApi.getStatus().catch(() => null as ParkingStatus | null),
-        safetyApi.getLatestTelemetry().catch(() => null as TelemetrySnapshotRecord | null),
-        safetyApi.getFireAlerts(1, 10).catch(
-          () =>
-            ({
+        canViewTelemetry
+          ? safetyApi.getLatestTelemetry().catch(() => null as TelemetrySnapshotRecord | null)
+          : Promise.resolve(null as TelemetrySnapshotRecord | null),
+        canViewFireAlerts
+          ? safetyApi.getFireAlerts(1, 10).catch(
+              () =>
+                ({
+                  items: [],
+                  meta: { total: 0, page: 1, limit: 10, totalPages: 1 },
+                }) as FireAlertsPayload,
+            )
+          : Promise.resolve({
               items: [],
               meta: { total: 0, page: 1, limit: 10, totalPages: 1 },
-            }) as FireAlertsPayload,
-        ),
+            } as FireAlertsPayload),
         notificationsApi.getUnreadCount().catch(() => 0),
         gradesApi.getGradesSummary().catch(() => null as GPASummary | null),
       ]);

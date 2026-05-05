@@ -14,6 +14,42 @@ services:
       - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - APP_BASE_URL=${APP_BASE_URL}
+      - IOT_MQTT_ENABLED=${IOT_MQTT_ENABLED}
+      - IOT_MQTT_BROKER_URL=${IOT_MQTT_BROKER_URL}
+      - IOT_MQTT_USERNAME=${IOT_MQTT_USERNAME}
+      - IOT_MQTT_PASSWORD=${IOT_MQTT_PASSWORD}
+      - IOT_MQTT_CLIENT_ID=${IOT_MQTT_CLIENT_ID}
+      - IOT_MQTT_TELEMETRY_TOPIC=${IOT_MQTT_TELEMETRY_TOPIC}
+    depends_on:
+      - mqtt
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: smart-campus-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto_passwords:/mosquitto/config/passwords:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+
+  iot-mqtt-bridge:
+    build:
+      context: ./iot-mqtt-bridge
+    container_name: smart-campus-iot-mqtt-bridge
+    restart: unless-stopped
+    environment:
+      - IOT_MQTT_BROKER_URL=${IOT_MQTT_BROKER_URL}
+      - IOT_MQTT_USERNAME=${IOT_MQTT_USERNAME}
+      - IOT_MQTT_PASSWORD=${IOT_MQTT_PASSWORD}
+      - IOT_MQTT_TELEMETRY_TOPIC=${IOT_MQTT_TELEMETRY_TOPIC}
+      - IOT_MQTT_BRIDGE_CLIENT_ID=${IOT_MQTT_BRIDGE_CLIENT_ID}
+      - IOT_MQTT_BRIDGE_API_URL=${IOT_MQTT_BRIDGE_API_URL}
+      - IOT_SHARED_SECRET=${IOT_SHARED_SECRET}
+    depends_on:
+      - mqtt
 
   nginx:
     image: nginx:alpine
@@ -27,3 +63,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - api
+
+volumes:
+  mqtt_data:
+  mqtt_log:

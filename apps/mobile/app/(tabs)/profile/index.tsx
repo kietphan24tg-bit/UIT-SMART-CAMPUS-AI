@@ -53,7 +53,7 @@ function resolveFileName(fileName?: string | null, mimeType?: string | null) {
 
 function resolveAvatarErrorMessage(error: unknown) {
   if (!error || typeof error !== 'object') {
-    return 'Khong the cap nhat anh dai dien.';
+    return 'Không thể cập nhật ảnh đại diện.';
   }
 
   const maybeError = error as {
@@ -75,7 +75,7 @@ function resolveAvatarErrorMessage(error: unknown) {
     return maybeError.error.message;
   }
 
-  return 'Khong the cap nhat anh dai dien.';
+  return 'Không thể cập nhật ảnh đại diện.';
 }
 
 export default function ProfileScreen() {

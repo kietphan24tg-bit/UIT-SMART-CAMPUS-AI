@@ -64,7 +64,6 @@ describe('ParkingScreen', () => {
     const { getByText, getAllByText, queryByText } = render(<ParkingScreen />);
 
     expect(getByText('Bãi xe UIT')).toBeTruthy();
-    expect(getAllByText('uit-gate-a').length).toBeGreaterThan(0);
     expect(getByText('Chỗ trống')).toBeTruthy();
     expect(getByText('1/2')).toBeTruthy();
     expect(getByText('IR A1-A2')).toBeTruthy();
@@ -76,8 +75,10 @@ describe('ParkingScreen', () => {
     expect(getByText('Cháy')).toBeTruthy();
     expect(getByText('Không cháy')).toBeTruthy();
     expect(queryByText('Sức khỏe')).toBeNull();
-    expect(getByText('51F44614')).toBeTruthy();
-    expect(getByText('Hiệu lực')).toBeTruthy();
+    expect(queryByText('Dữ liệu hệ thống')).toBeNull();
+    expect(queryByText('Xe đã đăng ký')).toBeNull();
+    expect(queryByText('Gói gửi xe')).toBeNull();
+    expect(queryByText('Hành động')).toBeNull();
   });
 
   it('renders an empty state when parking data is unavailable', () => {
@@ -95,10 +96,11 @@ describe('ParkingScreen', () => {
       createPayment: jest.fn(),
     });
 
-    const { getByText } = render(<ParkingScreen />);
+    const { getByText, queryByText } = render(<ParkingScreen />);
 
     expect(getByText('Chưa có telemetry')).toBeTruthy();
-    expect(getByText('Chưa có xe đăng ký')).toBeTruthy();
+    expect(queryByText('Dữ liệu hệ thống')).toBeNull();
+    expect(queryByText('Chưa có xe đăng ký')).toBeNull();
   });
 
   it('shows rain particles when the rain sensor is active', () => {

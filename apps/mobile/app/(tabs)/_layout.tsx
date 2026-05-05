@@ -39,7 +39,7 @@ function getRootRouteName(routeName: string) {
 
 export function getTabBarLabel(rootName: string, role?: string | null) {
   if (rootName === 'home') {
-    return 'Trang';
+    return 'Trang chủ';
   }
 
   if (rootName === 'schedule') {

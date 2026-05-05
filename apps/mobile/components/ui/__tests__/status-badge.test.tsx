@@ -81,5 +81,10 @@ describe('StatusBadge', () => {
         expect(label.props.allowFontScaling).toBe(false);
         expect(label.props.adjustsFontSizeToFit).toBe(true);
         expect(label.props.minimumFontScale).toBe(0.78);
+        expect(label.props.style).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ lineHeight: 18 }),
+            ]),
+        );
     });
 });

@@ -2,6 +2,7 @@ import type { RegisterRequest, UserProfile } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
+import { registerAuthSessionHandlers } from '@/services/api/auth-session';
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
 import { syncPushToken, unregisterPushTokenFromBackend } from '@/services/notifications/push';
@@ -40,8 +41,14 @@ const REFRESH_KEY = 'auth_refresh_token';
 async function syncPushTokenSafely() {
   try {
     await syncPushToken();
-  } catch {
+  } catch (error) {
     // Best-effort sync: auth flow should continue even if push registration fails.
+    if (__DEV__) {
+      console.warn(
+        '[push] Unable to register Expo push token:',
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 }
 
@@ -90,8 +97,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
-        const user = await authApi.getMe(token);
-        set({ isHydrated: true, isAuthenticated: true, user, accessToken: token });
+        const user = await usersApi.getProfile();
+        const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
+        set({
+          isHydrated: true,
+          isAuthenticated: true,
+          user,
+          accessToken: latestToken ?? token,
+        });
         await syncPushTokenSafely();
         return;
       }
@@ -112,8 +125,32 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     const user = await usersApi.getProfile();
-    set({ isHydrated: true, isAuthenticated: true, user, accessToken: token });
+    const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
+    set({
+      isHydrated: true,
+      isAuthenticated: true,
+      user,
+      accessToken: latestToken ?? token,
+    });
     await syncPushTokenSafely();
     return user;
   },
 }));
+
+registerAuthSessionHandlers({
+  onAccessTokenUpdated: (accessToken) => {
+    useAuthStore.setState((state) => ({
+      ...state,
+      accessToken,
+      isAuthenticated: Boolean(accessToken && state.user),
+    }));
+  },
+  onSessionInvalidated: () => {
+    useAuthStore.setState({
+      isHydrated: true,
+      isAuthenticated: false,
+      user: null,
+      accessToken: null,
+    });
+  },
+});

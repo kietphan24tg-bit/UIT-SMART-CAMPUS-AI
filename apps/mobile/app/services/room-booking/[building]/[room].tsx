@@ -416,7 +416,7 @@ export default function RoomDetailScreen() {
           <EmptyState
             icon="cloud-offline-outline"
             title="Không tải được lịch phòng"
-            description="Vui lòng thử lại khi backend sẵn sàng."
+            description="Vui lòng thử lại khi máy chủ sẵn sàng."
             actionLabel="Thử lại"
             onActionPress={() => void scheduleQuery.refetch()}
           />

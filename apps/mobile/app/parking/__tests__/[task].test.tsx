@@ -91,7 +91,7 @@ describe('ParkingTaskScreen payment status', () => {
 
   it('shows a clear message when MoMo config is missing', async () => {
     const createPayment = jest.fn().mockRejectedValue(
-      new Error('Cấu hình MoMo chưa đầy đủ. Hãy kiểm tra các biến MOMO_* ở backend.'),
+      new Error('Cấu hình MoMo chưa đầy đủ. Hãy kiểm tra các biến MOMO_* ở máy chủ.'),
     );
 
     mockUseParkingOverview.mockReturnValue({
@@ -127,7 +127,7 @@ describe('ParkingTaskScreen payment status', () => {
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         'Thanh toán gửi xe',
-        'Thanh toán MoMo chưa sẵn sàng trên môi trường hiện tại. Hãy kiểm tra các biến MOMO_* ở backend.',
+        'Thanh toán MoMo chưa sẵn sàng trên môi trường hiện tại. Hãy kiểm tra các biến MOMO_* ở máy chủ.',
       );
     });
   });

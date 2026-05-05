@@ -91,6 +91,31 @@ class EnvironmentVariables {
   @IsOptional()
   IOT_SHARED_SECRET = 'change-me';
 
+  @toOptionalBoolean(false)
+  @IsBoolean()
+  @IsOptional()
+  IOT_MQTT_ENABLED = false;
+
+  @IsString()
+  @IsOptional()
+  IOT_MQTT_BROKER_URL = '';
+
+  @IsString()
+  @IsOptional()
+  IOT_MQTT_USERNAME = '';
+
+  @IsString()
+  @IsOptional()
+  IOT_MQTT_PASSWORD = '';
+
+  @IsString()
+  @IsOptional()
+  IOT_MQTT_CLIENT_ID = 'smart-campus-api';
+
+  @IsString()
+  @IsOptional()
+  IOT_MQTT_TELEMETRY_TOPIC = 'uit/parking/telemetry';
+
   @IsString()
   @IsOptional()
   SMTP_HOST = '';
@@ -202,10 +227,15 @@ class EnvironmentVariables {
   @IsOptional()
   UIT_EVENTS_MAX_PAGES = 10;
 
-  @toOptionalNumber(900_000)
+  @toOptionalNumber(2)
   @IsNumber()
   @IsOptional()
-  UIT_EVENTS_CACHE_TTL_MS = 900_000;
+  UIT_EVENTS_INITIAL_PAGES = 2;
+
+  @toOptionalNumber(3_600_000)
+  @IsNumber()
+  @IsOptional()
+  UIT_EVENTS_CACHE_TTL_MS = 3_600_000;
 
   @toOptionalNumber(20_000)
   @IsNumber()

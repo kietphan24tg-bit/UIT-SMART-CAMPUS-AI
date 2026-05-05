@@ -101,34 +101,52 @@ export class UitEventsScraper {
     return this.configService.get<number>('UIT_EVENTS_MAX_PAGES', 10);
   }
 
-  async fetchAggregatedList(): Promise<UitListEventItem[]> {
-    const maxPages = this.getMaxPages();
+  async fetchListPage(page: number): Promise<UitListEventItem[]> {
+    const safePage = Math.max(1, Math.trunc(page));
+    const path =
+      safePage === 1
+        ? UIT_STUDENT_ACTIVITIES_PATH
+        : `${UIT_STUDENT_ACTIVITIES_PATH}?page=${safePage}`;
+    const response = await this.client.get<string>(path, { responseType: 'text' });
+    if (response.status !== 200 || typeof response.data !== 'string') {
+      return [];
+    }
+
+    return parseListPage(response.data, UIT_ORIGIN);
+  }
+
+  mergeListItems(...collections: UitListEventItem[][]): UitListEventItem[] {
     const merged: UitListEventItem[] = [];
     const seen = new Set<string>();
 
-    for (let page = 1; page <= maxPages; page += 1) {
-      const path =
-        page === 1
-          ? UIT_STUDENT_ACTIVITIES_PATH
-          : `${UIT_STUDENT_ACTIVITIES_PATH}?page=${page}`;
-      const response = await this.client.get<string>(path, { responseType: 'text' });
-      if (response.status !== 200 || typeof response.data !== 'string') {
-        break;
-      }
+    for (const collection of collections) {
+      for (const item of collection) {
+        if (seen.has(item.slug)) {
+          continue;
+        }
 
-      const pageItems = parseListPage(response.data, UIT_ORIGIN);
+        seen.add(item.slug);
+        merged.push(item);
+      }
+    }
+
+    return merged;
+  }
+
+  async fetchListRange(startPage: number, endPage: number): Promise<UitListEventItem[]> {
+    const safeStartPage = Math.max(1, Math.trunc(startPage));
+    const safeEndPage = Math.max(safeStartPage, Math.trunc(endPage));
+    const merged: UitListEventItem[] = [];
+
+    for (let page = safeStartPage; page <= safeEndPage; page += 1) {
+      const pageItems = await this.fetchListPage(page);
       if (pageItems.length === 0) {
         break;
       }
 
-      let appendedCount = 0;
-      for (const item of pageItems) {
-        if (!seen.has(item.slug)) {
-          seen.add(item.slug);
-          merged.push(item);
-          appendedCount += 1;
-        }
-      }
+      const nextMerged = this.mergeListItems(merged, pageItems);
+      const appendedCount = nextMerged.length - merged.length;
+      merged.splice(0, merged.length, ...nextMerged);
 
       if (appendedCount === 0) {
         break;
@@ -136,6 +154,10 @@ export class UitEventsScraper {
     }
 
     return merged;
+  }
+
+  async fetchAggregatedList(): Promise<UitListEventItem[]> {
+    return this.fetchListRange(1, this.getMaxPages());
   }
 
   async fetchArticleDetail(slug: string): Promise<UitArticleDetail | null> {

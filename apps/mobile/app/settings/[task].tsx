@@ -19,7 +19,7 @@ export default function SettingsTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Không tìm thấy tác vụ"
-            description="Task key không hợp lệ trong nhóm cài đặt."
+            description="Khóa tác vụ không hợp lệ trong nhóm cài đặt."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
@@ -54,7 +54,7 @@ export default function SettingsTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Tác vụ chưa sẵn sàng"
-            description="Task key này chưa được khai báo trong nhóm cài đặt."
+            description="Khóa tác vụ này chưa được khai báo trong nhóm cài đặt."
             actionLabel="Về cài đặt"
             onActionPress={() => router.replace('/settings')}
           />

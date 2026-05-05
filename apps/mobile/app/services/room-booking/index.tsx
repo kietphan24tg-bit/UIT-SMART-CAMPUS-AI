@@ -17,6 +17,8 @@ import { isAdminRole } from '@/utils/app';
 
 const BUILDING_CARD_GAP = 12;
 const BUILDING_MIN_WIDTH = 150;
+const HIDDEN_BUILDING_CODES = new Set(['SPORT', 'VENUE']);
+const HIDDEN_BUILDING_NAMES = new Set(['Sân tập và thể thao', 'Hội trường và không gian chung']);
 
 export default function RoomBookingHomeScreen() {
   const theme = useAppTheme();
@@ -40,7 +42,10 @@ export default function RoomBookingHomeScreen() {
     enabled: admin,
   });
 
-  const buildings = buildingsQuery.data ?? [];
+  const buildings = (buildingsQuery.data ?? []).filter(
+    (building) =>
+      !HIDDEN_BUILDING_CODES.has(building.code) && !HIDDEN_BUILDING_NAMES.has(building.name),
+  );
   const availableWidth =
     typeof layout.availableWidth === 'number'
       ? layout.availableWidth
@@ -58,10 +63,10 @@ export default function RoomBookingHomeScreen() {
     adminRequestRoomsQuery.data?.reduce((sum, room) => sum + room.pendingRequestCount, 0) ?? 0;
 
   useEffect(() => {
-    if (buildingsQuery.data?.length) {
-      setRuntimeBuildingAvailability(buildingsQuery.data);
+    if (buildings.length) {
+      setRuntimeBuildingAvailability(buildings);
     }
-  }, [buildingsQuery.data]);
+  }, [buildings]);
 
   useEffect(() => {
     if (roomCatalogQuery.data) {

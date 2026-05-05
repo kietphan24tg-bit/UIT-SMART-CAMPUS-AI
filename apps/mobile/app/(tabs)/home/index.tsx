@@ -34,6 +34,7 @@ const QUICK_COPY: Record<string, string> = {
   grades: 'Xem GPA.',
   alerts: 'Cảnh báo.',
   parking: 'Parking.',
+  'campus-map': 'Bản đồ.',
   operations: 'Vận hành.',
   services: 'Dịch vụ.',
 };
@@ -604,6 +605,8 @@ function getQuickLabel(id: string, fallback: string) {
       return 'Cảnh báo';
     case 'parking':
       return 'Parking';
+    case 'campus-map':
+      return 'Bản đồ';
     case 'operations':
       return 'Vận hành';
     case 'services':
@@ -623,6 +626,8 @@ function getQuickTone(actionId: string) {
       return 'danger';
     case 'parking':
       return 'telemetry';
+    case 'campus-map':
+      return 'success';
     case 'operations':
       return 'primary';
     default:

@@ -149,7 +149,7 @@ function PaymentStatusTask({ onDone }: { onDone: () => void }) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Không thể tạo giao dịch MoMo.';
       const displayMessage = isMomoConfigError(message)
-        ? 'Thanh toán MoMo chưa sẵn sàng trên môi trường hiện tại. Hãy kiểm tra các biến MOMO_* ở backend.'
+        ? 'Thanh toán MoMo chưa sẵn sàng trên môi trường hiện tại. Hãy kiểm tra các biến MOMO_* ở máy chủ.'
         : message;
 
       Alert.alert('Thanh toán gửi xe', displayMessage);

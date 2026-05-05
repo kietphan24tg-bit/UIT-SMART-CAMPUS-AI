@@ -10,6 +10,7 @@ import {
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+
 import { EventDetailResponseDto } from './dto/event-detail-response.dto';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { ListEventsResponseDto } from './dto/list-events-response.dto';

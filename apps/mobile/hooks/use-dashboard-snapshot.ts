@@ -5,6 +5,7 @@ import { gradesApi } from '@/services/api/grades';
 import { notificationsApi } from '@/services/api/notifications';
 import { parkingApi } from '@/services/api/parking';
 import { scheduleApi } from '@/services/api/schedule';
+import { useAuthStore } from '@/stores/auth-store';
 import { useParkingRealtimeStore } from '@/stores/parking-realtime-store';
 import type { DashboardSnapshot, GPASummary, ParkingStatus, ScheduleRecord } from '@/types/app-data';
 import { getNextClass, getTelemetryHealthState, getTodaySchedule } from '@/utils/app';
@@ -24,6 +25,8 @@ function createEmptySnapshot(role: string): DashboardSnapshot {
 
 export function useDashboardSnapshot(role?: string | null) {
   const resolvedRole = role ?? USER_ROLES.STUDENT;
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const connectionState = useParkingRealtimeStore(
     (state) => state.connectionState,
   );
@@ -66,6 +69,7 @@ export function useDashboardSnapshot(role?: string | null) {
         telemetryHealth,
       };
     },
+    enabled: isHydrated && isAuthenticated,
     placeholderData: createEmptySnapshot(resolvedRole),
     refetchInterval: connectionState === 'live' ? false : 10_000,
   });

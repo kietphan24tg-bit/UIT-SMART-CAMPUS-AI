@@ -67,6 +67,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Lối tắt')).toBeTruthy();
     expect(screen.getByText('09:00 - 11:00')).toBeTruthy();
     expect(screen.getAllByText('Parking').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bản đồ').length).toBeGreaterThan(0);
   });
 
   it('renders the operations dashboard for admin users', () => {
@@ -89,6 +90,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Tổng quan vận hành')).toBeTruthy();
     expect(screen.getByText('Lối tắt')).toBeTruthy();
     expect(screen.getAllByText('Parking').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bản đồ').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Cảnh báo').length).toBeGreaterThan(0);
   });
 

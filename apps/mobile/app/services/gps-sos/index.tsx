@@ -196,7 +196,7 @@ export default function GpsSosScreen() {
             />
             {myLatestActive ? (
               <StatusBadge
-                label={`Bạn đã có SOS active · hết hạn ${new Date(myLatestActive.expiresAt).toLocaleTimeString('vi-VN', {
+                label={`Bạn đã có SOS đang mở · hết hạn ${new Date(myLatestActive.expiresAt).toLocaleTimeString('vi-VN', {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}`}
@@ -217,17 +217,17 @@ export default function GpsSosScreen() {
           </View>
         </SectionCard>
 
-        <SectionCard title="Bản đồ SOS" subtitle="Marker snapshot của các yêu cầu đang mở." variant="glass" tone="campus">
+        <SectionCard title="Bản đồ SOS" subtitle="Điểm đánh dấu vị trí của các yêu cầu đang mở." variant="glass" tone="campus">
           <SosMap markers={markers} viewerLocation={viewerLocation} />
         </SectionCard>
 
-        <SectionCard title="Feed SOS đang mở" subtitle="Tất cả người dùng đăng nhập đều có thể xem." variant="outlined">
+        <SectionCard title="Bảng tin SOS đang mở" subtitle="Tất cả người dùng đăng nhập đều có thể xem." variant="outlined">
           {activeQuery.isLoading ? (
             <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
               Đang tải feed SOS...
             </Text>
           ) : activeItems.length === 0 ? (
-            <EmptyState icon="shield-checkmark-outline" title="Không có SOS active" description="Feed sẽ hiện khi có người dùng bấm SOS." />
+            <EmptyState icon="shield-checkmark-outline" title="Không có SOS đang mở" description="Bảng tin sẽ hiện khi có người dùng bấm SOS." />
           ) : (
             <View style={styles.stack}>
               {activeItems.map((item) => {

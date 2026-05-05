@@ -104,7 +104,7 @@ export default function LibraryScreen() {
     {
       label: 'Giữ chỗ',
       value: `${reservationsQuery.data?.filter((item) => item.status === 'active').length ?? 0}`,
-      helper: canBorrow ? 'Reservation còn hiệu lực' : 'Chỉ áp dụng SV/GV',
+      helper: canBorrow ? 'Giữ chỗ còn hiệu lực' : 'Chỉ áp dụng SV/GV',
       tone: 'warning' as const,
     },
     {
@@ -190,7 +190,7 @@ export default function LibraryScreen() {
             <EmptyState
               icon="cloud-offline-outline"
               title="Không tải được thư viện"
-              description="Vui lòng kiểm tra kết nối backend rồi thử lại."
+              description="Vui lòng kiểm tra kết nối máy chủ rồi thử lại."
               actionLabel="Thử lại"
               onActionPress={() => void booksQuery.refetch()}
             />
@@ -263,7 +263,7 @@ export default function LibraryScreen() {
         ) : null}
 
         {canBorrow ? (
-          <SectionCard title="Giữ chỗ của tôi" subtitle="Quản lý các reservation đang mở." variant="outlined">
+          <SectionCard title="Giữ chỗ của tôi" subtitle="Quản lý các lượt giữ chỗ đang mở." variant="outlined">
             {reservationsQuery.isLoading ? (
               <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
                 Đang tải danh sách giữ chỗ...

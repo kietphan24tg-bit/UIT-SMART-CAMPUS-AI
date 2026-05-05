@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { PressableProps, PressableStateCallbackType } from 'react-native';
+import type { PressableProps, PressableStateCallbackType, StyleProp, TextStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme';
 
@@ -8,6 +8,7 @@ interface ButtonProps extends PressableProps {
   label: string;
   loading?: boolean;
   icon?: ReactNode;
+  labelStyle?: StyleProp<TextStyle>;
 }
 
 function resolvePressableStyle(
@@ -22,6 +23,7 @@ export function PrimaryButton({
   loading,
   disabled,
   icon,
+  labelStyle,
   style,
   ...rest
 }: ButtonProps) {
@@ -51,6 +53,7 @@ export function PrimaryButton({
             style={[
               styles.primaryLabel,
               { color: theme.colors.onPrimary, fontFamily: theme.fonts.semibold },
+              labelStyle,
             ]}
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -70,6 +73,7 @@ export function SecondaryButton({
   loading,
   disabled,
   icon,
+  labelStyle,
   style,
   ...rest
 }: ButtonProps) {
@@ -100,6 +104,7 @@ export function SecondaryButton({
             style={[
               styles.secondaryLabel,
               { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+              labelStyle,
             ]}
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -136,16 +141,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexGrow: 1,
     fontSize: 15,
-    lineHeight: 20,
-    includeFontPadding: false,
+    lineHeight: 22,
     textAlign: 'center',
   },
   secondaryLabel: {
     flexShrink: 1,
     flexGrow: 1,
     fontSize: 15,
-    lineHeight: 20,
-    includeFontPadding: false,
+    lineHeight: 22,
     textAlign: 'center',
   },
 });

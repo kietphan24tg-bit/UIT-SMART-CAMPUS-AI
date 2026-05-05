@@ -22,6 +22,11 @@ export interface UploadedAvatarAsset {
   avatarUrl: string;
 }
 
+export interface UploadedCanteenProductImageAsset {
+  key: string;
+  imageUrl: string;
+}
+
 @Injectable()
 export class AvatarStorageService {
   private readonly bucket: string;
@@ -47,11 +52,32 @@ export class AvatarStorageService {
   }
 
   async uploadAvatar(userId: string, file: AvatarUploadFile): Promise<UploadedAvatarAsset> {
-    this.assertValidAvatarFile(file);
+    const key = this.buildScopedImageKey(['avatars', userId], file.mimetype);
+    const publicUrl = await this.uploadImageObject(key, file);
+
+    return {
+      key,
+      avatarUrl: publicUrl,
+    };
+  }
+
+  async uploadCanteenProductImage(
+    actorId: string,
+    file: AvatarUploadFile,
+  ): Promise<UploadedCanteenProductImageAsset> {
+    const key = this.buildScopedImageKey(['canteen-products', actorId], file.mimetype);
+    const publicUrl = await this.uploadImageObject(key, file);
+
+    return {
+      key,
+      imageUrl: publicUrl,
+    };
+  }
+
+  private async uploadImageObject(key: string, file: AvatarUploadFile) {
+    this.assertValidImageFile(file);
     this.assertStorageConfigured();
 
-    const extension = this.resolveExtension(file.mimetype);
-    const key = `avatars/${userId}/${randomUUID()}.${extension}`;
     const requestUrl = this.buildObjectUrl(key);
     const payloadHash = this.sha256Hex(file.buffer);
     const amzDate = this.getAmzDate(new Date());
@@ -92,13 +118,15 @@ export class AvatarStorageService {
       );
     }
 
-    return {
-      key,
-      avatarUrl: this.buildPublicUrl(key),
-    };
+    return this.buildPublicUrl(key);
   }
 
-  private assertValidAvatarFile(file: AvatarUploadFile) {
+  private buildScopedImageKey(pathSegments: string[], mimetype: string) {
+    const extension = this.resolveExtension(mimetype);
+    return `${pathSegments.join('/')}/${randomUUID()}.${extension}`;
+  }
+
+  private assertValidImageFile(file: AvatarUploadFile) {
     if (!file?.buffer || !file.size) {
       throw new BadRequestException('Avatar file is required');
     }

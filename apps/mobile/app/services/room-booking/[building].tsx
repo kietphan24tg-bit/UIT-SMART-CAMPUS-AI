@@ -85,7 +85,7 @@ export default function RoomsInBuildingScreen() {
         <ContentStack>
           <EmptyState
             title="Không tìm thấy tòa nhà"
-            description="Không tìm thấy dữ liệu tòa nhà từ backend."
+            description="Không tìm thấy dữ liệu tòa nhà từ máy chủ."
             actionLabel="Quay lại đặt phòng"
             onActionPress={() => router.replace('/services/room-booking')}
           />
@@ -166,7 +166,7 @@ export default function RoomsInBuildingScreen() {
           <EmptyState
             icon="cloud-offline-outline"
             title="Không tải được danh sách phòng"
-            description="Vui lòng kiểm tra backend và thử lại."
+            description="Vui lòng kiểm tra máy chủ và thử lại."
             actionLabel="Thử lại"
             onActionPress={() => void roomsQuery.refetch()}
           />

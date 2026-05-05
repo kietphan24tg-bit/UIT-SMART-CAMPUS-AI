@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { notificationsApi } from '@/services/api/notifications';
 import { safetyApi } from '@/services/api/safety';
+import { useAuthStore } from '@/stores/auth-store';
 import type {
   AlertCategory,
   AlertFeedItem,
@@ -123,6 +124,8 @@ function toFireAlertFeed(item: FireAlertRecord): AlertFeedItem {
 
 export function useAlertFeed(role?: string | null) {
   const canViewFireAlerts = isAdminRole(role);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -143,6 +146,7 @@ export function useAlertFeed(role?: string | null) {
         ...notifications.items.map(toNotificationFeed),
       ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     },
+    enabled: isHydrated && isAuthenticated,
     placeholderData: [] as AlertFeedItem[],
   });
 

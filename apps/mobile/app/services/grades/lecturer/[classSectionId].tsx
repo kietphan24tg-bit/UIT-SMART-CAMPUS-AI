@@ -546,7 +546,7 @@ export default function LecturerGradeSheetScreen() {
                   <EmptyState
                     icon="people-outline"
                     title="Lớp chưa có sinh viên"
-                    description="Sinh viên active enrollment sẽ xuất hiện trong bảng điểm."
+                    description="Sinh viên đang ghi danh sẽ xuất hiện trong bảng điểm."
                   />
                 ) : null}
 

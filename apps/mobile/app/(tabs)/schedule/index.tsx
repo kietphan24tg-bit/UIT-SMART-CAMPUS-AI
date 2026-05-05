@@ -23,7 +23,6 @@ import {
   getDayLabelShort,
   getNextClass,
   getRoleLabel,
-  getTelemetryHealthLabel,
   getTodayDayOfWeek,
   groupScheduleByDay,
   isAdminRole,
@@ -265,21 +264,13 @@ export default function ScheduleScreen() {
   const isOperationsRole = isAdminRole(role);
   const isLecturer = isLecturerRole(role);
   const scheduleState = useScheduleScreenData();
-  const operationsState = useOperationsScreenData();
+  const operationsState = useOperationsScreenData(role);
 
   if (isOperationsRole) {
     const parking = operationsState.data?.parking ?? null;
     const telemetry = operationsState.data?.telemetry ?? null;
     const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
     const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
-    const healthTone = telemetry?.fireDetected
-      ? 'danger'
-      : telemetry?.reportedAt
-        ? 'success'
-        : parking?.lastUpdated
-          ? 'warning'
-          : 'info';
-
     const metrics = [
       {
         label: 'Chỗ trống',
@@ -376,82 +367,6 @@ export default function ScheduleScreen() {
               ) : null}
             </View>
           </SectionCard>
-
-          <SectionCard
-            title="Parking hiện tại"
-            subtitle="Tóm tắt bãi xe."
-            variant="glass"
-            tone="telemetry"
-          >
-            {parking ? (
-              <View style={styles.column}>
-                <View
-                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
-                >
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                    ]}
-                  >
-                    {parking.availableSlots}/{parking.totalSlots} chỗ trống
-                  </Text>
-                  <StatusBadge
-                    label={getTelemetryHealthLabel(
-                      telemetry?.fireDetected
-                        ? 'fire-alert'
-                        : parking.lastUpdated
-                          ? 'online'
-                          : 'no-data',
-                    )}
-                    tone={healthTone}
-                  />
-                </View>
-                <View style={styles.infoGrid}>
-                  <InfoRow label="Cổng" value={parking.gateId} />
-                  <InfoRow label="Cập nhật" value={formatDateTime(parking.lastUpdated)} />
-                  <InfoRow label="IP thiết bị" value={parking.sensors.deviceIp ?? '--'} />
-                </View>
-                <View style={styles.badgeRow}>
-                  <StatusBadge
-                    label={
-                      typeof parking.sensors.temperature === 'number'
-                        ? `Nhiệt độ ${parking.sensors.temperature}°C`
-                        : 'Nhiệt độ --'
-                    }
-                    tone="info"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={
-                      typeof parking.sensors.humidity === 'number'
-                        ? `Độ ẩm ${parking.sensors.humidity}%`
-                        : 'Độ ẩm --'
-                    }
-                    tone="success"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={parking.sensors.rainDetected ? 'Có mưa' : 'Khô ráo'}
-                    tone="warning"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={parking.sensors.fireDetected ? 'Cảnh báo cháy' : 'An toàn'}
-                    tone={parking.sensors.fireDetected ? 'danger' : 'success'}
-                    size="sm"
-                  />
-                </View>
-              </View>
-            ) : (
-              <EmptyState
-                icon="car-outline"
-                title="Chưa có dữ liệu"
-                description="Tải lại để cập nhật parking."
-              />
-            )}
-          </SectionCard>
-
           <SectionCard
             title="Telemetry mới nhất"
             subtitle="Dữ liệu cảm biến gần nhất."
@@ -874,28 +789,20 @@ export default function ScheduleScreen() {
           <SectionCard title="Công cụ giảng dạy" subtitle="Tác vụ hỗ trợ." variant="outlined">
             <View style={styles.column}>
               <NavigationRow
-                icon="school-outline"
-                label="Bảng lớp học"
-                description="Mở dashboard lớp học."
-                badgeLabel="Sắp triển khai"
-                badgeTone="info"
-                onPress={() => router.push('/schedule/class-dashboard')}
-              />
-              <NavigationRow
                 icon="qr-code-outline"
                 label="Điểm danh QR"
                 description="Chuẩn bị phiên điểm danh."
-                badgeLabel="Sắp triển khai"
-                badgeTone="info"
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
                 onPress={() => router.push('/services/attendance/lecturer')}
               />
               <NavigationRow
                 icon="bar-chart-outline"
                 label="Bảng nhập điểm"
                 description="Xem và đối chiếu điểm."
-                badgeLabel="Sắp triển khai"
-                badgeTone="info"
-                onPress={() => router.push('/schedule/grade-sheet')}
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
+                onPress={() => router.push('/services/grades/lecturer')}
               />
               <NavigationRow
                 icon="notifications-outline"
@@ -1325,3 +1232,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
+

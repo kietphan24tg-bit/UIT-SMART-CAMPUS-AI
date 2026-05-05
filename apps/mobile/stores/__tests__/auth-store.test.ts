@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { useAuthStore } from '../auth-store';
 
+import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
 
 jest.mock('@/services/api/auth', () => ({
@@ -10,6 +11,12 @@ jest.mock('@/services/api/auth', () => ({
     login: jest.fn(),
     register: jest.fn(),
     getMe: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/api', () => ({
+  usersApi: {
+    getProfile: jest.fn(),
   },
 }));
 
@@ -36,6 +43,9 @@ const mockedAuthApi = authApi as unknown as {
   login: jest.Mock;
   register: jest.Mock;
   getMe: jest.Mock;
+};
+const mockedUsersApi = usersApi as unknown as {
+  getProfile: jest.Mock;
 };
 
 describe('useAuthStore', () => {
@@ -125,7 +135,7 @@ describe('useAuthStore', () => {
   describe('hydrate', () => {
     it('should restore auth state from stored token', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
-      mockedAuthApi.getMe.mockResolvedValue(mockUser);
+      mockedUsersApi.getProfile.mockResolvedValue(mockUser);
 
       await useAuthStore.getState().hydrate();
 
@@ -147,7 +157,7 @@ describe('useAuthStore', () => {
 
     it('should clear tokens on hydration error', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('bad-token');
-      mockedAuthApi.getMe.mockRejectedValue(new Error('Unauthorized'));
+      mockedUsersApi.getProfile.mockRejectedValue(new Error('Unauthorized'));
 
       await useAuthStore.getState().hydrate();
 

@@ -16,7 +16,7 @@ describe('tab layout metrics', () => {
   });
 
   it('uses mobile-safe labels for the main tabs', () => {
-    expect(getTabBarLabel('home', 'student')).toBe('Trang');
+    expect(getTabBarLabel('home', 'student')).toBe('Trang chủ');
     expect(getTabBarLabel('schedule', 'student')).toBe('Lịch');
     expect(getTabBarLabel('services', 'student')).toBe('Dịch vụ');
     expect(getTabBarLabel('alerts', 'student')).toBe('Cảnh báo');

@@ -1,6 +1,6 @@
 import type { UserProfile } from '@smart-campus/shared';
 
-import { apiClient } from './client';
+import { apiClient, postMultipart } from './client';
 
 export const usersApi = {
   getProfile: async (): Promise<UserProfile> => {
@@ -8,13 +8,11 @@ export const usersApi = {
   },
 
   uploadAvatar: async (uri: string, fileName = 'avatar.jpg', mimeType = 'image/jpeg') => {
-    const formData = new FormData();
-    formData.append('avatar', {
+    return postMultipart<UserProfile>('/users/me/avatar', {
+      fieldName: 'avatar',
       uri,
-      name: fileName,
-      type: mimeType,
-    } as unknown as Blob);
-
-    return apiClient.post('/users/me/avatar', formData) as Promise<UserProfile>;
+      fileName,
+      mimeType,
+    });
   },
 };

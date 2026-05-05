@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ParkingSlotState, RegisteredVehicle } from '@smart-campus/shared';
-import { useRouter } from 'expo-router';
+import type { ParkingSlotState } from '@smart-campus/shared';
 import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
@@ -15,35 +14,23 @@ import {
 import {
   ContentStack,
   EmptyState,
-  InfoRow,
-  PrimaryButton,
   Screen,
   SectionCard,
-  SecondaryButton,
-  StatusBadge,
   TopHero,
 } from '@/components/ui';
 import { useParkingOverview } from '@/hooks/use-parking-overview';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAppTheme } from '@/theme';
-import {
-  formatCurrency,
-  formatDateTime,
-  formatSubscriptionDate,
-  getTelemetryHealthLabel,
-} from '@/utils/app';
+import { formatDateTime, getTelemetryHealthLabel } from '@/utils/app';
 
 export default function ParkingScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
-  const router = useRouter();
   const parking = useParkingOverview();
 
   const parkingStatus = parking.data?.status ?? null;
-  const vehicles = parking.data?.vehicles ?? [];
   const slots = parkingStatus?.slots ?? [];
   const boardSlots = getBoardSlots(slots);
-  const subscriptionSummary = summarizeSubscriptions(vehicles);
   const gatewayState = parking.data?.telemetryHealth ?? 'offline';
   const gatewayLabel = getTelemetryHealthLabel(gatewayState);
   const gatewayTone =
@@ -193,99 +180,6 @@ export default function ParkingScreen() {
           )}
         </SectionCard>
 
-        <SectionCard title="Dữ liệu hệ thống" subtitle="Gateway và thời điểm ghi nhận." variant="glass" tone="telemetry">
-          {parkingStatus ? (
-            <View style={styles.infoGrid}>
-              <InfoRow label="Cổng" value={parkingStatus.gateId} />
-              <InfoRow
-                label="Cập nhật"
-                value={formatDateTime(parkingStatus.lastUpdated ?? parkingStatus.sensors.reportedAt ?? null)}
-              />
-              <InfoRow label="Gateway" value={gatewayLabel} />
-              <InfoRow label="IP thiết bị" value={parkingStatus.sensors.deviceIp ?? '--'} />
-            </View>
-          ) : (
-            <EmptyState icon="hardware-chip-outline" title="Chưa có dữ liệu" description="Kéo xuống để làm mới." />
-          )}
-        </SectionCard>
-
-        <SectionCard title="Xe đã đăng ký" subtitle="Danh sách hiện có." variant="outlined">
-          {vehicles.length > 0 ? (
-            <View style={styles.vehicleGrid}>
-              {vehicles.map((vehicle) => {
-                const meta = getSubscriptionMeta(vehicle.subscription.status);
-                return (
-                  <View
-                    key={vehicle.id}
-                    style={[
-                      styles.vehicleCard,
-                      {
-                        backgroundColor: theme.colors.surfaceSubtle,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.vehiclePlate, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
-                          {vehicle.plateNumber}
-                        </Text>
-                        <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                          RFID {vehicle.rfidTag}
-                        </Text>
-                      </View>
-                      <StatusBadge label={meta.label} tone={meta.tone} />
-                    </View>
-                    <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                      {vehicle.label ?? 'Chưa có nhãn'}
-                    </Text>
-                    <View style={styles.infoGrid}>
-                      <InfoRow label="Hạn gói" value={formatSubscriptionDate(vehicle.subscription.endDate)} />
-                      <InfoRow label="Phí tháng" value={`${formatCurrency(vehicle.subscription.monthlyFee)} VND`} />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <EmptyState
-              icon="car-outline"
-              title="Chưa có xe đăng ký"
-              description="Đăng ký xe để hệ thống tạo gói tương ứng."
-              actionLabel="Đăng ký xe"
-              onActionPress={() => router.push('/parking/vehicle-registration')}
-            />
-          )}
-        </SectionCard>
-
-        <SectionCard title="Gói gửi xe" subtitle="Trạng thái gói hiện tại." variant="subtle" tone="telemetry">
-          {vehicles.length > 0 ? (
-            <View style={styles.sectionStack}>
-              <View style={styles.badgeRow}>
-                <StatusBadge label={`${subscriptionSummary.active} hiệu lực`} tone="success" />
-                <StatusBadge label={`${subscriptionSummary.pending} chờ duyệt`} tone="warning" />
-                <StatusBadge label={`${subscriptionSummary.expired} hết hạn`} tone="danger" />
-                <StatusBadge label={`${subscriptionSummary.inactive} chưa kích hoạt`} tone="info" />
-              </View>
-              <SecondaryButton label="Mở gói gửi xe" onPress={() => router.push('/parking/payment-status')} />
-            </View>
-          ) : (
-            <EmptyState
-              icon="wallet-outline"
-              title="Chưa có gói gửi xe"
-              description="Đăng ký xe trước để tạo gói tương ứng."
-              actionLabel="Đăng ký xe"
-              onActionPress={() => router.push('/parking/vehicle-registration')}
-            />
-          )}
-        </SectionCard>
-
-        <SectionCard title="Hành động" subtitle="Tác vụ chính." variant="metric" tone="primary">
-          <View style={styles.sectionStack}>
-            <PrimaryButton label="Đăng ký xe" onPress={() => router.push('/parking/vehicle-registration')} />
-            <SecondaryButton label="Thanh toán" onPress={() => router.push('/parking/payment-status')} />
-          </View>
-        </SectionCard>
       </ContentStack>
     </Screen>
   );
@@ -825,29 +719,6 @@ function RainParticleLayer({
           );
         })}
     </View>
-  );
-}
-
-function getSubscriptionMeta(status: RegisteredVehicle['subscription']['status']) {
-  switch (status) {
-    case 'active':
-      return { label: 'Hiệu lực', tone: 'success' as const };
-    case 'pending':
-      return { label: 'Chờ duyệt', tone: 'warning' as const };
-    case 'expired':
-      return { label: 'Hết hạn', tone: 'danger' as const };
-    default:
-      return { label: 'Chưa kích hoạt', tone: 'info' as const };
-  }
-}
-
-function summarizeSubscriptions(vehicles: RegisteredVehicle[]) {
-  return vehicles.reduce(
-    (acc, vehicle) => {
-      acc[vehicle.subscription.status] += 1;
-      return acc;
-    },
-    { inactive: 0, pending: 0, active: 0, expired: 0 },
   );
 }
 

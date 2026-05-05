@@ -326,7 +326,7 @@ export function getOperationsTaskConfig(
     case 'notifications':
       return buildUnavailableConfig({
         eyebrow: 'Vận hành',
-        title: 'Broadcast thông báo',
+        title: 'Thông báo diện rộng',
         subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
         reason: 'Tính năng gửi thông báo theo phạm vi đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
         route: '/alerts',

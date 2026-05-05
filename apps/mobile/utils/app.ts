@@ -281,6 +281,8 @@ export function getRoleQuickActions(role?: string | null) {
       { id: 'operations', label: 'Vận hành', icon: 'pulse-outline', route: '/schedule' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
+      { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
+      { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
       { id: 'services', label: 'Dịch vụ', icon: 'grid-outline', route: '/services' },
     ];
   }
@@ -299,6 +301,7 @@ export function getRoleQuickActions(role?: string | null) {
     { id: 'schedule', label: 'Lịch học', icon: 'calendar-outline', route: '/schedule' },
     { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
     { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
+    { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
     { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
   ];
 }

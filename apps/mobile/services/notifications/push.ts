@@ -70,7 +70,9 @@ export async function syncPushToken() {
   }
 
   if (!canUseRemotePushNotifications()) {
-    return;
+    throw new Error(
+      'Remote push notifications are disabled in Expo Go on Android. Use a development build or a release build instead.',
+    );
   }
 
   await ensureAndroidChannel();
@@ -86,7 +88,7 @@ export async function syncPushToken() {
   }
 
   if (permissionStatus.status !== 'granted') {
-    return;
+    throw new Error('Notification permission was not granted on this device.');
   }
 
   const expoPushToken = await fetchExpoPushTokenAndCache();

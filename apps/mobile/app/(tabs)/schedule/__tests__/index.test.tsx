@@ -351,6 +351,8 @@ describe('ScheduleScreen', () => {
     expect(getByText('Lịch dạy trong học kỳ')).toBeTruthy();
     expect(getByText('Công cụ giảng dạy')).toBeTruthy();
     expect(getByText('Điểm danh QR')).toBeTruthy();
+    expect(queryByText('Bảng lớp học')).toBeNull();
+    expect(getByText('Bảng nhập điểm')).toBeTruthy();
     expect(queryByText('Chọn kỳ cần xem.')).toBeNull();
     expect(getAllByText('Nguyễn Hoàng Phúc').length).toBeGreaterThan(0);
     expect(queryByText('CS312')).toBeNull();

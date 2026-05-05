@@ -9,6 +9,7 @@ import { useOperationsScreenData } from '@/hooks/use-schedule-screen';
 import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
 import type { BroadcastNotificationRequest } from '@/services/api/notifications';
+import type { UserRole } from '@/types/app-data';
 import type { OperationsTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 import { getOperationsTaskConfig, getPermissionDeniedCopy } from '@/utils/role-ui';
@@ -17,7 +18,7 @@ export default function OperationsTaskScreen() {
   const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const params = useLocalSearchParams<{ task?: string }>();
-  const operationsState = useOperationsScreenData();
+  const operationsState = useOperationsScreenData(role);
   const task = params.task as OperationsTaskKey | undefined;
 
   if (!task) {
@@ -26,7 +27,7 @@ export default function OperationsTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Không tìm thấy tác vụ"
-            description="Task key không hợp lệ trong nhóm vận hành."
+            description="Khóa tác vụ không hợp lệ trong nhóm vận hành."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
@@ -65,7 +66,7 @@ export default function OperationsTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Tác vụ chưa sẵn sàng"
-            description="Task key này chưa được khai báo trong nhóm vận hành."
+            description="Khóa tác vụ này chưa được khai báo trong nhóm vận hành."
             actionLabel="Về vận hành"
             onActionPress={() => router.replace('/schedule')}
           />
@@ -118,14 +119,15 @@ function AdminNotificationBroadcastScreen({ role }: { role?: string | null }) {
     <Screen>
       <TopHero
         eyebrow="Vận hành"
-        title="Broadcast thông báo"
-        subtitle="Gửi thông báo in-app và push notification cho toàn trường hoặc theo vai trò."
+        title="Thông báo diện rộng"
+        subtitle="Gửi thông báo trong ứng dụng và thông báo đẩy cho toàn trường hoặc theo vai trò."
         badge={{ label: 'Admin', tone: 'info' }}
         variant="accent"
       />
       <ContentStack narrow>
         <NotificationComposeForm
           mode="admin"
+          currentUserRole={(role as UserRole | null) ?? null}
           loading={mutation.isPending}
           onSubmit={handleSubmit}
         />

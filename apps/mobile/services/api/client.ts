@@ -2,6 +2,8 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 
+import { notifyAccessTokenUpdated, notifySessionInvalidated } from './auth-session';
+
 export const AUTH_ACCESS_TOKEN_KEY = 'auth_access_token';
 const ACCESS_TOKEN_KEY = AUTH_ACCESS_TOKEN_KEY;
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -52,11 +54,39 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+type MultipartRequestOptions = {
+  fieldName: string;
+  uri: string;
+  fileName: string;
+  mimeType: string;
+};
+
+function buildAxiosDebugPayload(error: AxiosError) {
+  const method = error.config?.method?.toUpperCase() ?? 'GET';
+  const baseURL = error.config?.baseURL ?? API_BASE_URL;
+  const requestPath = error.config?.url ?? '';
+  const requestUrl = requestPath.startsWith('http')
+    ? requestPath
+    : `${String(baseURL).replace(/\/+$/g, '')}/${String(requestPath).replace(/^\/+/g, '')}`;
+
+  return {
+    message: error.message,
+    code: error.code,
+    method,
+    requestUrl,
+    timeout: error.config?.timeout,
+    hasResponse: error.response != null,
+    status: error.response?.status,
+    responseData: error.response?.data,
+  };
+}
+
 let refreshTokenRequest: Promise<string | null> | null = null;
 
 async function clearStoredTokens() {
   await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
   await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  notifySessionInvalidated();
 }
 
 async function refreshAccessToken() {
@@ -89,6 +119,7 @@ async function refreshAccessToken() {
 
       await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
       await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, nextRefreshToken);
+      notifyAccessTokenUpdated(accessToken);
       return accessToken as string;
     } catch {
       await clearStoredTokens();
@@ -126,6 +157,7 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response.data?.data ?? response.data,
   async (error: AxiosError) => {
+    console.error('[apiClient] request failed', buildAxiosDebugPayload(error));
     const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     if (
@@ -150,3 +182,70 @@ apiClient.interceptors.response.use(
     return Promise.reject(error.response?.data ?? error);
   },
 );
+
+export async function postMultipart<T>(
+  path: string,
+  { fieldName, uri, fileName, mimeType }: MultipartRequestOptions,
+): Promise<T> {
+  const formData = new FormData();
+  formData.append(fieldName, {
+    uri,
+    name: fileName,
+    type: mimeType,
+  } as unknown as Blob);
+
+  const send = async (token: string | null) => {
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const requestUrl = path.startsWith('http')
+      ? path
+      : `${String(API_BASE_URL).replace(/\/+$/g, '')}/${String(path).replace(/^\/+/g, '')}`;
+
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const raw = await response.text();
+    let parsed: { data?: T; message?: string; statusCode?: number } | null = null;
+
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw) as { data?: T; message?: string; statusCode?: number };
+      } catch {
+        parsed = { message: raw };
+      }
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: parsed,
+    };
+  };
+
+  const accessToken = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  const firstResponse = await send(accessToken);
+
+  if (firstResponse.ok) {
+    return (firstResponse.body?.data ?? firstResponse.body) as T;
+  }
+
+  if (firstResponse.status === 401 && shouldAttemptRefresh({ url: path })) {
+    const nextAccessToken = await refreshAccessToken();
+    if (nextAccessToken) {
+      const retryResponse = await send(nextAccessToken);
+      if (retryResponse.ok) {
+        return (retryResponse.body?.data ?? retryResponse.body) as T;
+      }
+      throw retryResponse.body ?? new Error(`Request failed with status ${retryResponse.status}`);
+    }
+    await clearStoredTokens();
+  }
+
+  throw firstResponse.body ?? new Error(`Request failed with status ${firstResponse.status}`);
+}

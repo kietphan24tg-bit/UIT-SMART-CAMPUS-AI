@@ -1,0 +1,14 @@
+{
+  "name": "smart-campus-iot-mqtt-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MQTT to HTTP bridge for ESP32 parking telemetry",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.15.1"
+  }
+}

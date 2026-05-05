@@ -34,7 +34,7 @@ export default function AdminCatalogScreen() {
   });
 
   const [courseCode, setCourseCode] = useState('SE399');
-  const [courseName, setCourseName] = useState('Chuyen de demo');
+  const [courseName, setCourseName] = useState('Chuyên đề demo');
   const [courseCredits, setCourseCredits] = useState('3');
 
   const [semesterId, setSemesterId] = useState('');

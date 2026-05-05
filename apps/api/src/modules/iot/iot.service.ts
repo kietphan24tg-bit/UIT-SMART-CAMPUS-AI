@@ -213,6 +213,24 @@ export class IotService {
     return snapshot;
   }
 
+  async recordTelemetryFromMqtt(dto: TelemetryDto) {
+    const previousSnapshot = await this.prisma.telemetrySnapshot.findFirst({
+      where: { gateId: dto.gateId },
+      orderBy: { reportedAt: 'desc' },
+    });
+
+    const snapshot = await this.recordTelemetry(dto);
+
+    if (snapshot.fireDetected && !previousSnapshot?.fireDetected) {
+      await this.createFireAlert({
+        gateId: snapshot.gateId,
+        reportedAt: snapshot.reportedAt.toISOString(),
+      });
+    }
+
+    return snapshot;
+  }
+
   async getLatestTelemetry(gateId?: string) {
     const resolvedGateId = normalizeGateId(gateId);
     const snapshot = await this.prisma.telemetrySnapshot.findFirst({

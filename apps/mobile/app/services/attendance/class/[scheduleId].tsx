@@ -250,7 +250,12 @@ export default function LecturerAttendanceClassDetailScreen() {
   const activeSession =
     localSession?.status === 'active'
       ? summaryActiveSession && summaryActiveSession.sessionId === localSession.sessionId
-        ? { ...localSession, ...summaryActiveSession }
+        ? {
+            ...summaryActiveSession,
+            ...localSession,
+            displayKey: localSession.displayKey ?? summaryActiveSession.displayKey,
+            displayUrl: localSession.displayUrl ?? summaryActiveSession.displayUrl,
+          }
         : localSession
       : summaryActiveSession;
 
@@ -667,7 +672,7 @@ export default function LecturerAttendanceClassDetailScreen() {
                     Danh sách sinh viên
                   </Text>
                   <Text style={[styles.helperText, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
-                    Danh sách lấy từ sinh viên đã enroll trong lớp. Trạng thái điểm danh sẽ cập nhật theo phiên đang mở.
+                    Danh sách lấy từ sinh viên đã ghi danh trong lớp. Trạng thái điểm danh sẽ cập nhật theo phiên đang mở.
                   </Text>
                   <TextInput
                     value={studentQuery}
@@ -696,7 +701,7 @@ export default function LecturerAttendanceClassDetailScreen() {
                             ? 'Không tải được danh sách sinh viên của lớp này.'
                             : studentQuery.trim()
                               ? 'Không tìm thấy sinh viên phù hợp với từ khóa đang nhập.'
-                              : 'Lớp này hiện chưa có sinh viên enroll hoặc đang bị map sai sang lớp attendance khác.'
+                              : 'Lớp này hiện chưa có sinh viên ghi danh hoặc đang bị ánh xạ sai sang lớp điểm danh khác.'
                         }
                       />
                     ) : null}
@@ -744,8 +749,14 @@ export default function LecturerAttendanceClassDetailScreen() {
                     },
                   ]}
                 >
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  <View style={styles.historySectionHeader}>
+                    <Text
+                      style={[
+                        styles.panelTitle,
+                        styles.historySectionTitle,
+                        { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                      ]}
+                    >
                       Lịch sử điểm danh
                     </Text>
                     <SecondaryButton
@@ -1066,15 +1077,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  historySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  historySectionTitle: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
+  },
   sectionMetaText: {
     fontSize: 14,
     lineHeight: 20,
   },
   historySummaryButton: {
-    minHeight: 40,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 34,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexShrink: 0,
+    minWidth: 112,
   },
   helperText: {
     fontSize: 13,
@@ -1140,6 +1164,7 @@ const styles = StyleSheet.create({
   },
   historyInfoItem: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 12,
@@ -1153,6 +1178,7 @@ const styles = StyleSheet.create({
   historyInfoValue: {
     fontSize: 14,
     lineHeight: 20,
+    flexShrink: 1,
   },
   metricGrid: {
     flexDirection: 'row',

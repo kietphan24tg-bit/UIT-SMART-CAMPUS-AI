@@ -24,6 +24,7 @@ export interface NotificationClassOption {
 interface NotificationComposeFormProps {
   mode: ComposerMode;
   classSections?: NotificationClassOption[];
+  currentUserRole?: UserRole | null;
   loading?: boolean;
   classesLoading?: boolean;
   onRefreshClasses?: () => void;
@@ -52,6 +53,7 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 export function NotificationComposeForm({
   mode,
   classSections = [],
+  currentUserRole,
   loading = false,
   classesLoading = false,
   onRefreshClasses,
@@ -77,6 +79,21 @@ export function NotificationComposeForm({
     () => classSections.find((section) => section.id === selectedClassSectionId) ?? null,
     [classSections, selectedClassSectionId],
   );
+  const senderIncludedInAudience = useMemo(() => {
+    if (mode === 'class') {
+      return true;
+    }
+
+    if (audienceMode === 'all') {
+      return true;
+    }
+
+    if (!currentUserRole) {
+      return false;
+    }
+
+    return selectedRoles.includes(currentUserRole);
+  }, [audienceMode, currentUserRole, mode, selectedRoles]);
 
   const toggleRole = (role: UserRole) => {
     setSelectedRoles((current) =>
@@ -122,13 +139,13 @@ export function NotificationComposeForm({
 
     setTitle('');
     setBody('');
-    Alert.alert('Đã gửi thông báo', formatResult(result));
+    Alert.alert('Đã gửi thông báo', formatBroadcastResult(result, senderIncludedInAudience));
   };
 
   return (
     <View style={styles.stack}>
       <SectionCard
-        title={mode === 'class' ? 'Thông báo lớp' : 'Broadcast thông báo'}
+        title={mode === 'class' ? 'Thông báo lớp' : 'Thông báo diện rộng'}
         subtitle={
           mode === 'class'
             ? 'Gửi cho sinh viên đang học trong lớp được chọn.'
@@ -147,7 +164,7 @@ export function NotificationComposeForm({
           />
           <FormField
             label="Nội dung"
-            placeholder="Nhập nội dung hiển thị trong app và push notification"
+            placeholder="Nhập nội dung hiển thị trong ứng dụng và thông báo đẩy"
             value={body}
             onChangeText={setBody}
             multiline
@@ -198,6 +215,12 @@ export function NotificationComposeForm({
                   />
                 ))}
               </View>
+            ) : null}
+            {!senderIncludedInAudience ? (
+              <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
+                Tài khoản hiện tại không nằm trong phạm vi đã chọn, nên tab Cảnh báo của bạn sẽ
+                không có mục mới sau khi gửi.
+              </Text>
             ) : null}
           </View>
         </SectionCard>
@@ -251,7 +274,7 @@ export function NotificationComposeForm({
       )}
 
       <PrimaryButton
-        label={mode === 'class' ? 'Gửi cho lớp' : 'Gửi broadcast'}
+        label={mode === 'class' ? 'Gửi cho lớp' : 'Gửi diện rộng'}
         loading={loading}
         onPress={() => void handleSubmit()}
       />
@@ -311,6 +334,21 @@ function formatResult(result: unknown) {
   const sent = value.push?.sent ?? 0;
   const failed = value.push?.failed ?? 0;
   return `Đã tạo ${count} thông báo. Push thành công ${sent}, lỗi ${failed}.`;
+}
+
+function formatBroadcastResult(result: unknown, senderIncludedInAudience: boolean) {
+  const baseMessage = formatResult(result)
+    .replace('ThÃ´ng bÃ¡o Ä‘Ã£ Ä‘Æ°á»£c táº¡o.', 'Thông báo đã được tạo.')
+    .replace(/ÄÃ£ táº¡o/g, 'Đã tạo')
+    .replace(/thÃ´ng bÃ¡o/g, 'thông báo')
+    .replace(/thÃ nh cÃ´ng/g, 'thành công')
+    .replace(/lá»—i/g, 'lỗi');
+
+  if (senderIncludedInAudience) {
+    return baseMessage;
+  }
+
+  return `${baseMessage} Tài khoản hiện tại không thuộc phạm vi nhận nên feed của bạn sẽ không có mục mới.`;
 }
 
 const styles = StyleSheet.create({

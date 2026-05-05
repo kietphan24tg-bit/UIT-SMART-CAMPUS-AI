@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { API_PREFIX, APP_NAME, APP_VERSION } from '@smart-campus/shared';
+import type { NextFunction, Request, Response } from 'express';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -11,6 +12,32 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!req.originalUrl.includes('/canteen/products/image')) {
+      next();
+      return;
+    }
+
+    const startedAt = Date.now();
+    console.warn(`[upload] ${req.method} ${req.originalUrl} started`);
+
+    res.on('finish', () => {
+      console.warn(
+        `[upload] ${req.method} ${req.originalUrl} completed ${res.statusCode} in ${Date.now() - startedAt}ms`,
+      );
+    });
+
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        console.warn(
+          `[upload] ${req.method} ${req.originalUrl} closed before response in ${Date.now() - startedAt}ms`,
+        );
+      }
+    });
+
+    next();
+  });
 
   app.setGlobalPrefix(API_PREFIX, {
     exclude: [{ path: 'live/(.*)', method: RequestMethod.ALL }],

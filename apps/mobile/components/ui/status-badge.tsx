@@ -122,15 +122,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
     borderRadius: 999,
     borderWidth: 1,
-    overflow: 'hidden',
   },
   badgeSm: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
+    minHeight: 28,
   },
   badgeMd: {
     paddingHorizontal: 12,
     paddingVertical: 7,
+    minHeight: 32,
   },
   row: {
     flexDirection: 'row',
@@ -147,12 +148,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     flexShrink: 1,
     minWidth: 0,
-    includeFontPadding: false,
   },
   labelSm: {
     fontSize: 11,
+    lineHeight: 16,
   },
   labelMd: {
     fontSize: 12,
+    lineHeight: 18,
   },
 });

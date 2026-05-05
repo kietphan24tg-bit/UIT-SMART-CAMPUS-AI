@@ -11,16 +11,21 @@ describe('IotService', () => {
   let service: IotService;
   let prisma: jest.Mocked<PrismaService>;
   let realtimeGateway: jest.Mocked<ParkingRealtimeGateway>;
+  let notificationsService: {
+    createSystemNotifications: jest.Mock;
+  };
 
   beforeEach(async () => {
+    notificationsService = {
+      createSystemNotifications: jest.fn(),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         IotService,
         {
           provide: NotificationsService,
-          useValue: {
-            createSystemNotifications: jest.fn(),
-          },
+          useValue: notificationsService,
         },
         {
           provide: ParkingService,
@@ -56,6 +61,7 @@ describe('IotService', () => {
           useValue: {
             telemetrySnapshot: {
               create: jest.fn(),
+              findFirst: jest.fn(),
             },
             parkingSlot: {
               deleteMany: jest.fn(),
@@ -140,5 +146,54 @@ describe('IotService', () => {
         totalSlots: 2,
       }),
     );
+  });
+
+  it('creates a fire alert on MQTT fire edge', async () => {
+    const reportedAt = new Date('2026-04-14T10:00:00.000Z');
+    (prisma.telemetrySnapshot.findFirst as jest.Mock).mockResolvedValue({
+      id: 'snapshot-prev',
+      gateId: 'uit-gate-a',
+      fireDetected: false,
+      reportedAt: new Date('2026-04-14T09:59:00.000Z'),
+    });
+    (prisma.telemetrySnapshot.create as jest.Mock).mockResolvedValue({
+      id: 'snapshot-next',
+      gateId: 'uit-gate-a',
+      fireDetected: true,
+      reportedAt,
+    });
+    (prisma.parkingSlot.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.parkingSlot.upsert as jest.Mock).mockResolvedValue({});
+    (prisma.fireAlert.create as jest.Mock).mockResolvedValue({
+      id: 'fire-alert-1',
+      gateId: 'uit-gate-a',
+      reportedAt,
+      message: 'default',
+    });
+
+    await service.recordTelemetryFromMqtt({
+      gateId: 'uit-gate-a',
+      deviceIp: '192.168.1.10',
+      slotBitmap: '01',
+      slots: [
+        { slotNumber: 'A1', occupied: false },
+        { slotNumber: 'A2', occupied: true },
+      ],
+      temperature: 30,
+      humidity: 70,
+      rainDetected: false,
+      fireDetected: true,
+      reportedAt: reportedAt.toISOString(),
+    });
+
+    expect(prisma.fireAlert.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          gateId: 'uit-gate-a',
+          reportedAt,
+        }),
+      }),
+    );
+    expect(notificationsService.createSystemNotifications).toHaveBeenCalled();
   });
 });

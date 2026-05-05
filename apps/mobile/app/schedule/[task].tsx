@@ -9,6 +9,7 @@ import { attendanceApi } from '@/services/api/attendance';
 import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
 import type { BroadcastNotificationRequest } from '@/services/api/notifications';
+import type { UserRole } from '@/types/app-data';
 import type { ScheduleTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
 import { isLecturerRole } from '@/utils/app';
 import { getPermissionDeniedCopy, getScheduleTaskConfig } from '@/utils/role-ui';
@@ -25,7 +26,7 @@ export default function ScheduleTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Không tìm thấy tác vụ"
-            description="Task key không hợp lệ trong nhóm lịch học."
+            description="Khóa tác vụ không hợp lệ trong nhóm lịch học."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />
@@ -64,7 +65,7 @@ export default function ScheduleTaskScreen() {
         <ContentStack narrow>
           <EmptyState
             title="Tác vụ chưa sẵn sàng"
-            description="Task key này chưa được khai báo trong nhóm lịch học."
+            description="Khóa tác vụ này chưa được khai báo trong nhóm lịch học."
             actionLabel="Về lịch"
             onActionPress={() => router.replace('/schedule')}
           />
@@ -139,6 +140,7 @@ function LecturerClassNotificationScreen({ role }: { role?: string | null }) {
         <NotificationComposeForm
           mode="class"
           classSections={classesQuery.data ?? []}
+          currentUserRole={(role as UserRole | null) ?? null}
           classesLoading={classesQuery.isLoading}
           loading={mutation.isPending}
           onRefreshClasses={() => void classesQuery.refetch()}
