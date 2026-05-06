@@ -156,6 +156,17 @@ describe('AuthService', () => {
         authService.login({ email: 'test@uit.edu.vn', password: 'wrong' }),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should throw UnauthorizedException for inactive user', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        isActive: false,
+      });
+
+      await expect(
+        authService.login({ email: 'test@uit.edu.vn', password: 'Password123' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('refreshToken', () => {
@@ -164,7 +175,7 @@ describe('AuthService', () => {
         id: 'rt-1',
         token: 'valid-token',
         expiresAt: new Date(Date.now() + 86400000),
-        user: { id: 'user-1', role: 'student' },
+        user: { id: 'user-1', role: 'student', isActive: true },
       };
       (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue(stored);
       (prisma.refreshToken.delete as jest.Mock).mockResolvedValue({});
@@ -181,7 +192,7 @@ describe('AuthService', () => {
         id: 'rt-1',
         token: 'expired',
         expiresAt: new Date(Date.now() - 86400000),
-        user: { id: 'user-1', role: 'student' },
+        user: { id: 'user-1', role: 'student', isActive: true },
       });
 
       await expect(authService.refreshToken('expired')).rejects.toThrow(UnauthorizedException);
@@ -191,6 +202,19 @@ describe('AuthService', () => {
       (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(authService.refreshToken('invalid')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw for refresh token belonging to inactive user', async () => {
+      (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+        id: 'rt-1',
+        token: 'inactive-user-token',
+        expiresAt: new Date(Date.now() + 86400000),
+        user: { id: 'user-1', role: 'student', isActive: false },
+      });
+
+      await expect(authService.refreshToken('inactive-user-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 

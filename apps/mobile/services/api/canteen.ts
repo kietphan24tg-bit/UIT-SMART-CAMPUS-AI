@@ -10,17 +10,36 @@ export type CanteenOrderStatus =
 export interface CanteenCatalogCategory {
   id: string;
   name: string;
-  slug: string;
   description: string | null;
   products: Array<{
     id: string;
     name: string;
-    slug: string;
     description: string | null;
     imageUrl: string | null;
     price: number;
     stock: number;
   }>;
+}
+
+export interface AdminCanteenProductRecord {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  price: number;
+  stock: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface AdminCanteenCategoryRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  products: AdminCanteenProductRecord[];
 }
 
 export interface CanteenOrderRecord {
@@ -80,6 +99,16 @@ export const canteenApi = {
     return (await apiClient.get('/canteen/catalog')) as CanteenCatalogCategory[];
   },
 
+  getAdminCatalog: async (params?: {
+    includeInactive?: boolean;
+  }): Promise<AdminCanteenCategoryRecord[]> => {
+    return (await apiClient.get('/canteen/catalog/admin', {
+      params: {
+        ...(params?.includeInactive ? { includeInactive: true } : {}),
+      },
+    })) as AdminCanteenCategoryRecord[];
+  },
+
   createOrder: async (payload: CreateCanteenOrderInput) => {
     return (await apiClient.post('/canteen/orders', payload)) as {
       id: string;
@@ -95,6 +124,25 @@ export const canteenApi = {
 
   getAdminOrders: async (): Promise<CanteenAdminOrderRecord[]> => {
     return (await apiClient.get('/canteen/orders/admin')) as CanteenAdminOrderRecord[];
+  },
+
+  deleteOrder: async (orderId: string) => {
+    return (await apiClient.delete(
+      `/canteen/orders/${encodeURIComponent(orderId)}`,
+    )) as {
+      id: string;
+      deleted: boolean;
+    };
+  },
+
+  deleteAdminOrder: async (orderId: string) => {
+    return (await apiClient.delete(
+      `/canteen/orders/admin/${encodeURIComponent(orderId)}`,
+    )) as {
+      id: string;
+      deleted: boolean;
+      restoredStock: boolean;
+    };
   },
 
   completeOrder: async (orderId: string): Promise<CanteenOrderRecord> => {
@@ -135,7 +183,6 @@ export const canteenApi = {
 
   createCategory: async (payload: {
     name: string;
-    slug: string;
     description?: string;
     sortOrder?: number;
     isActive?: boolean;
@@ -143,7 +190,6 @@ export const canteenApi = {
     return (await apiClient.post('/canteen/categories', payload)) as {
       id: string;
       name: string;
-      slug: string;
     };
   },
 
@@ -151,7 +197,6 @@ export const canteenApi = {
     categoryId: string,
     payload: Partial<{
       name: string;
-      slug: string;
       description: string;
       sortOrder: number;
       isActive: boolean;
@@ -163,7 +208,6 @@ export const canteenApi = {
     )) as {
       id: string;
       name: string;
-      slug: string;
       isActive: boolean;
     };
   },
@@ -180,7 +224,6 @@ export const canteenApi = {
   createProduct: async (payload: {
     categoryId: string;
     name: string;
-    slug: string;
     price: number;
     stock?: number;
     description?: string;
@@ -191,7 +234,6 @@ export const canteenApi = {
     return (await apiClient.post('/canteen/products', payload)) as {
       id: string;
       name: string;
-      slug: string;
       stock: number;
       price: number;
       isActive: boolean;
@@ -203,7 +245,6 @@ export const canteenApi = {
     payload: Partial<{
       categoryId: string;
       name: string;
-      slug: string;
       price: number;
       stock: number;
       description: string;
@@ -218,7 +259,6 @@ export const canteenApi = {
     )) as {
       id: string;
       name: string;
-      slug: string;
       stock: number;
       price: number;
       isActive: boolean;

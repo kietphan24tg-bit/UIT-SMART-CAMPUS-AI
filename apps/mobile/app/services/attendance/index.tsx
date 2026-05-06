@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AttendanceCtaButton } from '@/components/attendance/attendance-cta-button';
-import { ContentStack, Screen } from '@/components/ui';
+import { ContentStack, EmptyState, Screen } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { canManageAttendanceRole } from '@/utils/app';
@@ -89,14 +89,17 @@ export default function AttendanceHubScreen() {
     return (
       <Screen>
         <ContentStack narrow overlapHero={false}>
-          <Text
-            style={[
-              styles.permissionDescription,
-              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-            ]}
-          >
-            Tính năng quét QR hiện chỉ dành cho tài khoản sinh viên.
-          </Text>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Bạn không có quyền truy cập"
+            description={
+              role === USER_ROLES.ADMIN
+                ? 'Tài khoản quản trị viên không có quyền mở điểm danh QR. Chỉ sinh viên, giảng viên và quản trị hệ thống mới được truy cập.'
+                : 'Điểm danh QR chỉ dành cho sinh viên, giảng viên và quản trị hệ thống.'
+            }
+            actionLabel="Quay lại"
+            onActionPress={() => router.back()}
+          />
         </ContentStack>
       </Screen>
     );

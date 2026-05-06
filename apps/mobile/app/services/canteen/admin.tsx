@@ -48,7 +48,6 @@ type OrderDateFilter = 'all' | 'today' | '7d' | '30d';
 
 type CategoryFormState = {
   name: string;
-  slug: string;
   description: string;
   sortOrder: string;
   isActive: boolean;
@@ -82,7 +81,7 @@ type OptionItem = {
 const STATUS_OPTIONS: OptionItem[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'active', label: 'Đang hiển thị' },
-  { key: 'inactive', label: 'Đã ẩn' },
+  { key: 'inactive', label: 'Đã xóa' },
 ];
 
 const CATEGORY_STATUS_OPTIONS: OptionItem[] = STATUS_OPTIONS;
@@ -113,7 +112,6 @@ const QUICK_CATEGORY_DESCRIPTION = 'Danh mục tạo nhanh từ màn quản tr�
 
 const EMPTY_CATEGORY_FORM: CategoryFormState = {
   name: '',
-  slug: '',
   description: '',
   sortOrder: '0',
   isActive: true,
@@ -197,14 +195,15 @@ export default function CanteenAdminScreen() {
     role === USER_ROLES.CANTEEN_ADMIN ||
     role === USER_ROLES.ADMIN ||
     role === USER_ROLES.SUPER_ADMIN;
+  const canDelete = role === USER_ROLES.ADMIN || role === USER_ROLES.SUPER_ADMIN;
 
   const [activeTab, setActiveTab] = useState<AdminTab>('catalog');
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('categories');
 
   const [categorySearch, setCategorySearch] = useState('');
-  const [categoryStatusFilter, setCategoryStatusFilter] = useState<StatusFilter>('all');
+  const [categoryStatusFilter, setCategoryStatusFilter] = useState<StatusFilter>('active');
   const [productSearch, setProductSearch] = useState('');
-  const [productStatusFilter, setProductStatusFilter] = useState<StatusFilter>('all');
+  const [productStatusFilter, setProductStatusFilter] = useState<StatusFilter>('active');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [productSort, setProductSort] = useState<ProductSort>('name');
   const [orderSearch, setOrderSearch] = useState('');
@@ -246,6 +245,13 @@ export default function CanteenAdminScreen() {
     enabled: canManage,
   });
 
+  const invalidateOrderQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'admin'] }),
+      queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] }),
+    ]);
+  };
+
   const invalidateCatalogQueries = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['canteen', 'catalog', 'admin'] }),
@@ -256,7 +262,6 @@ export default function CanteenAdminScreen() {
   const createCategoryMutation = useMutation({
     mutationFn: (payload: {
       name: string;
-      slug: string;
       description?: string;
       sortOrder?: number;
       isActive?: boolean;
@@ -276,7 +281,6 @@ export default function CanteenAdminScreen() {
       categoryId: string;
       payload: Partial<{
         name: string;
-        slug: string;
         description: string;
         sortOrder: number;
         isActive: boolean;
@@ -291,7 +295,10 @@ export default function CanteenAdminScreen() {
 
   const removeCategoryMutation = useMutation({
     mutationFn: (categoryId: string) => canteenApi.removeCategory(categoryId),
-    onSuccess: invalidateCatalogQueries,
+    onSuccess: async () => {
+      setCategoryStatusFilter('active');
+      await invalidateCatalogQueries();
+    },
     onError: (error) => showError('Danh mục', error),
   });
 
@@ -299,7 +306,6 @@ export default function CanteenAdminScreen() {
     mutationFn: (payload: {
       categoryId: string;
       name: string;
-      slug: string;
       price: number;
       stock: number;
       description?: string;
@@ -323,7 +329,6 @@ export default function CanteenAdminScreen() {
       payload: Partial<{
         categoryId: string;
         name: string;
-        slug: string;
         price: number;
         stock: number;
         description: string;
@@ -341,23 +346,43 @@ export default function CanteenAdminScreen() {
 
   const removeProductMutation = useMutation({
     mutationFn: (productId: string) => canteenApi.removeProduct(productId),
-    onSuccess: invalidateCatalogQueries,
+    onSuccess: async () => {
+      setProductStatusFilter('active');
+      await invalidateCatalogQueries();
+    },
     onError: (error) => showError('Sản phẩm', error),
   });
 
-  const categories = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
+  const deleteAdminOrderMutation = useMutation({
+    mutationFn: (orderId: string) => canteenApi.deleteAdminOrder(orderId),
+    onSuccess: async () => {
+      setSelectedOrder(null);
+      await invalidateOrderQueries();
+    },
+    onError: (error) => showError('Lịch sử đơn', error),
+  });
+
+  const allCategories = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
+  const categories = useMemo(
+    () => allCategories.filter((category) => category.isActive),
+    [allCategories],
+  );
+  const activeCategories = useMemo(
+    () => categories,
+    [categories],
+  );
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
 
   const allProducts = useMemo(
     () =>
-      categories.flatMap((category) =>
+      allCategories.flatMap((category) =>
         category.products.map((product) => ({
           ...product,
           categoryName: category.name,
           categoryIsActive: category.isActive,
         })),
       ),
-    [categories],
+    [allCategories],
   );
 
   useEffect(() => {
@@ -368,7 +393,6 @@ export default function CanteenAdminScreen() {
     if (editingCategory) {
       setCategoryForm({
         name: editingCategory.name,
-        slug: editingCategory.slug,
         description: editingCategory.description ?? '',
         sortOrder: String(editingCategory.sortOrder),
         isActive: editingCategory.isActive,
@@ -402,9 +426,9 @@ export default function CanteenAdminScreen() {
 
     setProductForm({
       ...EMPTY_PRODUCT_FORM,
-      categoryId: categories[0]?.id ?? '',
+      categoryId: activeCategories[0]?.id ?? '',
     });
-  }, [categories, editingProduct, productSheetVisible]);
+  }, [activeCategories, categories, editingProduct, productSheetVisible]);
 
   useEffect(() => {
     if (!selectedOrder) {
@@ -417,7 +441,7 @@ export default function CanteenAdminScreen() {
   const filteredCategories = useMemo(() => {
     const normalizedSearch = categorySearch.trim().toLowerCase();
 
-    return categories.filter((category) => {
+    return allCategories.filter((category) => {
       const matchesStatus =
         categoryStatusFilter === 'all'
           ? true
@@ -427,12 +451,11 @@ export default function CanteenAdminScreen() {
       const matchesSearch =
         normalizedSearch.length === 0 ||
         category.name.toLowerCase().includes(normalizedSearch) ||
-        category.slug.toLowerCase().includes(normalizedSearch) ||
         category.description?.toLowerCase().includes(normalizedSearch);
 
       return matchesStatus && matchesSearch;
     });
-  }, [categories, categorySearch, categoryStatusFilter]);
+  }, [allCategories, categorySearch, categoryStatusFilter]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = productSearch.trim().toLowerCase();
@@ -449,7 +472,6 @@ export default function CanteenAdminScreen() {
       const matchesSearch =
         normalizedSearch.length === 0 ||
         product.name.toLowerCase().includes(normalizedSearch) ||
-        product.slug.toLowerCase().includes(normalizedSearch) ||
         product.categoryName.toLowerCase().includes(normalizedSearch) ||
         product.description?.toLowerCase().includes(normalizedSearch);
 
@@ -548,6 +570,7 @@ export default function CanteenAdminScreen() {
             {catalogTab === 'categories' ? (
               <CatalogCategoryTab
                 categories={filteredCategories}
+                canDelete={canDelete}
                 isLoading={catalogQuery.isLoading}
                 isError={catalogQuery.isError}
                 onRetry={() => void catalogQuery.refetch()}
@@ -567,27 +590,20 @@ export default function CanteenAdminScreen() {
                   setCategorySheetVisible(true);
                 }}
                 onToggleActive={(category) => {
-                  if (category.isActive) {
-                    setConfirmAction({
-                      entity: 'category',
-                      id: category.id,
-                      title: 'Ẩn danh mục',
-                      message: `Ẩn "${category.name}" khỏi catalog quản trị?`,
-                    });
-                    return;
-                  }
-
-                  updateCategoryMutation.mutate({
-                    categoryId: category.id,
-                    payload: { isActive: true },
+                  setConfirmAction({
+                    entity: 'category',
+                    id: category.id,
+                    title: 'Xóa danh mục',
+                    message: `Xóa "${category.name}" khỏi catalog quản trị?`,
                   });
                 }}
                 isMutating={removeCategoryMutation.isPending || updateCategoryMutation.isPending}
               />
             ) : (
               <CatalogProductTab
-                categories={categories}
+                categories={activeCategories}
                 products={filteredProducts}
+                canDelete={canDelete}
                 isLoading={catalogQuery.isLoading}
                 isError={catalogQuery.isError}
                 onRetry={() => void catalogQuery.refetch()}
@@ -617,19 +633,11 @@ export default function CanteenAdminScreen() {
                   setProductSheetVisible(true);
                 }}
                 onToggleActive={(product) => {
-                  if (product.isActive) {
-                    setConfirmAction({
-                      entity: 'product',
-                      id: product.id,
-                      title: 'Ẩn sản phẩm',
-                      message: `Ẩn "${product.name}" khỏi menu hiện tại?`,
-                    });
-                    return;
-                  }
-
-                  updateProductMutation.mutate({
-                    productId: product.id,
-                    payload: { isActive: true },
+                  setConfirmAction({
+                    entity: 'product',
+                    id: product.id,
+                    title: 'Xóa sản phẩm',
+                    message: `Xóa "${product.name}" khỏi menu hiện tại?`,
                   });
                 }}
                 isMutating={removeProductMutation.isPending || updateProductMutation.isPending}
@@ -751,13 +759,7 @@ export default function CanteenAdminScreen() {
           <FormField
             label="Tên danh mục"
             value={categoryForm.name}
-            onChangeText={(value) =>
-              setCategoryForm((prev) => ({
-                ...prev,
-                name: value,
-                slug: prev.slug === '' || prev.slug === slugify(prev.name) ? slugify(value) : prev.slug,
-              }))
-            }
+            onChangeText={(value) => setCategoryForm((prev) => ({ ...prev, name: value }))}
             placeholder="VD: Cơm"
           />
           <FormField
@@ -984,13 +986,33 @@ export default function CanteenAdminScreen() {
         subtitle={selectedOrder ? formatDateTime(selectedOrder.createdAt) : undefined}
         onClose={() => setSelectedOrder(null)}
       >
-        {selectedOrder ? <OrderDetailSheet order={selectedOrder} /> : null}
+        {selectedOrder ? (
+          <OrderDetailSheet
+            order={selectedOrder}
+            canDelete={canDelete}
+            deleting={deleteAdminOrderMutation.isPending}
+            onDelete={() => {
+              Alert.alert(
+                'Xóa lịch sử đơn',
+                `Xóa vĩnh viễn đơn ${selectedOrder.orderCode} khỏi khu vực quản trị?`,
+                [
+                  { text: 'Hủy', style: 'cancel' },
+                  {
+                    text: 'Xóa',
+                    style: 'destructive',
+                    onPress: () => deleteAdminOrderMutation.mutate(selectedOrder.id),
+                  },
+                ],
+              );
+            }}
+          />
+        ) : null}
       </BottomSheet>
 
       <BottomSheet
         visible={Boolean(confirmAction)}
         title={confirmAction?.title ?? 'Xác nhận'}
-        subtitle="Thao tác này sẽ chuyển item sang trạng thái đã ẩn."
+        subtitle="Thao tác này sẽ đánh dấu item là đã xóa và ẩn khỏi danh sách đang hiển thị."
         onClose={() => setConfirmAction(null)}
       >
         <View style={styles.sheetContent}>
@@ -1000,7 +1022,7 @@ export default function CanteenAdminScreen() {
           <View style={styles.sheetActionRow}>
             <SecondaryButton label="Hủy" onPress={() => setConfirmAction(null)} style={styles.flexButton} />
             <PrimaryButton
-              label="Xác nhận ẩn"
+              label="Xác nhận xóa"
               loading={removeCategoryMutation.isPending || removeProductMutation.isPending}
               onPress={() => {
                 if (!confirmAction) {
@@ -1098,7 +1120,7 @@ export default function CanteenAdminScreen() {
 
   function handleSubmitCategory() {
     const name = categoryForm.name.trim();
-    const slug = slugify(categoryForm.slug || categoryForm.name);
+    const slug = name;
     const sortOrder = Number.parseInt(categoryForm.sortOrder.trim(), 10);
 
     if (!name) {
@@ -1116,7 +1138,6 @@ export default function CanteenAdminScreen() {
 
     const payload = {
       name,
-      slug,
       description: categoryForm.description.trim() || undefined,
       sortOrder,
       isActive: categoryForm.isActive,
@@ -1136,7 +1157,7 @@ export default function CanteenAdminScreen() {
   function handleSubmitProduct() {
     const categoryId = productForm.categoryId.trim();
     const name = productForm.name.trim();
-    const slug = slugify(name);
+    const slug = name;
     const price = Number.parseInt(productForm.price.trim(), 10);
     const stock = Number.parseInt(productForm.stock.trim(), 10);
     const sortOrder = Number.parseInt(productForm.sortOrder.trim(), 10);
@@ -1165,7 +1186,6 @@ export default function CanteenAdminScreen() {
     const payload = {
       categoryId,
       name,
-      slug,
       price,
       stock,
       description: productForm.description.trim() || undefined,
@@ -1188,6 +1208,7 @@ export default function CanteenAdminScreen() {
 
 function CatalogCategoryTab({
   categories,
+  canDelete,
   isLoading,
   isError,
   onRetry,
@@ -1204,6 +1225,7 @@ function CatalogCategoryTab({
   isMutating,
 }: {
   categories: AdminCanteenCategoryRecord[];
+  canDelete: boolean;
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
@@ -1257,6 +1279,7 @@ function CatalogCategoryTab({
             <CategoryRow
               key={category.id}
               category={category}
+              canDelete={canDelete}
               onEdit={() => onEdit(category)}
               onToggleActive={() => onToggleActive(category)}
               disabling={isMutating}
@@ -1271,6 +1294,7 @@ function CatalogCategoryTab({
 function CatalogProductTab({
   categories,
   products,
+  canDelete,
   isLoading,
   isError,
   onRetry,
@@ -1298,6 +1322,7 @@ function CatalogProductTab({
 }: {
   categories: AdminCanteenCategoryRecord[];
   products: Array<AdminCanteenProductRecord & { categoryName: string; categoryIsActive: boolean }>;
+  canDelete: boolean;
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
@@ -1392,6 +1417,7 @@ function CatalogProductTab({
             <ProductRow
               key={product.id}
               product={product}
+              canDelete={canDelete}
               onEdit={() => onEdit(product)}
               onToggleActive={() => onToggleActive(product)}
               disabling={isMutating}
@@ -1680,11 +1706,13 @@ function ProductImageThumbnail({
 
 function CategoryRow({
   category,
+  canDelete,
   onEdit,
   onToggleActive,
   disabling,
 }: {
   category: AdminCanteenCategoryRecord;
+  canDelete: boolean;
   onEdit: () => void;
   onToggleActive: () => void;
   disabling: boolean;
@@ -1706,8 +1734,8 @@ function CategoryRow({
           </Text>
         </View>
         <StatusBadge
-          label={category.isActive ? 'Đang hiển thị' : 'Đã ẩn'}
-          tone={category.isActive ? 'success' : 'warning'}
+          label={category.isActive ? 'Đang hiển thị' : 'Đã xóa'}
+          tone={category.isActive ? 'success' : 'neutral'}
           size="sm"
         />
       </View>
@@ -1722,9 +1750,9 @@ function CategoryRow({
       <View style={styles.actionRow}>
         <SecondaryButton label="Sửa" onPress={onEdit} style={styles.compactActionButton} />
         <SecondaryButton
-          label={category.isActive ? 'Ẩn' : 'Khôi phục'}
+          label="Xóa"
           onPress={onToggleActive}
-          disabled={disabling}
+          disabled={disabling || !canDelete}
           style={styles.compactActionButton}
         />
       </View>
@@ -1734,11 +1762,13 @@ function CategoryRow({
 
 function ProductRow({
   product,
+  canDelete,
   onEdit,
   onToggleActive,
   disabling,
 }: {
   product: AdminCanteenProductRecord & { categoryName: string; categoryIsActive: boolean };
+  canDelete: boolean;
   onEdit: () => void;
   onToggleActive: () => void;
   disabling: boolean;
@@ -1769,11 +1799,11 @@ function ProductRow({
       </View>
       <View style={styles.metricRow}>
         <StatusBadge
-          label={product.isActive ? 'Đang hiển thị' : 'Đã ẩn'}
-          tone={product.isActive ? 'success' : 'warning'}
+          label={product.isActive ? 'Đang hiển thị' : 'Đã xóa'}
+          tone={product.isActive ? 'success' : 'neutral'}
           size="sm"
         />
-        {!product.categoryIsActive ? <StatusBadge label="Danh mục đã ẩn" tone="danger" size="sm" /> : null}
+        {!product.categoryIsActive ? <StatusBadge label="Danh mục đã xóa" tone="neutral" size="sm" /> : null}
       </View>
       <Text style={[styles.itemMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
         Tồn kho: {product.stock}
@@ -1781,9 +1811,9 @@ function ProductRow({
       <View style={styles.actionRow}>
         <SecondaryButton label="Sửa" onPress={onEdit} style={styles.compactActionButton} />
         <SecondaryButton
-          label={product.isActive ? 'Ẩn' : 'Khôi phục'}
+          label="Xóa"
           onPress={onToggleActive}
-          disabled={disabling}
+          disabled={disabling || !canDelete}
           style={styles.compactActionButton}
         />
       </View>
@@ -1938,7 +1968,17 @@ function BottomSheet({
   );
 }
 
-function OrderDetailSheet({ order }: { order: CanteenAdminOrderRecord }) {
+function OrderDetailSheet({
+  order,
+  canDelete,
+  deleting,
+  onDelete,
+}: {
+  order: CanteenAdminOrderRecord;
+  canDelete: boolean;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
   const theme = useAppTheme();
 
   return (
@@ -2017,6 +2057,17 @@ function OrderDetailSheet({ order }: { order: CanteenAdminOrderRecord }) {
           {formatCurrency(order.totalAmount)}đ
         </Text>
       </View>
+
+      {canDelete ? (
+        <View style={styles.sheetActionRow}>
+          <SecondaryButton
+            label={deleting ? 'Đang xóa...' : 'Xóa lịch sử đơn'}
+            onPress={onDelete}
+            disabled={deleting}
+            style={styles.flexButton}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -2148,16 +2199,6 @@ function getOrderStatusTone(status: CanteenAdminOrderRecord['status']) {
     default:
       return 'warning' as const;
   }
-}
-
-function slugify(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
 }
 
 function showError(title: string, error: unknown) {

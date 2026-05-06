@@ -25,6 +25,7 @@ jest.mock('@/services/api/canteen', () => ({
     getMyOrders: jest.fn(),
     createOrder: jest.fn(),
     createSepayPayment: jest.fn(),
+    deleteOrder: jest.fn(),
   },
 }));
 
@@ -34,6 +35,7 @@ const mockCanteenApi = canteenApi as unknown as {
   getMyOrders: jest.Mock;
   createOrder: jest.Mock;
   createSepayPayment: jest.Mock;
+  deleteOrder: jest.Mock;
 };
 
 function makeOrder(status: CanteenOrderRecord['status']): CanteenOrderRecord {
@@ -92,6 +94,10 @@ describe('CanteenScreen', () => {
       accountName: 'SMART CAMPUS',
       transferDescription: 'TT ORDER-1',
     });
+    mockCanteenApi.deleteOrder.mockResolvedValue({
+      id: 'order-1',
+      deleted: true,
+    });
   });
 
   it.each([USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
@@ -117,6 +123,8 @@ describe('CanteenScreen', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
       selector({
         user: { id: 'student-1', role: USER_ROLES.STUDENT },
+        isHydrated: true,
+        isAuthenticated: true,
       }),
     );
     mockCanteenApi.getCatalog.mockResolvedValue([
@@ -273,6 +281,25 @@ describe('CanteenScreen', () => {
       expect(queryByText('Ẩn QR')).toBeNull();
       expect(getByText('Thanh toán lỗi')).toBeTruthy();
       expect(getByText('Thanh toán QR')).toBeTruthy();
+    });
+  });
+  it('deletes a pending order from history', async () => {
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+      selector({
+        user: { id: 'student-1', role: USER_ROLES.STUDENT },
+        isHydrated: true,
+        isAuthenticated: true,
+      }),
+    );
+    mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
+
+    const { getByText } = renderWithClient(<CanteenScreen />);
+
+    await waitFor(() => expect(getByText('ORD-001')).toBeTruthy());
+    fireEvent.press(getByText('Xóa đơn'));
+
+    await waitFor(() => {
+      expect(mockCanteenApi.deleteOrder).toHaveBeenCalledWith('order-1');
     });
   });
 });

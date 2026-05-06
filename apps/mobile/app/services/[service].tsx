@@ -246,8 +246,8 @@ export default function ServiceDetailScreen() {
         <ContentStack narrow overlapHero={false}>
           <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
             <Text style={styles.body}>
-              Ứng dụng đang tập trung vào các tác vụ quản trị có dữ liệu thật: parking, telemetry,
-              fire alert và thông báo.
+              Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus,
+              phê duyệt đặt phòng, canteen và thư viện.
             </Text>
           </SectionCard>
 
@@ -255,18 +255,20 @@ export default function ServiceDetailScreen() {
             <View style={styles.column}>
               <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
               <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
-              <InfoRow label="Catalog học vụ" value="Tạo học phần, lớp học phần và lịch học" />
+              <InfoRow label="Canteen" value="Quản lý menu, đơn hàng và trạng thái phục vụ" />
+              <InfoRow label="Thư viện" value="Tra cứu sách, giữ chỗ và theo dõi mượn trả" />
             </View>
           </SectionCard>
 
           <PrimaryButton
-            label="Mở catalog học vụ"
-            onPress={() => router.push('/services/admin-catalog')}
+            label="Mở quản trị canteen"
+            onPress={() => router.push('/services/canteen/admin')}
           />
           <SecondaryButton
             label="Mở queue phê duyệt đặt phòng"
             onPress={() => router.push('/services/room-booking/approvals')}
           />
+          <SecondaryButton label="Mở thư viện" onPress={() => router.push('/services/library')} />
           <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
         </ContentStack>
       </Screen>

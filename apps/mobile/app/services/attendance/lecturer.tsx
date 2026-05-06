@@ -10,7 +10,7 @@ import {
   mapClassSectionsToAttendanceCards,
   mapScheduleToAttendanceCards,
   resolveScheduleCardToClassSection,
-} from '@/app/services/attendance/lecturer-data';
+} from '@/features/attendance/lecturer-data';
 import { ContentStack, EmptyState, Screen, SkeletonBlock } from '@/components/ui';
 import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { attendanceApi } from '@/services/api/attendance';
@@ -168,7 +168,7 @@ export default function LecturerAttendanceScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description="Màn hình này chỉ dành cho giảng viên, quản trị viên hoặc quản trị hệ thống."
+            description="Màn hình này chỉ dành cho giảng viên hoặc quản trị hệ thống."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />

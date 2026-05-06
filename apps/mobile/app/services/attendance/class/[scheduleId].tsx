@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Linking, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { buildStudentRoster, mapScheduleToAttendanceCards } from '@/app/services/attendance/lecturer-data';
+import { buildStudentRoster, mapScheduleToAttendanceCards } from '@/features/attendance/lecturer-data';
 import { ContentStack, EmptyState, PrimaryButton, Screen, SecondaryButton, SkeletonBlock } from '@/components/ui';
 import { useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { attendanceApi, type AttendanceSessionStartResponse } from '@/services/api/attendance';

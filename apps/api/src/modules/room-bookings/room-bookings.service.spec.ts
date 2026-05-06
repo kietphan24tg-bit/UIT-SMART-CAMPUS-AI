@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 
@@ -47,6 +48,7 @@ describe('RoomBookingsService', () => {
     roomBooking: {
       findMany: jest.Mock;
       findUnique: jest.Mock;
+      delete: jest.Mock;
       deleteMany: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
@@ -93,6 +95,7 @@ describe('RoomBookingsService', () => {
       roomBooking: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        delete: jest.fn(),
         deleteMany: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
@@ -603,6 +606,44 @@ describe('RoomBookingsService', () => {
         },
       });
       expect(result).toEqual({ id: 'booking-1', status: 'approved' });
+    });
+  });
+
+  describe('deleteOwnBooking', () => {
+    it('deletes the current user booking and its room booking slots', async () => {
+      prisma.roomBooking.findUnique.mockResolvedValue({
+        id: 'booking-1',
+        userId: 'user-1',
+      });
+      prisma.roomBookingSlot.deleteMany.mockResolvedValue({ count: 2 });
+      prisma.roomBooking.delete.mockResolvedValue({ id: 'booking-1' });
+      prisma.$transaction.mockImplementation(async (operations: unknown[]) => operations);
+
+      const result = await service.deleteOwnBooking('booking-1', 'user-1');
+
+      expect(prisma.roomBookingSlot.deleteMany).toHaveBeenCalledWith({
+        where: { bookingId: 'booking-1' },
+      });
+      expect(prisma.roomBooking.delete).toHaveBeenCalledWith({
+        where: { id: 'booking-1' },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledWith([
+        expect.any(Promise),
+        expect.any(Promise),
+      ]);
+      expect(result).toEqual({ id: 'booking-1', deleted: true });
+    });
+
+    it('rejects deleting another user booking', async () => {
+      prisma.roomBooking.findUnique.mockResolvedValue({
+        id: 'booking-1',
+        userId: 'user-2',
+      });
+
+      await expect(service.deleteOwnBooking('booking-1', 'user-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.roomBooking.delete).not.toHaveBeenCalled();
     });
   });
 

@@ -1513,6 +1513,38 @@ export class RoomBookingsService {
     return this.getBookingById(booking.id);
   }
 
+  async deleteOwnBooking(bookingId: string, userId: string) {
+    const booking = await this.prisma.roomBooking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        userId: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+    }
+
+    if (booking.userId !== userId) {
+      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a yÃªu cáº§u nÃ y');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.roomBookingSlot.deleteMany({
+        where: { bookingId: booking.id },
+      }),
+      this.prisma.roomBooking.delete({
+        where: { id: booking.id },
+      }),
+    ]);
+
+    return {
+      id: booking.id,
+      deleted: true,
+    };
+  }
+
   private async getBookingById(bookingId: string) {
     const booking = await this.prisma.roomBooking.findUnique({
       where: { id: bookingId },

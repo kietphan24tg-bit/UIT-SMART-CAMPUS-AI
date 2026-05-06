@@ -1,12 +1,24 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { CanteenOrderStatus } from '@prisma/client';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { CanteenOrderStatus, Prisma } from '@prisma/client';
 
 import { CanteenService } from './canteen.service';
 
 describe('CanteenService', () => {
   const prisma: any = {
+    $transaction: jest.fn(),
+    canteenCategory: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    canteenProduct: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+    },
     canteenOrder: {
       findUnique: jest.fn(),
+      delete: jest.fn(),
       update: jest.fn(),
     },
     canteenPaymentTransaction: {
@@ -40,6 +52,9 @@ describe('CanteenService', () => {
     });
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as never);
     service = new CanteenService(prisma, configService as never);
+    prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+      callback(prisma),
+    );
   });
 
   afterEach(() => {
@@ -134,5 +149,156 @@ describe('CanteenService', () => {
     await expect(service.completeOrder('order-1', 'canteen-admin-1')).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('deletes a pending order of current user and restores stock', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue({
+      id: 'order-1',
+      createdById: 'student-1',
+      status: CanteenOrderStatus.pending_payment,
+      items: [
+        {
+          id: 'item-1',
+          productId: 'product-1',
+          quantity: 2,
+        },
+      ],
+    });
+    prisma.canteenProduct.update.mockResolvedValue({});
+    prisma.canteenOrder.delete.mockResolvedValue({});
+
+    await expect(service.deleteOrder('student-1', 'order-1')).resolves.toEqual({
+      id: 'order-1',
+      deleted: true,
+    });
+
+    expect(prisma.canteenProduct.update).toHaveBeenCalledWith({
+      where: { id: 'product-1' },
+      data: { stock: { increment: 2 } },
+    });
+    expect(prisma.canteenOrder.delete).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+    });
+  });
+
+  it('rejects deleting a paid order', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue({
+      id: 'order-1',
+      createdById: 'student-1',
+      status: CanteenOrderStatus.paid,
+      items: [],
+    });
+
+    await expect(service.deleteOrder('student-1', 'order-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('rejects deleting an order owned by another user', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue({
+      id: 'order-1',
+      createdById: 'student-2',
+      status: CanteenOrderStatus.pending_payment,
+      items: [],
+    });
+
+    await expect(service.deleteOrder('student-1', 'order-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('allows admin history deletion and restores stock for unpaid orders', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue({
+      id: 'order-2',
+      status: CanteenOrderStatus.pending_payment,
+      items: [
+        {
+          id: 'item-2',
+          productId: 'product-2',
+          quantity: 3,
+        },
+      ],
+    });
+    prisma.canteenProduct.update.mockResolvedValue({});
+    prisma.canteenOrder.delete.mockResolvedValue({});
+
+    await expect(service.deleteAdminOrder('order-2')).resolves.toEqual({
+      id: 'order-2',
+      deleted: true,
+      restoredStock: true,
+    });
+
+    expect(prisma.canteenProduct.update).toHaveBeenCalledWith({
+      where: { id: 'product-2' },
+      data: { stock: { increment: 3 } },
+    });
+    expect(prisma.canteenOrder.delete).toHaveBeenCalledWith({
+      where: { id: 'order-2' },
+    });
+  });
+
+  it('allows admin history deletion without restoring stock for paid orders', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue({
+      id: 'order-3',
+      status: CanteenOrderStatus.completed,
+      items: [
+        {
+          id: 'item-3',
+          productId: 'product-3',
+          quantity: 1,
+        },
+      ],
+    });
+    prisma.canteenOrder.delete.mockResolvedValue({});
+
+    await expect(service.deleteAdminOrder('order-3')).resolves.toEqual({
+      id: 'order-3',
+      deleted: true,
+      restoredStock: false,
+    });
+
+    expect(prisma.canteenProduct.update).not.toHaveBeenCalled();
+    expect(prisma.canteenOrder.delete).toHaveBeenCalledWith({
+      where: { id: 'order-3' },
+    });
+  });
+
+  it('rejects admin history deletion when order does not exist', async () => {
+    prisma.canteenOrder.findUnique.mockResolvedValue(null);
+
+    await expect(service.deleteAdminOrder('missing-order')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('maps duplicate category create conflict to conflict exception', async () => {
+    prisma.canteenCategory.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.createCategory({
+        name: 'Drinks',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('maps duplicate product create conflict to conflict exception', async () => {
+    prisma.canteenCategory.findUnique.mockResolvedValue({ id: 'category-1' });
+    prisma.canteenProduct.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.createProduct({
+        categoryId: 'category-1',
+        name: 'Milk Tea',
+        price: 25000,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

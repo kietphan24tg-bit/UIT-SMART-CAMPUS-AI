@@ -1,16 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentStack, EmptyState, Screen, SecondaryButton, SkeletonBlock } from '@/components/ui';
 import { roomBookingsApi } from '@/services/api/room-bookings';
 import { useAppTheme } from '@/theme';
 import { formatDateTime } from '@/utils/app';
-
-function canCancel(status: string) {
-  return status === 'pending' || status === 'approved' || status === 'booked';
-}
 
 export default function MyRoomBookingsScreen() {
   const theme = useAppTheme();
@@ -22,8 +18,8 @@ export default function MyRoomBookingsScreen() {
     queryFn: () => roomBookingsApi.listMyBookings(),
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (bookingId: string) => roomBookingsApi.cancelBooking(bookingId),
+  const deleteMutation = useMutation({
+    mutationFn: (bookingId: string) => roomBookingsApi.deleteBooking(bookingId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['room-bookings', 'my'] }),
@@ -31,6 +27,17 @@ export default function MyRoomBookingsScreen() {
       ]);
     },
   });
+
+  function confirmDeleteBooking(bookingId: string) {
+    Alert.alert('Xóa yêu cầu', 'Bạn có chắc muốn xóa yêu cầu đặt phòng này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: () => deleteMutation.mutate(bookingId),
+      },
+    ]);
+  }
 
   return (
     <Screen>
@@ -101,13 +108,11 @@ export default function MyRoomBookingsScreen() {
                   <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
                     Tạo lúc: {formatDateTime(item.createdAt)}
                   </Text>
-                  {canCancel(item.status) ? (
-                    <SecondaryButton
-                      label={cancelMutation.isPending ? 'Đang hủy...' : 'Hủy yêu cầu'}
-                      onPress={() => cancelMutation.mutate(item.id)}
-                      disabled={cancelMutation.isPending}
-                    />
-                  ) : null}
+                  <SecondaryButton
+                    label={deleteMutation.isPending ? 'Đang xóa...' : 'Xóa yêu cầu'}
+                    onPress={() => confirmDeleteBooking(item.id)}
+                    disabled={deleteMutation.isPending}
+                  />
                 </View>
               ))}
             </View>

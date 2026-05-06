@@ -38,6 +38,8 @@ export default function CanteenScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.user?.role);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const consumer = isConsumerRole(role);
   const canManageCanteen = canManageCanteenRole(role);
   const [cart, setCart] = useState<CartMap>({});
@@ -50,11 +52,12 @@ export default function CanteenScreen() {
   const catalogQuery = useQuery({
     queryKey: ['canteen', 'catalog'],
     queryFn: () => canteenApi.getCatalog(),
+    enabled: isHydrated && isAuthenticated,
   });
   const ordersQuery = useQuery({
     queryKey: ['canteen', 'orders', 'me'],
     queryFn: () => canteenApi.getMyOrders(),
-    enabled: consumer,
+    enabled: isHydrated && isAuthenticated && consumer,
     refetchInterval: hasActiveQrPayments ? 5000 : false,
   });
 
@@ -190,7 +193,11 @@ export default function CanteenScreen() {
 
       <ContentStack overlapHero={false}>
         <SectionCard title="Menu hôm nay" subtitle={`${allProducts.length} sản phẩm`} variant="glass" tone="academic">
-          {catalogQuery.isLoading ? (
+          {!isHydrated || !isAuthenticated ? (
+            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+              Đang khởi tạo phiên đăng nhập...
+            </Text>
+          ) : catalogQuery.isLoading ? (
             <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
               Đang tải menu...
             </Text>

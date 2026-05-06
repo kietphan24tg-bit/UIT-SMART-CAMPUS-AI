@@ -12,6 +12,11 @@ function getMethodRoles(methodName: keyof CanteenController) {
 
 describe('CanteenController roles', () => {
   it('allows admin and super_admin on live admin mutations', () => {
+    expect(getMethodRoles('getAdminCatalog')).toEqual([
+      USER_ROLES.CANTEEN_ADMIN,
+      USER_ROLES.ADMIN,
+      USER_ROLES.SUPER_ADMIN,
+    ]);
     expect(getMethodRoles('completeOrder')).toEqual([
       USER_ROLES.CANTEEN_ADMIN,
       USER_ROLES.ADMIN,
@@ -27,11 +32,6 @@ describe('CanteenController roles', () => {
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
     ]);
-    expect(getMethodRoles('removeCategory')).toEqual([
-      USER_ROLES.CANTEEN_ADMIN,
-      USER_ROLES.ADMIN,
-      USER_ROLES.SUPER_ADMIN,
-    ]);
     expect(getMethodRoles('createProduct')).toEqual([
       USER_ROLES.CANTEEN_ADMIN,
       USER_ROLES.ADMIN,
@@ -42,8 +42,18 @@ describe('CanteenController roles', () => {
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
     ]);
+  });
+
+  it('restricts destructive canteen catalog mutations to admin and super_admin', () => {
+    expect(getMethodRoles('deleteAdminOrder')).toEqual([
+      USER_ROLES.ADMIN,
+      USER_ROLES.SUPER_ADMIN,
+    ]);
+    expect(getMethodRoles('removeCategory')).toEqual([
+      USER_ROLES.ADMIN,
+      USER_ROLES.SUPER_ADMIN,
+    ]);
     expect(getMethodRoles('removeProduct')).toEqual([
-      USER_ROLES.CANTEEN_ADMIN,
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
     ]);

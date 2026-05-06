@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -39,6 +40,15 @@ export class CanteenController {
     return this.canteenService.getCatalog();
   }
 
+  @Get('catalog/admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get canteen catalog for admin management' })
+  getAdminCatalog(@Query('includeInactive') includeInactive?: string) {
+    return this.canteenService.getAdminCatalog(includeInactive === 'true');
+  }
+
   @Post('orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(USER_ROLES.STUDENT, USER_ROLES.LECTURER)
@@ -63,6 +73,24 @@ export class CanteenController {
   @ApiOperation({ summary: 'Get canteen order list for management/audit' })
   listAdminOrders(@CurrentUser('role') role: Role) {
     return this.canteenService.listAdminOrders(role);
+  }
+
+  @Delete('orders/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.STUDENT, USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete unpaid canteen order of current user' })
+  deleteOrder(@CurrentUser('id') userId: string, @Param('id') orderId: string) {
+    return this.canteenService.deleteOrder(userId, orderId);
+  }
+
+  @Delete('orders/admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete canteen order history from admin management' })
+  deleteAdminOrder(@Param('id') orderId: string) {
+    return this.canteenService.deleteAdminOrder(orderId);
   }
 
   @Patch('orders/:id/complete')
@@ -127,7 +155,7 @@ export class CanteenController {
 
   @Delete('categories/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable canteen category' })
   removeCategory(@Param('id') categoryId: string) {
@@ -154,7 +182,7 @@ export class CanteenController {
 
   @Delete('products/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable canteen product' })
   removeProduct(@Param('id') productId: string) {

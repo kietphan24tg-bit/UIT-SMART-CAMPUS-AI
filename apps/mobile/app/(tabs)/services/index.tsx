@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   ContentStack,
@@ -27,6 +27,17 @@ export default function ServicesScreen() {
   const showLiveSection = liveServices.length > 0;
   const liveRows = buildGridRows(liveServices, 2);
   const upcomingRows = buildGridRows(upcomingServices, 2);
+  const handleServicePress = (service: (typeof services)[number]) => {
+    if (service.isInteractive) {
+      router.push(service.route as never);
+      return;
+    }
+
+    Alert.alert(
+      'Không khả dụng',
+      service.disabledReason ?? `${service.title} hiện chưa khả dụng với ${getRoleLabel(role)}.`,
+    );
+  };
 
   return (
     <Screen>
@@ -49,11 +60,7 @@ export default function ServicesScreen() {
           <ServiceTile
             service={featuredService}
             featured
-            onPress={
-              featuredService.isInteractive
-                ? () => router.push(featuredService.route as never)
-                : undefined
-            }
+            onPress={() => handleServicePress(featuredService)}
           />
         </SectionCard>
 
@@ -71,7 +78,7 @@ export default function ServicesScreen() {
                     <ServiceTile
                       key={service.id}
                       service={service}
-                      onPress={() => router.push(service.route as never)}
+                      onPress={() => handleServicePress(service)}
                     />
                   ))}
                   {row.length < 2 ? <View style={{ flex: 1 }} /> : null}
@@ -83,7 +90,7 @@ export default function ServicesScreen() {
 
         {upcomingServices.length > 0 ? (
           <SectionCard
-            title="Sắp tới"
+            title="Chưa khả dụng"
             subtitle={`${upcomingServices.length} mục`}
             variant="outlined"
             tone="neutral"
@@ -95,7 +102,7 @@ export default function ServicesScreen() {
                     <ServiceTile
                       key={service.id}
                       service={service}
-                      onPress={service.isInteractive ? () => router.push(service.route as never) : undefined}
+                      onPress={() => handleServicePress(service)}
                     />
                   ))}
                   {row.length < 2 ? <View style={{ flex: 1 }} /> : null}
@@ -127,36 +134,40 @@ function ServiceTile({
   onPress?: () => void;
 }) {
   const theme = useAppTheme();
-  const interactive = Boolean(onPress);
+  const available = service.isInteractive;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: !interactive }}
-      disabled={!interactive}
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         featured ? styles.cardFeatured : null,
         {
           flex: featured ? undefined : 1,
-          backgroundColor: interactive ? theme.colors.surfaceElevated : theme.colors.surfaceSubtle,
+          backgroundColor: available ? theme.colors.surfaceElevated : theme.colors.surfaceSubtle,
           borderColor: theme.colors.border,
-          opacity: interactive ? (pressed ? 0.88 : 1) : 0.92,
+          opacity: pressed ? (available ? 0.88 : 0.9) : 1,
         },
         theme.elevation.level1 as never,
       ]}
     >
-      <View style={styles.cardHeader}>
+      <View style={featured ? styles.cardHeaderFeatured : styles.cardHeaderCompact}>
         <View
           style={[
             styles.iconWrap,
             {
-              backgroundColor: getServiceSurface(theme, service.category),
+              backgroundColor: available
+                ? getServiceSurface(theme, service.category)
+                : theme.colors.surface,
             },
           ]}
         >
-          <Ionicons name={service.icon as never} size={featured ? 22 : 20} color={getServiceTone(theme, service.category)} />
+          <Ionicons
+            name={service.icon as never}
+            size={featured ? 22 : 20}
+            color={available ? getServiceTone(theme, service.category) : theme.colors.textSoft}
+          />
         </View>
         <StatusBadge
           label={getSupportLabel(service.supportState)}
@@ -164,7 +175,16 @@ function ServiceTile({
           size="sm"
         />
       </View>
-      <Text style={[styles.cardTitle, featured ? styles.cardTitleFeatured : null, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+      <Text
+        style={[
+          styles.cardTitle,
+          featured ? styles.cardTitleFeatured : null,
+          {
+            color: available ? theme.colors.text : theme.colors.textMuted,
+            fontFamily: theme.fonts.semibold,
+          },
+        ]}
+      >
         {service.title}
       </Text>
       <Text
@@ -180,7 +200,7 @@ function ServiceTile({
         style={[
           styles.cardAction,
           {
-            color: interactive ? theme.colors.primary : theme.colors.textSoft,
+            color: available ? theme.colors.primary : theme.colors.textSoft,
             fontFamily: theme.fonts.medium,
           },
         ]}
@@ -211,7 +231,7 @@ function getSupportLabel(state: 'live' | 'partial' | 'unsupported') {
     case 'partial':
       return 'Giới hạn';
     default:
-      return 'Sắp mở';
+      return 'Không khả dụng';
   }
 }
 
@@ -222,7 +242,7 @@ function getSupportTone(state: 'live' | 'partial' | 'unsupported') {
     case 'partial':
       return 'warning';
     default:
-      return 'info';
+      return 'neutral';
   }
 }
 
@@ -233,7 +253,7 @@ function getServiceActionLabel(state: 'live' | 'partial' | 'unsupported') {
     case 'partial':
       return 'Xem chi tiết';
     default:
-      return 'Theo dõi';
+      return 'Xem lý do';
   }
 }
 
@@ -292,10 +312,14 @@ const styles = StyleSheet.create({
     padding: 14,
     minHeight: 150,
   },
-  cardHeader: {
+  cardHeaderFeatured: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+  },
+  cardHeaderCompact: {
+    alignItems: 'flex-start',
     gap: 12,
   },
   iconWrap: {

@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -56,6 +57,22 @@ function makeOrderCode() {
   return `CTN-${compact}-${suffix}`;
 }
 
+function slugify(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+function buildInternalSlug(name: string) {
+  const base = slugify(name) || 'item';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${base}-${suffix}`;
+}
+
 @Injectable()
 export class CanteenService {
   constructor(
@@ -78,12 +95,10 @@ export class CanteenService {
     return categories.map((category) => ({
       id: category.id,
       name: category.name,
-      slug: category.slug,
       description: category.description,
       products: category.products.map((product) => ({
         id: product.id,
         name: product.name,
-        slug: product.slug,
         description: product.description,
         imageUrl: product.imageUrl,
         price: product.price,
@@ -92,30 +107,69 @@ export class CanteenService {
     }));
   }
 
-  async createCategory(dto: CreateCanteenCategoryDto) {
-    return this.prisma.canteenCategory.create({
-      data: {
-        name: dto.name.trim(),
-        slug: dto.slug.trim().toLowerCase(),
-        description: dto.description?.trim() || null,
-        isActive: dto.isActive ?? true,
-        sortOrder: dto.sortOrder ?? 0,
+  async getAdminCatalog(includeInactive = false) {
+    const categories = await this.prisma.canteenCategory.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        products: {
+          where: includeInactive ? undefined : { isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
       },
     });
+
+    return categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      sortOrder: category.sortOrder,
+      isActive: category.isActive,
+      products: category.products.map((product) => ({
+        id: product.id,
+        categoryId: product.categoryId,
+        name: product.name,
+        description: product.description,
+        imageUrl: product.imageUrl,
+        price: product.price,
+        stock: product.stock,
+        sortOrder: product.sortOrder,
+        isActive: product.isActive,
+      })),
+    }));
+  }
+
+  async createCategory(dto: CreateCanteenCategoryDto) {
+    try {
+      return await this.prisma.canteenCategory.create({
+        data: {
+          name: dto.name.trim(),
+          slug: buildInternalSlug(dto.name.trim()),
+          description: dto.description?.trim() || null,
+          isActive: dto.isActive ?? true,
+          sortOrder: dto.sortOrder ?? 0,
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogConflict(error, 'Danh mục canteen');
+    }
   }
 
   async updateCategory(categoryId: string, dto: UpdateCanteenCategoryDto) {
     await this.assertCategoryExists(categoryId);
-    return this.prisma.canteenCategory.update({
-      where: { id: categoryId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.slug !== undefined ? { slug: dto.slug.trim().toLowerCase() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
-        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
-        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
-      },
-    });
+    try {
+      return await this.prisma.canteenCategory.update({
+        where: { id: categoryId },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogConflict(error, 'Danh mục canteen');
+    }
   }
 
   async removeCategory(categoryId: string) {
@@ -128,19 +182,23 @@ export class CanteenService {
 
   async createProduct(dto: CreateCanteenProductDto) {
     await this.assertCategoryExists(dto.categoryId);
-    return this.prisma.canteenProduct.create({
-      data: {
-        categoryId: dto.categoryId,
-        name: dto.name.trim(),
-        slug: dto.slug.trim().toLowerCase(),
-        description: dto.description?.trim() || null,
-        imageUrl: dto.imageUrl?.trim() || null,
-        price: dto.price,
-        stock: dto.stock ?? 0,
-        isActive: dto.isActive ?? true,
-        sortOrder: dto.sortOrder ?? 0,
-      },
-    });
+    try {
+      return await this.prisma.canteenProduct.create({
+        data: {
+          categoryId: dto.categoryId,
+          name: dto.name.trim(),
+          slug: buildInternalSlug(dto.name.trim()),
+          description: dto.description?.trim() || null,
+          imageUrl: dto.imageUrl?.trim() || null,
+          price: dto.price,
+          stock: dto.stock ?? 0,
+          isActive: dto.isActive ?? true,
+          sortOrder: dto.sortOrder ?? 0,
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogConflict(error, 'Sản phẩm canteen');
+    }
   }
 
   async updateProduct(productId: string, dto: UpdateCanteenProductDto) {
@@ -149,20 +207,23 @@ export class CanteenService {
       await this.assertCategoryExists(dto.categoryId);
     }
 
-    return this.prisma.canteenProduct.update({
-      where: { id: productId },
-      data: {
-        ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
-        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.slug !== undefined ? { slug: dto.slug.trim().toLowerCase() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
-        ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl?.trim() || null } : {}),
-        ...(dto.price !== undefined ? { price: dto.price } : {}),
-        ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
-        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
-        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
-      },
-    });
+    try {
+      return await this.prisma.canteenProduct.update({
+        where: { id: productId },
+        data: {
+          ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+          ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl?.trim() || null } : {}),
+          ...(dto.price !== undefined ? { price: dto.price } : {}),
+          ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogConflict(error, 'Sản phẩm canteen');
+    }
   }
 
   async removeProduct(productId: string) {
@@ -291,6 +352,89 @@ export class CanteenService {
       completedBy: order.completedBy ? this.mapUser(order.completedBy) : null,
       viewerRole,
     }));
+  }
+
+  async deleteOrder(userId: string, orderId: string) {
+    const order = await this.prisma.canteenOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+    }
+    if (order.createdById !== userId) {
+      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a Ä‘Æ¡n hÃ ng nÃ y');
+    }
+
+    const deletableStatuses: CanteenOrderStatus[] = [
+      CanteenOrderStatus.pending_payment,
+      CanteenOrderStatus.payment_failed,
+    ];
+    if (!deletableStatuses.includes(order.status)) {
+      throw new BadRequestException('Chá»‰ cÃ³ thá»ƒ xÃ³a Ä‘Æ¡n chÆ°a thanh toÃ¡n hoáº·c thanh toÃ¡n lá»—i');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        await tx.canteenProduct.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      await tx.canteenOrder.delete({
+        where: { id: order.id },
+      });
+    });
+
+    return {
+      id: order.id,
+      deleted: true,
+    };
+  }
+
+  async deleteAdminOrder(orderId: string) {
+    const order = await this.prisma.canteenOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy đơn hàng');
+    }
+
+    const restorableStatuses: CanteenOrderStatus[] = [
+      CanteenOrderStatus.pending_payment,
+      CanteenOrderStatus.payment_failed,
+      CanteenOrderStatus.cancelled,
+    ];
+    const shouldRestoreStock = restorableStatuses.includes(order.status);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (shouldRestoreStock) {
+        for (const item of order.items) {
+          await tx.canteenProduct.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+      }
+
+      await tx.canteenOrder.delete({
+        where: { id: order.id },
+      });
+    });
+
+    return {
+      id: order.id,
+      deleted: true,
+      restoredStock: shouldRestoreStock,
+    };
   }
 
   async completeOrder(orderId: string, actorId: string) {
@@ -800,5 +944,16 @@ export class CanteenService {
     });
 
     return `${config.qrBaseUrl.replace(/\/$/, '')}?${params.toString()}`;
+  }
+
+  private rethrowCatalogConflict(error: unknown, entityLabel: string): never {
+    if (this.isUniqueConstraintError(error)) {
+      throw new ConflictException(`${entityLabel} đã tồn tại`);
+    }
+    throw error;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 }

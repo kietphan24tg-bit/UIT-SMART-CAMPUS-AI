@@ -68,6 +68,10 @@ describe('RoomBookingsController', () => {
                 status: 'Trống hiện tại',
               },
             ]),
+            deleteOwnBooking: jest.fn().mockResolvedValue({
+              id: 'booking-1',
+              deleted: true,
+            }),
           },
         },
       ],
@@ -148,6 +152,16 @@ describe('RoomBookingsController', () => {
     expect(service.getBuildingRooms).toHaveBeenCalledWith('B', {
       floorNumber: undefined,
       minCapacity: undefined,
+    });
+  });
+
+  it('should delete a room booking request for the current user', async () => {
+    const result = await controller.deleteOwnBooking('booking-1', 'user-1');
+
+    expect(service.deleteOwnBooking).toHaveBeenCalledWith('booking-1', 'user-1');
+    expect(result).toEqual({
+      id: 'booking-1',
+      deleted: true,
     });
   });
 });

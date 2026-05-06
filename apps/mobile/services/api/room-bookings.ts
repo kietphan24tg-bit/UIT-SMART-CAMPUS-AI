@@ -385,6 +385,12 @@ export const roomBookingsApi = {
     )) as RoomBookingResponse;
   },
 
+  deleteBooking: async (bookingId: string): Promise<{ id: string; deleted: boolean }> => {
+    return (await apiClient.delete(
+      `/room-bookings/${encodeURIComponent(bookingId)}`,
+    )) as { id: string; deleted: boolean };
+  },
+
   listAdminRequestRooms: async (): Promise<AdminRoomRequestSummary[]> => {
     return (await apiClient.get('/room-bookings/admin/request-rooms', {
       params: { status: 'pending' },

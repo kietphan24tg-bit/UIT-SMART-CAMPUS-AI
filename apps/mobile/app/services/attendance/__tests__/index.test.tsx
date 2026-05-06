@@ -103,7 +103,7 @@ describe('AttendanceHubScreen', () => {
     });
   });
 
-  it.each([USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
+  it.each([USER_ROLES.LECTURER, USER_ROLES.SUPER_ADMIN])(
     'redirects %s role to attendance management screen',
     async (role) => {
       mockRole(role);
@@ -115,14 +115,29 @@ describe('AttendanceHubScreen', () => {
     },
   );
 
+  it('shows an unavailable notice for admin role', async () => {
+    mockRole(USER_ROLES.ADMIN);
+
+    const { getByText } = render(<AttendanceHubScreen />);
+
+    await waitFor(() => expect(mockGetCameraPermissionsAsync).toHaveBeenCalled());
+    expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
+    expect(
+      getByText(
+        'Tài khoản quản trị viên không có quyền mở điểm danh QR. Chỉ sinh viên, giảng viên và quản trị hệ thống mới được truy cập.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('shows permission notice for unsupported role', async () => {
     mockRole(USER_ROLES.CANTEEN_ADMIN);
 
     const { getByText } = render(<AttendanceHubScreen />);
 
     await waitFor(() => expect(mockGetCameraPermissionsAsync).toHaveBeenCalled());
+    expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
     expect(
-      getByText('Tính năng quét QR hiện chỉ dành cho tài khoản sinh viên.'),
+      getByText('Điểm danh QR chỉ dành cho sinh viên, giảng viên và quản trị hệ thống.'),
     ).toBeTruthy();
   });
 });

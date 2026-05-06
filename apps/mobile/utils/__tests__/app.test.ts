@@ -44,6 +44,8 @@ describe('app utils', () => {
     expect(studentCanteen?.route).toBe('/services/canteen');
     expect(adminCanteen?.route).toBe('/services/canteen/admin');
     expect(operatorCanteen?.route).toBe('/services/canteen/admin');
+    expect(operatorAttendance?.supportState).toBe('unsupported');
+    expect(operatorAttendance?.isInteractive).toBe(false);
     expect(operatorAttendance?.route).toBe('/services/attendance');
     expect(library?.supportState).toBe('live');
     expect(chatbot?.supportState).toBe('live');
@@ -64,9 +66,9 @@ describe('app utils', () => {
     expect(lecturerGrades?.isInteractive).toBe(true);
     expect(lecturerGrades?.route).toBe('/services/grades/lecturer');
 
-    expect(adminGrades?.supportState).toBe('live');
-    expect(adminGrades?.isInteractive).toBe(true);
-    expect(adminGrades?.route).toBe('/services/grades/lecturer');
+    expect(adminGrades?.supportState).toBe('unsupported');
+    expect(adminGrades?.isInteractive).toBe(false);
+    expect(adminGrades?.route).toBe('/services/grades');
 
     expect(superAdminGrades?.supportState).toBe('live');
     expect(superAdminGrades?.isInteractive).toBe(true);

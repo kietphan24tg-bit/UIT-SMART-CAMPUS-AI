@@ -52,6 +52,22 @@ async function syncPushTokenSafely() {
   }
 }
 
+async function logStoredTokens(context: 'login' | 'register') {
+  if (!__DEV__) {
+    return;
+  }
+
+  const [storedAccessTokenAfterLogin, storedRefreshTokenAfterLogin] = await Promise.all([
+    SecureStore.getItemAsync(TOKEN_KEY),
+    SecureStore.getItemAsync(REFRESH_KEY),
+  ]);
+
+  console.warn(`[auth-store] ${context} token persistence`, {
+    storedAccessTokenAfterLogin: Boolean(storedAccessTokenAfterLogin),
+    storedRefreshTokenAfterLogin: Boolean(storedRefreshTokenAfterLogin),
+  });
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   isHydrated: false,
   isAuthenticated: false,
@@ -68,8 +84,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     const tokens = await authApi.login({ email, password });
+    if (__DEV__) {
+      console.warn('[auth-store] login token response', {
+        receivedAccessToken: Boolean(tokens.accessToken),
+        receivedRefreshToken: Boolean(tokens.refreshToken),
+      });
+    }
     await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken);
     await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
+    await logStoredTokens('login');
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
@@ -78,8 +101,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   register: async (data) => {
     const tokens = await authApi.register(data);
+    if (__DEV__) {
+      console.warn('[auth-store] register token response', {
+        receivedAccessToken: Boolean(tokens.accessToken),
+        receivedRefreshToken: Boolean(tokens.refreshToken),
+      });
+    }
     await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken);
     await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
+    await logStoredTokens('register');
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });

@@ -81,6 +81,23 @@ function buildAxiosDebugPayload(error: AxiosError) {
   };
 }
 
+async function buildStoredAuthDebugPayload() {
+  const [accessToken, refreshToken] = await Promise.all([
+    SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
+    SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
+  ]);
+
+  return {
+    hasAccessToken: Boolean(accessToken),
+    hasRefreshToken: Boolean(refreshToken),
+  };
+}
+
+function isCanteenDebugRequest(config: AxiosRequestConfig | undefined) {
+  const requestUrl = String(config?.url ?? '');
+  return requestUrl.includes('/canteen/catalog');
+}
+
 let refreshTokenRequest: Promise<string | null> | null = null;
 
 async function clearStoredTokens() {
@@ -147,6 +164,16 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  if (isCanteenDebugRequest(config)) {
+    console.warn('[apiClient] canteen request auth debug', {
+      method: config.method?.toUpperCase() ?? 'GET',
+      url: config.url,
+      hasToken: Boolean(token),
+      tokenLength: token?.length ?? 0,
+      hasAuthorizationHeader: Boolean(config.headers?.Authorization),
+    });
+  }
+
   if (config.data instanceof FormData && config.headers) {
     delete config.headers['Content-Type'];
   }
@@ -157,7 +184,23 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response.data?.data ?? response.data,
   async (error: AxiosError) => {
-    console.error('[apiClient] request failed', buildAxiosDebugPayload(error));
+    const authDebugPayload = await buildStoredAuthDebugPayload();
+    console.error('[apiClient] request failed', {
+      ...buildAxiosDebugPayload(error),
+      ...authDebugPayload,
+      hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
+    });
+    if (isCanteenDebugRequest(error.config)) {
+      console.warn('[apiClient] canteen response auth debug', {
+        method: error.config?.method?.toUpperCase() ?? 'GET',
+        url: error.config?.url,
+        status: error.response?.status,
+        hasResponse: error.response != null,
+        responseData: error.response?.data,
+        ...authDebugPayload,
+        hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
+      });
+    }
     const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     if (

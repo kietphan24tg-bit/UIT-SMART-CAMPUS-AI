@@ -306,4 +306,13 @@ export class RoomBookingsController {
     const isAdmin = role === USER_ROLES.ADMIN || role === USER_ROLES.SUPER_ADMIN;
     return this.roomBookingsService.cancelBooking(bookingId, userId, isAdmin);
   }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Room booking id' })
+  @ApiOperation({ summary: 'Delete own room booking request' })
+  deleteOwnBooking(@Param('id') bookingId: string, @CurrentUser('id') userId: string) {
+    return this.roomBookingsService.deleteOwnBooking(bookingId, userId);
+  }
 }

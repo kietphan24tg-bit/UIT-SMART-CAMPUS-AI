@@ -119,6 +119,52 @@ describe('API RBAC & Integrity (e2e)', () => {
   );
 
   it.each([
+    ['admin', 200],
+    ['super_admin', 200],
+    ['canteen_admin', 403],
+    ['student', 403],
+    ['lecturer', 403],
+  ] as const)(
+    'DELETE /canteen/orders/admin/:id role %s => %i',
+    async (role, expectedStatus) => {
+      const student = await prisma.user.findUnique({
+        where: { email: seedAccounts.student.email },
+        select: { id: true },
+      });
+      const product = await prisma.canteenProduct.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true },
+      });
+      expect(student?.id).toBeTruthy();
+      expect(product?.id).toBeTruthy();
+
+      const order = await prisma.canteenOrder.create({
+        data: {
+          orderCode: `QC-ADMIN-DELETE-${Date.now()}-${role}`,
+          createdById: student?.id as string,
+          status: 'completed',
+          totalAmount: 15000,
+          items: {
+            create: {
+              productId: product?.id as string,
+              productName: product?.name as string,
+              unitPrice: 15000,
+              quantity: 1,
+              lineTotal: 15000,
+            },
+          },
+        },
+      });
+
+      await request(server)
+        .delete(`/api/v1/canteen/orders/admin/${encodeURIComponent(order.id)}`)
+        .set('Authorization', `Bearer ${accessTokens[role] as string}`)
+        .expect(expectedStatus);
+    },
+  );
+
+  it.each([
     ['student', 200],
     ['lecturer', 403],
     ['canteen_admin', 403],
@@ -153,7 +199,6 @@ describe('API RBAC & Integrity (e2e)', () => {
   it('allows canteen admin roles to call canteen admin mutations and blocks consumer roles', async () => {
     const samplePayload = {
       name: `QC Category ${Date.now()}`,
-      slug: `qc-category-${Date.now()}`,
       description: 'Role matrix category created from e2e test.',
     };
 
@@ -164,7 +209,7 @@ describe('API RBAC & Integrity (e2e)', () => {
       await request(server)
         .post('/api/v1/canteen/categories')
         .set('Authorization', `Bearer ${accessTokens[role] as string}`)
-        .send({ ...samplePayload, slug: `${samplePayload.slug}-${role}` })
+        .send({ ...samplePayload, name: `${samplePayload.name} ${role}` })
         .expect(201);
     }
 
@@ -172,9 +217,105 @@ describe('API RBAC & Integrity (e2e)', () => {
       await request(server)
         .post('/api/v1/canteen/categories')
         .set('Authorization', `Bearer ${accessTokens[role] as string}`)
-        .send({ ...samplePayload, slug: `${samplePayload.slug}-${role}-deny` })
+        .send({ ...samplePayload, name: `${samplePayload.name} ${role} deny` })
         .expect(403);
     }
+  });
+
+  it('restricts canteen product delete to admin and super_admin and keeps soft-delete behavior', async () => {
+    const suffix = Date.now();
+    const categoryResponse = await request(server)
+      .post('/api/v1/canteen/categories')
+      .set('Authorization', `Bearer ${accessTokens.admin as string}`)
+      .send({
+        name: `Delete Product Category ${suffix}`,
+        description: 'Category for product delete e2e.',
+      })
+      .expect(201);
+
+    const categoryId = categoryResponse.body?.data?.id as string | undefined;
+    expect(categoryId).toBeTruthy();
+
+    const productResponse = await request(server)
+      .post('/api/v1/canteen/products')
+      .set('Authorization', `Bearer ${accessTokens.admin as string}`)
+      .send({
+        categoryId,
+        name: `Delete Product ${suffix}`,
+        price: 15000,
+        stock: 4,
+      })
+      .expect(201);
+
+    const productId = productResponse.body?.data?.id as string | undefined;
+    expect(productId).toBeTruthy();
+
+    await request(server)
+      .delete(`/api/v1/canteen/products/${encodeURIComponent(productId as string)}`)
+      .set('Authorization', `Bearer ${accessTokens.canteen_admin as string}`)
+      .expect(403);
+
+    await request(server)
+      .delete(`/api/v1/canteen/products/${encodeURIComponent(productId as string)}`)
+      .set('Authorization', `Bearer ${accessTokens.super_admin as string}`)
+      .expect(200);
+
+    const hiddenProduct = await prisma.canteenProduct.findUnique({
+      where: { id: productId as string },
+      select: { isActive: true },
+    });
+    expect(hiddenProduct).toEqual({ isActive: false });
+
+    const catalogResponse = await request(server)
+      .get('/api/v1/canteen/catalog')
+      .set('Authorization', `Bearer ${accessTokens.admin as string}`)
+      .expect(200);
+
+    const categories = (catalogResponse.body?.data ?? []) as Array<{
+      id: string;
+      products: Array<{ id: string }>;
+    }>;
+    const category = categories.find((item) => item.id === categoryId);
+    expect(category?.products.some((item) => item.id === productId)).toBe(false);
+  });
+
+  it('restricts canteen category delete to admin and super_admin and keeps soft-delete behavior', async () => {
+    const suffix = Date.now();
+    const categoryResponse = await request(server)
+      .post('/api/v1/canteen/categories')
+      .set('Authorization', `Bearer ${accessTokens.super_admin as string}`)
+      .send({
+        name: `Delete Category ${suffix}`,
+        description: 'Category delete e2e.',
+      })
+      .expect(201);
+
+    const categoryId = categoryResponse.body?.data?.id as string | undefined;
+    expect(categoryId).toBeTruthy();
+
+    await request(server)
+      .delete(`/api/v1/canteen/categories/${encodeURIComponent(categoryId as string)}`)
+      .set('Authorization', `Bearer ${accessTokens.canteen_admin as string}`)
+      .expect(403);
+
+    await request(server)
+      .delete(`/api/v1/canteen/categories/${encodeURIComponent(categoryId as string)}`)
+      .set('Authorization', `Bearer ${accessTokens.admin as string}`)
+      .expect(200);
+
+    const hiddenCategory = await prisma.canteenCategory.findUnique({
+      where: { id: categoryId as string },
+      select: { isActive: true },
+    });
+    expect(hiddenCategory).toEqual({ isActive: false });
+
+    const catalogResponse = await request(server)
+      .get('/api/v1/canteen/catalog')
+      .set('Authorization', `Bearer ${accessTokens.super_admin as string}`)
+      .expect(200);
+
+    const categories = (catalogResponse.body?.data ?? []) as Array<{ id: string }>;
+    expect(categories.some((item) => item.id === categoryId)).toBe(false);
   });
 
   it('prevents double-booking in concurrent room booking requests', async () => {

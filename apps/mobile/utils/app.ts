@@ -66,11 +66,11 @@ export function isCanteenAdminRole(role?: string | null) {
 }
 
 export function canManageAttendanceRole(role?: string | null) {
-  return isLecturerRole(role) || isAdminRole(role);
+  return isLecturerRole(role) || isSuperAdminRole(role);
 }
 
 export function canManageGradesRole(role?: string | null) {
-  return isLecturerRole(role) || isAdminRole(role);
+  return isLecturerRole(role) || isSuperAdminRole(role);
 }
 
 export function canManageCanteenRole(role?: string | null) {
@@ -242,7 +242,7 @@ export function getSupportStateLabel(state: SupportState) {
     case 'partial':
       return 'Tạm thời chưa khả dụng';
     default:
-      return 'Sắp triển khai';
+      return 'Không khả dụng';
   }
 }
 
@@ -253,7 +253,7 @@ export function getSupportStateTone(state: SupportState): StatusTone {
     case 'partial':
       return 'warning';
     default:
-      return 'info';
+      return 'neutral';
   }
 }
 
@@ -310,42 +310,53 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const teachingCategory = 'Công cụ giảng dạy' as const;
   const adminCategory = 'Công cụ quản trị' as const;
   const isStudentRole = role === USER_ROLES.STUDENT;
+  const isOperatorAdminRole = role === USER_ROLES.ADMIN;
   const attendanceManager = canManageAttendanceRole(role);
   const gradesManager = canManageGradesRole(role);
   const canteenManager = canManageCanteenRole(role);
+  const canOpenAttendance = isStudentRole || attendanceManager;
+  const canOpenGrades = isStudentRole || gradesManager;
+  const gradesBlockedReason = isOperatorAdminRole
+    ? 'Tài khoản quản trị viên không có quyền nhập điểm. Chỉ giảng viên và quản trị hệ thống mới được truy cập.'
+    : 'Vai trò này chưa được hỗ trợ luồng nhập điểm trong ứng dụng.';
+  const attendanceBlockedReason = isOperatorAdminRole
+    ? 'Tài khoản quản trị viên không có quyền mở điểm danh QR. Chỉ sinh viên, giảng viên và quản trị hệ thống mới được truy cập.'
+    : 'Chỉ sinh viên, giảng viên và quản trị hệ thống mới có thể dùng điểm danh QR.';
 
   const entries: ServiceEntry[] = [
     {
       id: 'grades',
-      title: gradesManager ? 'Nhập điểm' : 'Điểm & GPA',
+      title: isStudentRole ? 'Điểm & GPA' : 'Nhập điểm',
       summary: isStudentRole
         ? 'Theo dõi bảng điểm theo học kỳ.'
         : gradesManager
           ? 'Nhập điểm theo lớp, cấu hình trọng số và tự tính trung bình.'
-          : 'Luồng dữ liệu điểm cho vai trò này sẽ được triển khai sau.',
+          : isOperatorAdminRole
+            ? 'Vai trò quản trị viên không thể mở bảng nhập điểm trong ứng dụng.'
+            : 'Luồng nhập điểm cho vai trò này hiện chưa khả dụng.',
       category: gradesManager ? teachingCategory : 'Học vụ',
       icon: 'bar-chart-outline',
-      supportState: isStudentRole || gradesManager ? 'live' : 'unsupported',
-      isInteractive: isStudentRole || gradesManager,
-      disabledReason: isStudentRole || gradesManager
-        ? undefined
-        : 'Vai trò này chưa được hỗ trợ luồng điểm & GPA trong app.',
+      supportState: canOpenGrades ? 'live' : 'unsupported',
+      isInteractive: canOpenGrades,
+      disabledReason: canOpenGrades ? undefined : gradesBlockedReason,
       lastVerifiedSource: 'grades',
       primaryAction: isStudentRole
         ? 'Xem bảng điểm'
         : gradesManager
           ? 'Mở bảng nhập điểm'
-          : 'Theo dõi cập nhật',
+          : 'Xem lý do',
       route: isStudentRole
         ? '/services/grades'
         : gradesManager
           ? '/services/grades/lecturer'
-          : '/services',
+          : '/services/grades',
       description: isStudentRole
         ? 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.'
         : gradesManager
-          ? 'Giảng viên, admin và super admin có thể nhập điểm theo lớp học phần.'
-          : 'Chức năng xem/nhập điểm cho vai trò này đang ở trạng thái sắp triển khai.',
+          ? 'Giảng viên và quản trị hệ thống có thể nhập điểm theo lớp học phần.'
+          : isOperatorAdminRole
+            ? 'Role quản trị viên không có quyền nhập hoặc chỉnh sửa điểm trong ứng dụng.'
+            : 'Chức năng nhập điểm cho vai trò này hiện chưa khả dụng trong ứng dụng.',
     },
     {
       id: 'parking',
@@ -396,17 +407,30 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       title: 'Điểm danh QR',
       summary: attendanceManager
         ? 'Quản lý phiên điểm danh và theo dõi check-in theo lớp.'
-        : 'Quét mã QR trên màn hình lớp để điểm danh (sinh viên).',
+        : isStudentRole
+          ? 'Quét mã QR trên màn hình lớp để điểm danh.'
+          : isOperatorAdminRole
+            ? 'Vai trò quản trị viên không thể mở khu vực điểm danh QR.'
+            : 'Vai trò hiện tại không thể dùng điểm danh QR.',
       category: attendanceManager ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
-      supportState: 'live',
-      isInteractive: true,
+      supportState: canOpenAttendance ? 'live' : 'unsupported',
+      isInteractive: canOpenAttendance,
+      disabledReason: canOpenAttendance ? undefined : attendanceBlockedReason,
       lastVerifiedSource: 'schedule',
-      primaryAction: attendanceManager ? 'Quản lý phiên QR' : 'Mở điểm danh QR',
+      primaryAction: attendanceManager
+        ? 'Quản lý phiên QR'
+        : isStudentRole
+          ? 'Mở điểm danh QR'
+          : 'Xem lý do',
       route: '/services/attendance',
       description: attendanceManager
-        ? 'Giảng viên, admin và super admin có thể mở/đóng phiên QR và theo dõi điểm danh.'
-        : 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.',
+        ? 'Giảng viên và quản trị hệ thống có thể mở/đóng phiên QR và theo dõi điểm danh.'
+        : isStudentRole
+          ? 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.'
+          : isOperatorAdminRole
+            ? 'Role quản trị viên không có quyền quản lý hoặc quét điểm danh QR trong ứng dụng.'
+            : 'Điểm danh QR chỉ dành cho sinh viên, giảng viên và quản trị hệ thống.',
     },
     {
       id: 'room-booking',

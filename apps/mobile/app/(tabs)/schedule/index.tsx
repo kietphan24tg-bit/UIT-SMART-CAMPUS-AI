@@ -6,7 +6,6 @@ import { MetricGrid } from '@/components/tasks';
 import {
   ContentStack,
   EmptyState,
-  InfoRow,
   Screen,
   SectionCard,
   StatusBadge,
@@ -268,7 +267,6 @@ export default function ScheduleScreen() {
 
   if (isOperationsRole) {
     const parking = operationsState.data?.parking ?? null;
-    const telemetry = operationsState.data?.telemetry ?? null;
     const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
     const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
     const metrics = [
@@ -367,65 +365,6 @@ export default function ScheduleScreen() {
               ) : null}
             </View>
           </SectionCard>
-          <SectionCard
-            title="Telemetry mới nhất"
-            subtitle="Dữ liệu cảm biến gần nhất."
-            variant="outlined"
-          >
-            {telemetry ? (
-              <View style={styles.column}>
-                <View
-                  style={[styles.rowBetween, layout.isCompact ? styles.rowBetweenStacked : null]}
-                >
-                  <StatusBadge
-                    label={telemetry.fireDetected ? 'Cảnh báo cháy' : 'Thiết bị đang gửi dữ liệu'}
-                    tone={telemetry.fireDetected ? 'danger' : 'success'}
-                  />
-                  <Text
-                    style={[
-                      styles.metaText,
-                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                    ]}
-                  >
-                    {formatDateTime(telemetry.reportedAt)}
-                  </Text>
-                </View>
-                <View style={styles.infoGrid}>
-                  <InfoRow label="Gateway" value={telemetry.gateId} />
-                  <InfoRow label="IP thiết bị" value={telemetry.deviceIp ?? '--'} />
-                </View>
-                <View style={styles.badgeRow}>
-                  <StatusBadge
-                    label={`Nhiệt độ ${telemetry.temperature ?? '--'}°C`}
-                    tone="info"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={`Độ ẩm ${telemetry.humidity ?? '--'}%`}
-                    tone="success"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={telemetry.rainDetected ? 'Có mưa' : 'Khô ráo'}
-                    tone="warning"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    label={telemetry.fireDetected ? 'Cháy' : 'Không cháy'}
-                    tone={telemetry.fireDetected ? 'danger' : 'success'}
-                    size="sm"
-                  />
-                </View>
-              </View>
-            ) : (
-              <EmptyState
-                icon="hardware-chip-outline"
-                title="Chưa có telemetry"
-                description="Dữ liệu sẽ hiện khi gateway gửi bản mới."
-              />
-            )}
-          </SectionCard>
-
           <SectionCard
             title="Cảnh báo gần đây"
             subtitle="Các mục cần xử lý trước."

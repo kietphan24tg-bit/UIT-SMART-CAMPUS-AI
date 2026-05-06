@@ -7,10 +7,6 @@ export class CreateCanteenCategoryDto {
   @IsString()
   name!: string;
 
-  @ApiProperty()
-  @IsString()
-  slug!: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -37,10 +33,6 @@ export class CreateCanteenProductDto {
   @ApiProperty()
   @IsString()
   name!: string;
-
-  @ApiProperty()
-  @IsString()
-  slug!: string;
 
   @ApiProperty()
   @IsInt()
