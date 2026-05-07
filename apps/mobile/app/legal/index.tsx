@@ -34,7 +34,7 @@ export default function LegalScreen() {
 
         <SectionCard title="Điều khoản sử dụng" subtitle="Những điểm người dùng cần biết khi dùng ứng dụng.">
           <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-            Người dùng chịu trách nhiệm bảo mật tài khoản, kiểm tra biển số xe trước khi đăng ký và tuân thủ quy định của nhà trường.
+            Người dùng chịu trách nhiệm bảo mật tài khoản và tuân thủ quy định của nhà trường.
           </Text>
         </SectionCard>
 

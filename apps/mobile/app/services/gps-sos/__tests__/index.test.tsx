@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import GpsSosScreen from '../index';
 import SosFullMapScreen from '../map';
@@ -54,7 +55,11 @@ function renderWithClient(ui: React.ReactElement) {
     },
   });
 
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </SafeAreaProvider>,
+  );
 }
 
 const sosRecord = {

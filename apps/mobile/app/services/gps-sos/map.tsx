@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SosMap } from '@/components/maps/sos-map';
 import { Screen } from '@/components/ui';
@@ -18,9 +19,12 @@ type ViewerLocation = {
 
 const ROUTE_REFRESH_MIN_MS = 8_000;
 const ROUTE_REFRESH_DISTANCE_METERS = 20;
+const LOCATION_NOISE_MIN_METERS = 12;
+const LOCATION_MAX_ACCURACY_METERS = 35;
 
 export default function SosFullMapScreen() {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { sosId } = useLocalSearchParams<{ sosId?: string }>();
   const latestEvent = useSosRealtimeStore((state) =>
@@ -33,6 +37,7 @@ export default function SosFullMapScreen() {
   const [routeInfo, setRouteInfo] = useState<string | null>(null);
   const [sosStatusLabel, setSosStatusLabel] = useState<string | null>(null);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
+  const viewerLocationRef = useRef<ViewerLocation>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFetchingRouteRef = useRef(false);
   const lastFetchAtRef = useRef(0);
@@ -104,7 +109,9 @@ export default function SosFullMapScreen() {
           }
           const nextRoute = payload.route.routes?.[0] ?? null;
           setRouteData(nextRoute);
-          setRouteInfo(formatRouteInfo(nextRoute));
+          setRouteInfo(
+            formatRouteInfo(nextRoute) || formatFallbackRouteInfo(location, selectedRequest),
+          );
         })
         .catch((error: unknown) => {
           if (isCancelled) {
@@ -129,7 +136,7 @@ export default function SosFullMapScreen() {
       }
 
       const current = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
+        accuracy: Location.Accuracy.High,
       });
       const initialLocation = {
         lat: current.coords.latitude,
@@ -140,20 +147,26 @@ export default function SosFullMapScreen() {
         return;
       }
       setViewerLocation(initialLocation);
+      viewerLocationRef.current = initialLocation;
       scheduleRouteRefresh(initialLocation, true);
 
       watchRef.current = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 10,
-          timeInterval: 5_000,
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 5,
+          timeInterval: 4_000,
         },
         (position) => {
-          const nextLocation = {
+          const rawLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             accuracyMeters: position.coords.accuracy ?? undefined,
           };
+          const nextLocation = stabilizeViewerLocation(viewerLocationRef.current, rawLocation);
+          if (!nextLocation) {
+            return;
+          }
+          viewerLocationRef.current = nextLocation;
           setViewerLocation(nextLocation);
           scheduleRouteRefresh(nextLocation);
         },
@@ -196,7 +209,7 @@ export default function SosFullMapScreen() {
           markers={markers}
           viewerLocation={viewerLocation}
           routePolyline={extractRoutePolyline(routeData)}
-          routeCoordinates={extractRouteCoordinates(routeData)}
+          routeCoordinates={resolveRouteCoordinates(routeData, viewerLocation, selectedRequest)}
           height={null}
         />
 
@@ -207,6 +220,7 @@ export default function SosFullMapScreen() {
           style={[
             styles.backButton,
             {
+              top: Math.max(insets.top + 8, 16),
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
             },
@@ -221,6 +235,15 @@ export default function SosFullMapScreen() {
           style={[
             styles.infoPanel,
             {
+              right: 0,
+              bottom: 0,
+              left: 0,
+              paddingTop: 16,
+              paddingRight: 16,
+              paddingBottom: Math.max(insets.bottom, 12) + 12,
+              paddingLeft: 16,
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
             },
@@ -301,6 +324,33 @@ function extractRoutePolyline(route: SosRouteData | null) {
   return null;
 }
 
+function formatFallbackRouteInfo(
+  viewerLocation: ViewerLocation,
+  selectedRequest: SosRequestRecord | null,
+) {
+  if (!viewerLocation || !selectedRequest) {
+    return null;
+  }
+
+  const distanceMeters = getDistanceMeters(
+    viewerLocation.lat,
+    viewerLocation.lng,
+    selectedRequest.lat,
+    selectedRequest.lng,
+  );
+
+  if (!Number.isFinite(distanceMeters) || distanceMeters <= 0) {
+    return 'Đang hiển thị đường nối trực tiếp tới điểm SOS.';
+  }
+
+  const distanceLabel =
+    distanceMeters < 1000
+      ? `${Math.max(1, Math.round(distanceMeters))} m`
+      : `${(distanceMeters / 1000).toFixed(2)} km`;
+
+  return `Đang hiển thị đường nối trực tiếp: ${distanceLabel}`;
+}
+
 function extractRouteCoordinates(route: SosRouteData | null): Array<[number, number]> | null {
   const geometry = route?.geometry;
   if (!geometry || typeof geometry !== 'object' || !Array.isArray(geometry.coordinates)) {
@@ -318,6 +368,61 @@ function extractRouteCoordinates(route: SosRouteData | null): Array<[number, num
     .map((coord) => [Number(coord[0]), Number(coord[1])] as [number, number]);
 
   return coordinates.length ? coordinates : null;
+}
+
+function resolveRouteCoordinates(
+  route: SosRouteData | null,
+  viewerLocation: ViewerLocation,
+  selectedRequest: SosRequestRecord | null,
+): Array<[number, number]> | null {
+  const extracted = extractRouteCoordinates(route);
+  if (extracted?.length) {
+    return extracted;
+  }
+
+  if (viewerLocation && selectedRequest) {
+    return [
+      [viewerLocation.lng, viewerLocation.lat],
+      [selectedRequest.lng, selectedRequest.lat],
+    ];
+  }
+
+  return null;
+}
+
+function stabilizeViewerLocation(
+  previous: ViewerLocation,
+  next: NonNullable<ViewerLocation>,
+): ViewerLocation {
+  const nextAccuracy = next.accuracyMeters ?? Number.POSITIVE_INFINITY;
+  if (nextAccuracy > LOCATION_MAX_ACCURACY_METERS) {
+    return previous;
+  }
+
+  if (!previous) {
+    return next;
+  }
+
+  const previousAccuracy = previous.accuracyMeters ?? LOCATION_MAX_ACCURACY_METERS;
+  const distanceMoved = getDistanceMeters(previous.lat, previous.lng, next.lat, next.lng);
+  const noiseThreshold = Math.max(
+    LOCATION_NOISE_MIN_METERS,
+    Math.min(25, Math.min(previousAccuracy, nextAccuracy)),
+  );
+
+  if (distanceMoved < noiseThreshold && nextAccuracy >= previousAccuracy) {
+    return previous;
+  }
+
+  if (distanceMoved < noiseThreshold * 2) {
+    return {
+      lat: (previous.lat + next.lat) / 2,
+      lng: (previous.lng + next.lng) / 2,
+      accuracyMeters: Math.min(previousAccuracy, nextAccuracy),
+    };
+  }
+
+  return next;
 }
 
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -340,7 +445,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 16,
     left: 16,
     width: 48,
     height: 48,
@@ -351,12 +455,8 @@ const styles = StyleSheet.create({
   },
   infoPanel: {
     position: 'absolute',
-    right: 16,
-    bottom: 24,
-    left: 16,
     borderWidth: 1,
     borderRadius: 20,
-    padding: 16,
     gap: 6,
   },
 });

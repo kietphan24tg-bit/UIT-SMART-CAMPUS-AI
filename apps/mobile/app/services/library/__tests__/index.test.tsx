@@ -150,4 +150,35 @@ describe('LibraryScreen', () => {
     expect(getAllByText('Tìm sách').length).toBeGreaterThan(0);
     expect(getByText('Chọn sách này')).toBeTruthy();
   });
+
+  it('renders book cover image when coverUrl exists', async () => {
+    mockLibraryApi.listBooks.mockResolvedValue({
+      items: [
+        {
+          id: 'book-2',
+          openLibraryId: 'OL2M',
+          isbn13: '9780134757599',
+          title: 'Refactoring',
+          subtitle: null,
+          authors: 'Martin Fowler',
+          subjects: ['software engineering'],
+          publisher: 'Addison-Wesley',
+          publishedAt: '2018',
+          language: 'en',
+          coverUrl: 'https://img.test/refactoring.jpg',
+          shelfCode: 'SE-02',
+          availableCopies: 1,
+          totalCopies: 1,
+        },
+      ],
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+    });
+
+    const { getByLabelText } = renderWithClient(<LibraryScreen />);
+
+    await waitFor(() => expect(getByLabelText('Bìa sách Refactoring')).toBeTruthy());
+  });
 });

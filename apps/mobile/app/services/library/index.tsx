@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { USER_ROLES } from '@smart-campus/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -633,23 +634,52 @@ function BookCard({
         },
       ]}
     >
-      <View style={styles.rowBetween}>
-        <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>{item.title}</Text>
-        <StatusBadge
-          label={`${item.availableCopies}/${item.totalCopies} bản`}
-          tone={available ? 'success' : 'danger'}
-          size="sm"
-        />
+      <View style={styles.bookCardTop}>
+        {item.coverUrl ? (
+          <Image
+            source={{ uri: item.coverUrl }}
+            style={styles.bookCover}
+            contentFit="cover"
+            accessibilityLabel={`Bìa sách ${item.title}`}
+          />
+        ) : (
+          <View
+            style={[
+              styles.bookCoverPlaceholder,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Ionicons name="book-outline" size={26} color={theme.colors.textSoft} />
+          </View>
+        )}
+
+        <View style={styles.bookCardContent}>
+          <View style={styles.rowBetween}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+              {item.title}
+            </Text>
+            <StatusBadge
+              label={`${item.availableCopies}/${item.totalCopies} bản`}
+              tone={available ? 'success' : 'danger'}
+              size="sm"
+            />
+          </View>
+          <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            {item.authors}
+          </Text>
+          <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
+            {item.publisher || 'Chưa cập nhật NXB'} · {item.publishedAt || 'Năm chưa rõ'}
+          </Text>
+          {item.subjects.length > 0 ? (
+            <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+              Chủ đề: {item.subjects.slice(0, 3).join(', ')}
+            </Text>
+          ) : null}
+        </View>
       </View>
-      <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>{item.authors}</Text>
-      <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-        {item.publisher || 'Chưa cập nhật NXB'} · {item.publishedAt || 'Năm chưa rõ'}
-      </Text>
-      {item.subjects.length > 0 ? (
-        <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
-          Chủ đề: {item.subjects.slice(0, 3).join(', ')}
-        </Text>
-      ) : null}
       {canBorrow ? (
         <PrimaryButton
           label={selected ? 'Đang chọn' : available ? 'Chọn sách này' : 'Hết bản sẵn sàng'}
@@ -769,6 +799,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  bookCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  bookCardContent: {
+    flex: 1,
+    gap: 8,
+  },
+  bookCover: {
+    width: 84,
+    height: 120,
+    borderRadius: 14,
+    backgroundColor: '#D9E3F0',
+  },
+  bookCoverPlaceholder: {
+    width: 84,
+    height: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     fontSize: 13,

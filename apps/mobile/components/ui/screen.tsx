@@ -71,9 +71,10 @@ export function Screen({
   const activeTargetRef = useRef<number | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const flattenedContentStyle = StyleSheet.flatten(contentContainerStyle) ?? {};
-  const resolvedPaddingBottom =
-    BASE_CONTENT_PADDING_BOTTOM + keyboardInset + resolvePaddingBottom(flattenedContentStyle);
   const isFullBleed = variant === 'fullBleed';
+  const basePaddingBottom = isFullBleed ? 0 : BASE_CONTENT_PADDING_BOTTOM;
+  const resolvedPaddingBottom =
+    basePaddingBottom + keyboardInset + resolvePaddingBottom(flattenedContentStyle);
   const backgroundColor =
     variant === 'muted'
       ? theme.colors.backgroundMuted
