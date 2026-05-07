@@ -264,7 +264,9 @@ describe('SosService', () => {
       resolvedAt: null,
       expiresAt: new Date('2026-05-08T06:00:00.000Z'),
     });
-    jest.spyOn(service as never, 'reverseGeocode').mockResolvedValue(null);
+    jest
+      .spyOn(service as never, 'reverseGeocode')
+      .mockResolvedValue(null as never);
 
     await service.createRequest('student-1', {
       lat: 10.8,

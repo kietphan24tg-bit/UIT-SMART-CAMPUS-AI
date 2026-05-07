@@ -66,6 +66,13 @@ enum RoomBookingStatus {
   cancelled
 }
 
+enum RoomScheduleOverrideType {
+  manual
+  maintenance
+  cancel_class
+  move_class
+}
+
 enum EnrollmentStatus {
   active
   dropped
@@ -96,6 +103,13 @@ enum LibraryLoanStatus {
   borrowed
   returned
   overdue
+}
+
+enum LibraryLoanRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
 }
 
 enum LibraryReservationStatus {
@@ -165,11 +179,14 @@ model User {
   vehicles              Vehicle[]
   roomBookings          RoomBooking[]         @relation("RoomBookingsCreatedBy")
   approvedRoomBookings  RoomBooking[]         @relation("RoomBookingsApprovedBy")
+  createdRoomScheduleOverrides RoomScheduleOverride[] @relation("RoomScheduleOverrideCreator")
   lecturedClassSections ClassSection[]
   classEnrollments      ClassEnrollment[]     @relation("ClassEnrollmentStudent")
   createdEvents         Event[]               @relation("EventOwner")
   eventRegistrations    EventRegistration[]
   libraryLoans          LibraryLoan[]
+  libraryLoanRequests   LibraryLoanRequest[] @relation("LibraryLoanRequestRequester")
+  approvedLoanRequests  LibraryLoanRequest[] @relation("LibraryLoanRequestApprover")
   libraryReservations   LibraryReservation[]
   createdCanteenOrders  CanteenOrder[]        @relation("CanteenOrderCreatedBy")
   managedCanteenOrders  CanteenOrder[]        @relation("CanteenOrderCompletedBy")
@@ -222,6 +239,7 @@ model Room {
   floor            Floor              @relation(fields: [floorId], references: [id], onDelete: Cascade)
   roomBookings     RoomBooking[]
   roomBookingSlots RoomBookingSlot[]
+  scheduleOverrides RoomScheduleOverride[]
 
   @@index([floorId, status])
   @@map("rooms")
@@ -238,6 +256,7 @@ model TimeSlot {
 
   roomBookings     RoomBooking[]
   roomBookingSlots RoomBookingSlot[]
+  scheduleOverrides RoomScheduleOverride[]
 
   @@map("time_slots")
 }
@@ -362,6 +381,10 @@ model ClassSection {
   sectionCode      String   @map("section_code")
   note             String?
   capacity         Int      @default(40)
+  processWeight    Float?   @default(20) @map("process_weight")
+  practiceWeight   Float?   @default(20) @map("practice_weight")
+  midtermWeight    Float?   @default(20) @map("midterm_weight")
+  finalWeight      Float?   @default(40) @map("final_weight")
   registrationOpen Boolean  @default(true) @map("registration_open")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -394,6 +417,7 @@ model ClassMeeting {
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
   classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  scheduleOverrides RoomScheduleOverride[] @relation("RoomScheduleOverrideClassMeeting")
 
   @@index([classSectionId, dayOfWeek, startTime])
   @@map("class_meetings")
@@ -482,6 +506,10 @@ model Grade {
   midterm       Float?
   finalExam     Float?   @map("final_exam")
   assignment    Float?
+  processScore  Float?   @map("process_score")
+  practiceScore Float?   @map("practice_score")
+  midtermScore  Float?   @map("midterm_score")
+  finalScore    Float?   @map("final_score")
   totalScore    Float?   @map("total_score")
   letterGrade   String?  @map("letter_grade")
   gradePoint    Float?   @map("grade_point")
@@ -496,6 +524,30 @@ model Grade {
 
   @@unique([userId, courseId, semesterId])
   @@map("grades")
+}
+
+model RoomScheduleOverride {
+  id                   String                   @id @default(uuid())
+  roomId               String                   @map("room_id")
+  overrideDate         DateTime                 @map("override_date") @db.Date
+  timeSlotId           String                   @map("time_slot_id")
+  type                 RoomScheduleOverrideType
+  title                String
+  note                 String?
+  sourceClassMeetingId String?                  @map("source_class_meeting_id")
+  createdById          String                   @map("created_by_id")
+  createdAt            DateTime                 @default(now()) @map("created_at")
+  updatedAt            DateTime                 @updatedAt @map("updated_at")
+
+  room               Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timeSlot           TimeSlot     @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  sourceClassMeeting ClassMeeting? @relation("RoomScheduleOverrideClassMeeting", fields: [sourceClassMeetingId], references: [id], onDelete: SetNull)
+  createdBy          User         @relation("RoomScheduleOverrideCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([roomId, overrideDate, timeSlotId])
+  @@index([sourceClassMeetingId, overrideDate])
+  @@index([createdById, createdAt])
+  @@map("room_schedule_overrides")
 }
 
 model Notification {
@@ -532,8 +584,9 @@ model LibraryBook {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  copies       LibraryBookCopy[]
-  reservations LibraryReservation[]
+  copies        LibraryBookCopy[]
+  loanRequests  LibraryLoanRequest[]
+  reservations  LibraryReservation[]
 
   @@index([title])
   @@index([isActive])
@@ -550,8 +603,9 @@ model LibraryBookCopy {
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime              @updatedAt @map("updated_at")
 
-  book  LibraryBook   @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  loans LibraryLoan[]
+  book         LibraryBook          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  loans        LibraryLoan[]
+  loanRequests LibraryLoanRequest[]
 
   @@index([bookId, status])
   @@map("library_book_copies")
@@ -577,6 +631,30 @@ model LibraryLoan {
   @@index([borrowerId, status])
   @@index([copyId, status])
   @@map("library_loans")
+}
+
+model LibraryLoanRequest {
+  id          String                   @id @default(uuid())
+  requesterId String                   @map("requester_id")
+  approvedById String?                 @map("approved_by_id")
+  bookId      String                   @map("book_id")
+  copyId      String                   @map("copy_id")
+  status      LibraryLoanRequestStatus @default(pending)
+  note        String?
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  approvedAt  DateTime?                @map("approved_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  requester User            @relation("LibraryLoanRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  approvedBy User?          @relation("LibraryLoanRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  book       LibraryBook    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  copy       LibraryBookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, status])
+  @@index([approvedById, status])
+  @@index([bookId, status])
+  @@index([copyId, status])
+  @@map("library_loan_requests")
 }
 
 model LibraryReservation {
@@ -906,6 +984,19 @@ model PaymentTransaction {
 
   @@index([vehicleId, status])
   @@map("payment_transactions")
+}
+
+model PaymentWebhookEvent {
+  id              String   @id @default(uuid())
+  provider        String
+  providerEventId String   @map("provider_event_id")
+  providerOrderId String   @map("provider_order_id")
+  payload         Json
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, providerEventId])
+  @@index([providerOrderId])
+  @@map("payment_webhook_events")
 }
 
 model ParkingSession {
