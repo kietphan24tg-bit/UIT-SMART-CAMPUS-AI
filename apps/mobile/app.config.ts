@@ -32,6 +32,7 @@ const config: ExpoConfig = {
     usesCleartextTraffic: true,
   },
   plugins: [
+    './plugins/with-android-release-network',
     'expo-router',
     'expo-secure-store',
     'expo-font',

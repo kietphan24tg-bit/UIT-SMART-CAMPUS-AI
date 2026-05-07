@@ -43,13 +43,15 @@ function getMetroHost() {
 const configuredBaseUrl =
   Constants.expoConfig?.extra?.apiUrl ?? process.env.EXPO_PUBLIC_API_URL;
 const metroHost = getMetroHost();
+const fallbackDevBaseUrl = metroHost
+  ? `http://${metroHost}:3000/api/v1`
+  : 'http://127.0.0.1:3000/api/v1';
 export const API_BASE_URL =
-  configuredBaseUrl ??
-  (metroHost ? `http://${metroHost}:3000/api/v1` : 'http://127.0.0.1:3000/api/v1');
-export const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  configuredBaseUrl ?? (__DEV__ ? fallbackDevBaseUrl : null);
+export const API_ORIGIN = API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? null;
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL ?? undefined,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -60,6 +62,18 @@ type MultipartRequestOptions = {
   fileName: string;
   mimeType: string;
 };
+
+function createApiConfigurationError() {
+  return new Error(
+    'EXPO_PUBLIC_API_URL chưa được cấu hình cho bản build này. APK release đang không biết phải gọi backend nào.',
+  );
+}
+
+function assertApiBaseUrlConfigured() {
+  if (!API_BASE_URL) {
+    throw createApiConfigurationError();
+  }
+}
 
 function buildAxiosDebugPayload(error: AxiosError) {
   const method = error.config?.method?.toUpperCase() ?? 'GET';
@@ -131,6 +145,7 @@ async function refreshAccessToken() {
   }
 
   refreshTokenRequest = (async () => {
+    assertApiBaseUrlConfigured();
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
       return null;
@@ -182,6 +197,7 @@ function shouldAttemptRefresh(config: RetryableRequestConfig) {
 }
 
 apiClient.interceptors.request.use(async (config) => {
+  assertApiBaseUrlConfigured();
   const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -259,6 +275,7 @@ export async function postMultipart<T>(
   path: string,
   { fieldName, uri, fileName, mimeType }: MultipartRequestOptions,
 ): Promise<T> {
+  assertApiBaseUrlConfigured();
   const formData = new FormData();
   formData.append(fieldName, {
     uri,

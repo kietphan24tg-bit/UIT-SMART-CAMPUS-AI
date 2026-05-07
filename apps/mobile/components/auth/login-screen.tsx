@@ -10,6 +10,23 @@ import { FormField, PrimaryButton } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 
+function getLoginErrorMessage(error: unknown) {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'statusCode' in error &&
+    (error as { statusCode?: number }).statusCode === 401
+  ) {
+    return 'Email hoặc mật khẩu chưa đúng.';
+  }
+
+  if (error instanceof Error && error.message.includes('EXPO_PUBLIC_API_URL')) {
+    return 'Bản APK này chưa được cấu hình địa chỉ máy chủ. Hãy build lại với EXPO_PUBLIC_API_URL đúng.';
+  }
+
+  return 'Không thể kết nối máy chủ đăng nhập. Kiểm tra API URL, mạng, và server rồi thử lại.';
+}
+
 export function LoginScreen() {
   const theme = useAppTheme();
   const login = useAuthStore((state) => state.login);
@@ -30,8 +47,8 @@ export function LoginScreen() {
     try {
       await login(email.trim(), password);
       router.replace('/home');
-    } catch {
-      setError('Email hoặc mật khẩu chưa đúng.');
+    } catch (error) {
+      setError(getLoginErrorMessage(error));
     } finally {
       setLoading(false);
     }
