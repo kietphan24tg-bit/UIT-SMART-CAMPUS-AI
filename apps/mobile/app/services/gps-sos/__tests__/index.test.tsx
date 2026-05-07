@@ -136,6 +136,33 @@ describe('GPS SOS screens', () => {
     expect(mockRouter.back).toHaveBeenCalled();
   });
 
+  it('accepts TrackAsia geometry routes instead of only Google-style overview polyline', async () => {
+    mockParams = { sosId: 'sos-1' };
+    mockSosApi.getRoute.mockResolvedValue({
+      sosId: 'sos-1',
+      route: {
+        routes: [
+          {
+            geometry: {
+              coordinates: [
+                [106.8, 10.87],
+                [106.801, 10.871],
+              ],
+            },
+            distance: 1500,
+            duration: 420,
+          },
+        ],
+      },
+    });
+
+    const screen = renderWithClient(<SosFullMapScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByText('Lộ trình realtime: 1.50 km · 7 phút')).toBeTruthy(),
+    );
+  });
+
   it('shows cancellation status immediately from realtime event', async () => {
     mockParams = { sosId: 'sos-1' };
     useSosRealtimeStore.getState().registerEvent({

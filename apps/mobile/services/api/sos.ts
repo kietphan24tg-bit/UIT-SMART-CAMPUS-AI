@@ -57,7 +57,16 @@ export interface SosRouteData {
   overview_polyline?: {
     points?: string;
   };
+  geometry?:
+    | string
+    | {
+        points?: string;
+        coordinates?: number[][];
+        type?: string;
+      };
   legs?: SosRouteLeg[];
+  distance?: number;
+  duration?: number;
 }
 
 export interface SosRouteResponse {

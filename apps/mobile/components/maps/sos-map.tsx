@@ -20,6 +20,7 @@ interface SosMapProps {
   markers: SosMapMarker[];
   viewerLocation: ViewerLocation;
   routePolyline?: string | null;
+  routeCoordinates?: Array<[number, number]> | null;
   height?: number | null;
   onPress?: () => void;
 }
@@ -28,6 +29,7 @@ export function SosMap({
   markers,
   viewerLocation,
   routePolyline,
+  routeCoordinates,
   height = 280,
   onPress,
 }: SosMapProps) {
@@ -37,6 +39,7 @@ export function SosMap({
     markers,
     viewerLocation,
     routePolyline,
+    routeCoordinates,
     isDark: theme.isDark,
     trackAsiaStyleUrl,
   });
@@ -90,12 +93,14 @@ function createMapHtml({
   markers,
   viewerLocation,
   routePolyline,
+  routeCoordinates,
   isDark,
   trackAsiaStyleUrl,
 }: {
   markers: SosMapMarker[];
   viewerLocation: ViewerLocation;
   routePolyline?: string | null;
+  routeCoordinates?: Array<[number, number]> | null;
   isDark: boolean;
   trackAsiaStyleUrl?: string;
 }) {
@@ -103,6 +108,7 @@ function createMapHtml({
     markers,
     viewerLocation,
     routePolyline: routePolyline || null,
+    routeCoordinates: routeCoordinates || null,
   });
   const tileLayer = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const textColor = isDark ? '#E2E8F0' : '#0F172A';
@@ -202,7 +208,9 @@ function createMapHtml({
     }
 
     map.on('load', () => {
-      const routeCoords = decodePolyline(payload.routePolyline);
+      const routeCoords = Array.isArray(payload.routeCoordinates) && payload.routeCoordinates.length
+        ? payload.routeCoordinates
+        : decodePolyline(payload.routePolyline);
       if (routeCoords.length) {
         map.addSource('route', {
           type: 'geojson',
@@ -277,7 +285,9 @@ function createMapHtml({
       points.push([payload.viewerLocation.lat, payload.viewerLocation.lng]);
     }
 
-    const routeCoords = decodePolyline(payload.routePolyline).map((coord) => [coord[1], coord[0]]);
+    const routeCoords = Array.isArray(payload.routeCoordinates) && payload.routeCoordinates.length
+      ? payload.routeCoordinates.map((coord) => [coord[1], coord[0]])
+      : decodePolyline(payload.routePolyline).map((coord) => [coord[1], coord[0]]);
     if (routeCoords.length) {
       L.polyline(routeCoords, {
         color: '${routeColor}',

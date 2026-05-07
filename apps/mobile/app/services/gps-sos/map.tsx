@@ -195,7 +195,8 @@ export default function SosFullMapScreen() {
         <SosMap
           markers={markers}
           viewerLocation={viewerLocation}
-          routePolyline={routeData?.overview_polyline?.points ?? null}
+          routePolyline={extractRoutePolyline(routeData)}
+          routeCoordinates={extractRouteCoordinates(routeData)}
           height={null}
         />
 
@@ -264,8 +265,12 @@ function formatRouteInfo(route: SosRouteData | null) {
   }
 
   const legs = route.legs ?? [];
-  const distanceMeters = legs.reduce((sum, leg) => sum + Number(leg.distance?.value ?? 0), 0);
-  const durationSeconds = legs.reduce((sum, leg) => sum + Number(leg.duration?.value ?? 0), 0);
+  const distanceMeters =
+    legs.reduce((sum, leg) => sum + Number(leg.distance?.value ?? 0), 0) ||
+    Number(route.distance ?? 0);
+  const durationSeconds =
+    legs.reduce((sum, leg) => sum + Number(leg.duration?.value ?? 0), 0) ||
+    Number(route.duration ?? 0);
 
   if (distanceMeters <= 0 && durationSeconds <= 0) {
     return 'Đã cập nhật lộ trình realtime.';
@@ -274,6 +279,45 @@ function formatRouteInfo(route: SosRouteData | null) {
   const distanceKm = (distanceMeters / 1000).toFixed(2);
   const minutes = Math.max(1, Math.round(durationSeconds / 60));
   return `Lộ trình realtime: ${distanceKm} km · ${minutes} phút`;
+}
+
+function extractRoutePolyline(route: SosRouteData | null) {
+  if (!route) {
+    return null;
+  }
+
+  if (route.overview_polyline?.points) {
+    return route.overview_polyline.points;
+  }
+
+  if (typeof route.geometry === 'string' && route.geometry.trim()) {
+    return route.geometry;
+  }
+
+  if (route.geometry && typeof route.geometry === 'object' && route.geometry.points) {
+    return route.geometry.points;
+  }
+
+  return null;
+}
+
+function extractRouteCoordinates(route: SosRouteData | null): Array<[number, number]> | null {
+  const geometry = route?.geometry;
+  if (!geometry || typeof geometry !== 'object' || !Array.isArray(geometry.coordinates)) {
+    return null;
+  }
+
+  const coordinates = geometry.coordinates
+    .filter(
+      (coord): coord is number[] =>
+        Array.isArray(coord) &&
+        coord.length >= 2 &&
+        Number.isFinite(coord[0]) &&
+        Number.isFinite(coord[1]),
+    )
+    .map((coord) => [Number(coord[0]), Number(coord[1])] as [number, number]);
+
+  return coordinates.length ? coordinates : null;
 }
 
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
