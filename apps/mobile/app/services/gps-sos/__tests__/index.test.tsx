@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import GpsSosScreen from '../index';
 import SosFullMapScreen from '../map';
@@ -21,6 +20,11 @@ let mockParams: { sosId?: string } = {};
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => mockParams,
+}));
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('@/stores/auth-store');
@@ -55,11 +59,7 @@ function renderWithClient(ui: React.ReactElement) {
     },
   });
 
-  return render(
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </SafeAreaProvider>,
-  );
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 const sosRecord = {
