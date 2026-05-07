@@ -252,6 +252,10 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  EXPO_PUBLIC_TRACK_ASIA_MAP_KEY = '';
+
+  @IsString()
+  @IsOptional()
   OPEN_LIBRARY_USER_AGENT = 'smart-campus-demo/1.0';
 }
 

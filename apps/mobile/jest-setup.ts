@@ -143,6 +143,24 @@ jest.mock('expo-constants', () => ({
   expoConfig: { extra: { apiUrl: 'http://localhost:3000/api/v1' } },
 }));
 
+jest.mock('expo-location', () => ({
+  Accuracy: {
+    Highest: 'Highest',
+    BestForNavigation: 'BestForNavigation',
+  },
+  requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getCurrentPositionAsync: jest.fn().mockResolvedValue({
+    coords: {
+      latitude: 10.87,
+      longitude: 106.8,
+      accuracy: 5,
+    },
+  }),
+  watchPositionAsync: jest.fn().mockResolvedValue({
+    remove: jest.fn(),
+  }),
+}));
+
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(),
   hideAsync: jest.fn(),

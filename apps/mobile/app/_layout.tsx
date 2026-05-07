@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { SosRealtimeProvider } from '@/components/system/sos-realtime-provider';
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
 import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
 import { appQueryClient } from '@/services/query-client';
@@ -98,12 +99,14 @@ export default function RootLayout() {
     <QueryClientProvider client={appQueryClient}>
       <ThemePreferenceProvider>
         <ParkingRealtimeProvider>
-          <>
-            <RootNavigator isStartupScreenVisible={isStartupScreenVisible} />
-            {isStartupScreenVisible ? (
-              <StartupLoadingScreen onReadyToDisplay={handleStartupScreenReady} />
-            ) : null}
-          </>
+          <SosRealtimeProvider>
+            <>
+              <RootNavigator isStartupScreenVisible={isStartupScreenVisible} />
+              {isStartupScreenVisible ? (
+                <StartupLoadingScreen onReadyToDisplay={handleStartupScreenReady} />
+              ) : null}
+            </>
+          </SosRealtimeProvider>
         </ParkingRealtimeProvider>
       </ThemePreferenceProvider>
     </QueryClientProvider>
@@ -148,6 +151,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/canteen/index" />
         <Stack.Screen name="services/canteen/admin" />
         <Stack.Screen name="services/gps-sos/index" />
+        <Stack.Screen name="services/gps-sos/map" />
         <Stack.Screen name="services/chatbot/index" />
         <Stack.Screen name="services/events/index" />
         <Stack.Screen name="services/events/[slug]" />

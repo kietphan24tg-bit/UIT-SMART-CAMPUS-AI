@@ -15,6 +15,9 @@ jest.mock('@expo-google-fonts/inter', () => ({
 jest.mock('@/components/system/parking-realtime-provider', () => ({
   ParkingRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@/components/system/sos-realtime-provider', () => ({
+  SosRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 jest.mock('@/theme', () => ({
   ThemePreferenceProvider: ({ children }: { children: React.ReactNode }) => children,
