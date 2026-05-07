@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateSosRequestDto {
@@ -28,12 +29,14 @@ export class CreateSosRequestDto {
 
 export class SosRouteQueryDto {
   @ApiProperty()
+  @Type(() => Number)
   @IsNumber()
   @Min(-90)
   @Max(90)
   fromLat!: number;
 
   @ApiProperty()
+  @Type(() => Number)
   @IsNumber()
   @Min(-180)
   @Max(180)

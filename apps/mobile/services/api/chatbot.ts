@@ -5,6 +5,7 @@ export interface ChatbotQueryResponse {
   answer: string;
   citations: Array<Record<string, unknown>>;
   deepLinks: string[];
+  suggestedQuestions: string[];
   confidence: number;
   intent: string;
 }

@@ -93,9 +93,28 @@ async function buildStoredAuthDebugPayload() {
   };
 }
 
+function hasStoredSessionTokens(authDebugPayload: {
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+}) {
+  return authDebugPayload.hasAccessToken || authDebugPayload.hasRefreshToken;
+}
+
 function isCanteenDebugRequest(config: AxiosRequestConfig | undefined) {
   const requestUrl = String(config?.url ?? '');
   return requestUrl.includes('/canteen/catalog');
+}
+
+function isRefreshableUnauthorizedError(
+  error: AxiosError,
+  config: RetryableRequestConfig | undefined,
+) {
+  return (
+    error.response?.status === 401 &&
+    config != null &&
+    !config._retry &&
+    shouldAttemptRefresh(config)
+  );
 }
 
 let refreshTokenRequest: Promise<string | null> | null = null;
@@ -151,6 +170,10 @@ async function refreshAccessToken() {
   }
 }
 
+export async function tryRefreshAccessToken() {
+  return refreshAccessToken();
+}
+
 function shouldAttemptRefresh(config: RetryableRequestConfig) {
   const requestUrl = String(config.url ?? '');
   return !requestUrl.includes('/auth/login') &&
@@ -185,30 +208,29 @@ apiClient.interceptors.response.use(
   (response) => response.data?.data ?? response.data,
   async (error: AxiosError) => {
     const authDebugPayload = await buildStoredAuthDebugPayload();
-    console.error('[apiClient] request failed', {
-      ...buildAxiosDebugPayload(error),
-      ...authDebugPayload,
-      hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
-    });
-    if (isCanteenDebugRequest(error.config)) {
-      console.warn('[apiClient] canteen response auth debug', {
-        method: error.config?.method?.toUpperCase() ?? 'GET',
-        url: error.config?.url,
-        status: error.response?.status,
-        hasResponse: error.response != null,
-        responseData: error.response?.data,
+    const originalRequest = error.config as RetryableRequestConfig | undefined;
+    const isRecoverable401 = isRefreshableUnauthorizedError(error, originalRequest);
+
+    if (!isRecoverable401) {
+      console.error('[apiClient] request failed', {
+        ...buildAxiosDebugPayload(error),
         ...authDebugPayload,
         hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
       });
+      if (isCanteenDebugRequest(error.config)) {
+        console.warn('[apiClient] canteen response auth debug', {
+          method: error.config?.method?.toUpperCase() ?? 'GET',
+          url: error.config?.url,
+          status: error.response?.status,
+          hasResponse: error.response != null,
+          responseData: error.response?.data,
+          ...authDebugPayload,
+          hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
+        });
+      }
     }
-    const originalRequest = error.config as RetryableRequestConfig | undefined;
 
-    if (
-      error.response?.status === 401 &&
-      originalRequest &&
-      !originalRequest._retry &&
-      shouldAttemptRefresh(originalRequest)
-    ) {
+    if (isRecoverable401 && originalRequest) {
       originalRequest._retry = true;
       const accessToken = await refreshAccessToken();
 
@@ -220,6 +242,13 @@ apiClient.interceptors.response.use(
         return apiClient.request(originalRequest);
       }
 
+      if (hasStoredSessionTokens(authDebugPayload)) {
+        console.error('[apiClient] session refresh failed after 401', {
+          ...buildAxiosDebugPayload(error),
+          ...authDebugPayload,
+          hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
+        });
+      }
       await clearStoredTokens();
     }
     return Promise.reject(error.response?.data ?? error);

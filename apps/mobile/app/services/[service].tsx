@@ -50,6 +50,8 @@ const CAMPUS_MAP_GUIDE = [
 export default function ServiceDetailScreen() {
   const theme = useAppTheme();
   const role = useAuthStore((state) => state.user?.role);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const router = useRouter();
   const params = useLocalSearchParams<{ service?: string }>();
   const serviceId = params.service ?? '';
@@ -67,7 +69,7 @@ export default function ServiceDetailScreen() {
 
       return { overview, semesters };
     },
-    enabled: isGradesViewer,
+    enabled: isGradesViewer && isHydrated && isAuthenticated,
   });
 
   if (serviceId === 'attendance') {

@@ -3,9 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { registerAuthSessionHandlers } from '@/services/api/auth-session';
+import { tryRefreshAccessToken } from '@/services/api/client';
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
-import { syncPushToken, unregisterPushTokenFromBackend } from '@/services/notifications/push';
+import { appQueryClient } from '@/services/query-client';
 
 type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> &
   Partial<
@@ -38,20 +39,6 @@ interface AuthState {
 const TOKEN_KEY = 'auth_access_token';
 const REFRESH_KEY = 'auth_refresh_token';
 
-async function syncPushTokenSafely() {
-  try {
-    await syncPushToken();
-  } catch (error) {
-    // Best-effort sync: auth flow should continue even if push registration fails.
-    if (__DEV__) {
-      console.warn(
-        '[push] Unable to register Expo push token:',
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
-}
-
 async function logStoredTokens(context: 'login' | 'register') {
   if (!__DEV__) {
     return;
@@ -66,6 +53,11 @@ async function logStoredTokens(context: 'login' | 'register') {
     storedAccessTokenAfterLogin: Boolean(storedAccessTokenAfterLogin),
     storedRefreshTokenAfterLogin: Boolean(storedRefreshTokenAfterLogin),
   });
+}
+
+async function clearSessionQueries() {
+  await appQueryClient.cancelQueries();
+  appQueryClient.clear();
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -96,7 +88,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
-    await syncPushTokenSafely();
   },
 
   register: async (data) => {
@@ -113,21 +104,32 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const user = await authApi.getMe(tokens.accessToken);
     set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
-    await syncPushTokenSafely();
   },
 
   logout: async () => {
-    await unregisterPushTokenFromBackend();
+    set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
+    await clearSessionQueries();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
-    set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
   },
 
   hydrate: async () => {
     try {
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
-        const user = await usersApi.getProfile();
+        let user: UserInfo;
+
+        try {
+          user = await usersApi.getProfile();
+        } catch {
+          const refreshedAccessToken = await tryRefreshAccessToken();
+          if (!refreshedAccessToken) {
+            throw new Error('Unable to refresh access token during hydrate');
+          }
+
+          user = await authApi.getMe(refreshedAccessToken);
+        }
+
         const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
         set({
           isHydrated: true,
@@ -135,7 +137,6 @@ export const useAuthStore = create<AuthState>((set) => ({
           user,
           accessToken: latestToken ?? token,
         });
-        await syncPushTokenSafely();
         return;
       }
 
@@ -162,7 +163,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       user,
       accessToken: latestToken ?? token,
     });
-    await syncPushTokenSafely();
     return user;
   },
 }));
@@ -176,6 +176,7 @@ registerAuthSessionHandlers({
     }));
   },
   onSessionInvalidated: () => {
+    void clearSessionQueries();
     useAuthStore.setState({
       isHydrated: true,
       isAuthenticated: false,

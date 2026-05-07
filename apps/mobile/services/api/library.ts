@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, postMultipart } from './client';
 
 export interface LibraryBookListItem {
   id: string;
@@ -53,6 +53,11 @@ export interface LibraryBookDetail {
   copies: LibraryBookCopyRecord[];
 }
 
+export interface AdminLibraryBookRecord extends LibraryBookDetail {
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LibraryLoanRecord {
   id: string;
   status: 'borrowed' | 'overdue' | 'returned';
@@ -68,6 +73,47 @@ export interface LibraryLoanRecord {
   copy: {
     id: string;
     copyCode: string;
+  };
+}
+
+export interface LibraryLoanRequestRecord {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  note: string | null;
+  createdAt: string;
+  approvedAt: string | null;
+  requester: {
+    id: string;
+    studentId: string | null;
+    fullName: string;
+    email: string;
+  };
+  approvedBy: {
+    id: string;
+    studentId: string | null;
+    fullName: string;
+    email: string;
+  } | null;
+  book: {
+    id: string;
+    title: string;
+    authors: string;
+  };
+  copy: {
+    id: string;
+    copyCode: string;
+  };
+}
+
+export interface AdminLibraryLoanRecord extends LibraryLoanRecord {
+  borrowNote: string | null;
+  returnNote: string | null;
+  borrower: {
+    id: string;
+    studentId: string | null;
+    fullName: string;
+    email: string;
+    role: string;
   };
 }
 
@@ -113,8 +159,173 @@ export const libraryApi = {
     return (await apiClient.get(`/library/books/${encodeURIComponent(bookId)}`)) as LibraryBookDetail;
   },
 
+  getAdminBooks: async (): Promise<AdminLibraryBookRecord[]> => {
+    return (await apiClient.get('/library/admin/books')) as AdminLibraryBookRecord[];
+  },
+
+  getAdminLoanRequests: async (
+    status?: LibraryLoanRequestRecord['status'],
+  ): Promise<LibraryLoanRequestRecord[]> => {
+    return (await apiClient.get('/library/admin/loan-requests', {
+      params: status ? { status } : undefined,
+    })) as LibraryLoanRequestRecord[];
+  },
+
+  approveLoanRequest: async (requestId: string) => {
+    return (await apiClient.patch(
+      `/library/admin/loan-requests/${encodeURIComponent(requestId)}/approve`,
+    )) as LibraryLoanRequestRecord;
+  },
+
+  rejectLoanRequest: async (requestId: string) => {
+    return (await apiClient.patch(
+      `/library/admin/loan-requests/${encodeURIComponent(requestId)}/reject`,
+    )) as LibraryLoanRequestRecord;
+  },
+
+  uploadBookCover: async (uri: string, fileName = 'book-cover.jpg', mimeType = 'image/jpeg') => {
+    return postMultipart<{ key: string; imageUrl: string }>('/library/admin/books/cover', {
+      fieldName: 'cover',
+      uri,
+      fileName,
+      mimeType,
+    });
+  },
+
+  createAdminBook: async (payload: {
+    title: string;
+    authors: string;
+    subtitle?: string;
+    openLibraryId?: string;
+    isbn13?: string;
+    subjects?: string[];
+    publisher?: string;
+    publishedAt?: string;
+    language?: string;
+    coverUrl?: string;
+    description?: string;
+    shelfCode?: string;
+    isActive?: boolean;
+  }) => {
+    return (await apiClient.post('/library/admin/books', payload)) as AdminLibraryBookRecord;
+  },
+
+  updateAdminBook: async (
+    bookId: string,
+    payload: Partial<{
+      title: string;
+      authors: string;
+      subtitle: string;
+      openLibraryId: string;
+      isbn13: string;
+      subjects: string[];
+      publisher: string;
+      publishedAt: string;
+      language: string;
+      coverUrl: string;
+      description: string;
+      shelfCode: string;
+      isActive: boolean;
+    }>,
+  ) => {
+    return (await apiClient.patch(`/library/admin/books/${encodeURIComponent(bookId)}`, payload)) as AdminLibraryBookRecord;
+  },
+
+  deleteAdminBook: async (bookId: string) => {
+    return (await apiClient.delete(`/library/admin/books/${encodeURIComponent(bookId)}`)) as {
+      id: string;
+      deleted: boolean;
+    };
+  },
+
+  createBookCopy: async (
+    bookId: string,
+    payload: {
+      copyCode: string;
+      conditionNote?: string;
+      acquiredAt?: string;
+    },
+  ) => {
+    return (await apiClient.post(`/library/admin/books/${encodeURIComponent(bookId)}/copies`, payload)) as LibraryBookCopyRecord;
+  },
+
+  updateBookCopy: async (
+    copyId: string,
+    payload: Partial<{
+      copyCode: string;
+      conditionNote: string;
+      acquiredAt: string;
+    }>,
+  ) => {
+    return (await apiClient.patch(`/library/admin/copies/${encodeURIComponent(copyId)}`, payload)) as LibraryBookCopyRecord;
+  },
+
+  deleteBookCopy: async (copyId: string) => {
+    return (await apiClient.delete(`/library/admin/copies/${encodeURIComponent(copyId)}`)) as {
+      id: string;
+      deleted: boolean;
+    };
+  },
+
+  getAdminLoans: async (): Promise<AdminLibraryLoanRecord[]> => {
+    return (await apiClient.get('/library/admin/loans')) as AdminLibraryLoanRecord[];
+  },
+
+  checkInLoan: async (loanId: string, note?: string) => {
+    return (await apiClient.patch(`/library/admin/loans/${encodeURIComponent(loanId)}/check-in`, {
+      ...(note ? { note } : {}),
+    })) as { id: string; status: 'returned'; returnedAt: string | null; returnNote: string | null };
+  },
+
+  markCopyLost: async (copyId: string, conditionNote?: string) => {
+    return (await apiClient.patch(`/library/admin/copies/${encodeURIComponent(copyId)}/mark-lost`, {
+      ...(conditionNote ? { conditionNote } : {}),
+    })) as LibraryBookCopyRecord;
+  },
+
+  markCopyMaintenance: async (copyId: string, conditionNote?: string) => {
+    return (await apiClient.patch(`/library/admin/copies/${encodeURIComponent(copyId)}/mark-maintenance`, {
+      ...(conditionNote ? { conditionNote } : {}),
+    })) as LibraryBookCopyRecord;
+  },
+
   getMyLoans: async (): Promise<LibraryLoanRecord[]> => {
     return (await apiClient.get('/library/me/loans')) as LibraryLoanRecord[];
+  },
+
+  getMyLoanRequests: async (status?: LibraryLoanRequestRecord['status']): Promise<LibraryLoanRequestRecord[]> => {
+    return (await apiClient.get('/library/me/loan-requests', {
+      params: status ? { status } : undefined,
+    })) as LibraryLoanRequestRecord[];
+  },
+
+  createLoanRequest: async ({
+    bookId,
+    copyId,
+    note,
+  }: {
+    bookId: string;
+    copyId: string;
+    note?: string;
+  }) => {
+    return (await apiClient.post('/library/loan-requests', {
+      bookId,
+      copyId,
+      ...(note ? { note } : {}),
+    })) as LibraryLoanRequestRecord;
+  },
+
+  cancelLoanRequest: async (requestId: string) => {
+    return (await apiClient.patch(
+      `/library/loan-requests/${encodeURIComponent(requestId)}/cancel`,
+    )) as LibraryLoanRequestRecord;
+  },
+
+  deleteLoanRequest: async (requestId: string) => {
+    return (await apiClient.delete(`/library/loan-requests/${encodeURIComponent(requestId)}`)) as {
+      id: string;
+      deleted: boolean;
+    };
   },
 
   getMyReservations: async (): Promise<LibraryReservationRecord[]> => {

@@ -387,20 +387,16 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
     {
       id: 'course-registration',
       title: 'Đăng ký môn học',
-      summary: isStudentRole
-        ? 'Đăng ký học phần theo lớp mở.'
-        : 'Tính năng dành cho tài khoản sinh viên.',
+      summary: 'Tính năng đang được cập nhật và tạm thời chưa khả dụng trong ứng dụng.',
       category: 'Học vụ',
       icon: 'document-text-outline',
-      supportState: isStudentRole ? 'live' : 'unsupported',
-      isInteractive: isStudentRole,
-      disabledReason: isStudentRole ? undefined : 'Chỉ tài khoản sinh viên mới có thể đăng ký học phần.',
+      supportState: 'unsupported',
+      isInteractive: false,
+      disabledReason: 'Đăng ký môn học hiện đang được cập nhật và tạm thời chưa khả dụng trong ứng dụng.',
       lastVerifiedSource: 'schedule',
-      primaryAction: isStudentRole ? 'Mở đăng ký' : 'Xem trạng thái',
-      route: isStudentRole ? '/services/course-registration' : '/services',
-      description: isStudentRole
-        ? 'Đăng ký, hủy đăng ký và theo dõi trạng thái học phần.'
-        : 'Tính năng đăng ký học phần chỉ áp dụng cho sinh viên.',
+      primaryAction: 'Xem trạng thái',
+      route: '/services',
+      description: 'Tính năng đăng ký học phần đang được cập nhật và sẽ mở lại sau.',
     },
     {
       id: 'attendance',
@@ -485,7 +481,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       isInteractive: true,
       lastVerifiedSource: 'manual',
       primaryAction: 'Mở thư viện',
-      route: '/services/library',
+      route: isAdminRole(role) ? '/services/library/admin' : '/services/library',
       description: 'Theo dõi bản sao còn sẵn, giữ chỗ và gia hạn theo chính sách vai trò.',
     },
     {

@@ -5,6 +5,7 @@ import { useAuthStore } from '../auth-store';
 
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
+import { tryRefreshAccessToken } from '@/services/api/client';
 
 jest.mock('@/services/api/auth', () => ({
   authApi: {
@@ -14,15 +15,14 @@ jest.mock('@/services/api/auth', () => ({
   },
 }));
 
+jest.mock('@/services/api/client', () => ({
+  tryRefreshAccessToken: jest.fn(),
+}));
+
 jest.mock('@/services/api', () => ({
   usersApi: {
     getProfile: jest.fn(),
   },
-}));
-
-jest.mock('@/services/notifications/push', () => ({
-  syncPushToken: jest.fn().mockResolvedValue(undefined),
-  unregisterPushTokenFromBackend: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockUser = {
@@ -47,6 +47,7 @@ const mockedAuthApi = authApi as unknown as {
 const mockedUsersApi = usersApi as unknown as {
   getProfile: jest.Mock;
 };
+const mockedTryRefreshAccessToken = tryRefreshAccessToken as jest.Mock;
 
 describe('useAuthStore', () => {
   beforeEach(() => {
@@ -158,12 +159,32 @@ describe('useAuthStore', () => {
     it('should clear tokens on hydration error', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('bad-token');
       mockedUsersApi.getProfile.mockRejectedValue(new Error('Unauthorized'));
+      mockedTryRefreshAccessToken.mockResolvedValue(null);
 
       await useAuthStore.getState().hydrate();
 
       expect(useAuthStore.getState().isHydrated).toBe(true);
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
+    });
+
+    it('should refresh session and retry profile on hydration 401', async () => {
+      (SecureStore.getItemAsync as jest.Mock)
+        .mockResolvedValueOnce('expired-token')
+        .mockResolvedValueOnce('refreshed-token');
+      mockedUsersApi.getProfile.mockRejectedValue(new Error('Unauthorized'));
+      mockedTryRefreshAccessToken.mockResolvedValue('refreshed-token');
+      mockedAuthApi.getMe.mockResolvedValue(mockUser);
+
+      await useAuthStore.getState().hydrate();
+
+      const state = useAuthStore.getState();
+      expect(mockedTryRefreshAccessToken).toHaveBeenCalledTimes(1);
+      expect(mockedAuthApi.getMe).toHaveBeenCalledWith('refreshed-token');
+      expect(state.isHydrated).toBe(true);
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.user).toEqual(mockUser);
+      expect(state.accessToken).toBe('refreshed-token');
     });
   });
 });

@@ -21,16 +21,6 @@ jest.mock('@/theme', () => ({
   useResolvedThemeMode: () => 'light',
 }));
 
-jest.mock('@/services/notifications/push-receiver', () => ({
-  configureForegroundNotificationHandler: jest.fn(),
-  flushPendingNotificationNavigation: jest.fn(),
-  subscribePushNotificationEvents: jest.fn(() => jest.fn()),
-}));
-
-jest.mock('@/services/notifications/push-token-listener', () => ({
-  subscribeExpoPushTokenChanges: jest.fn(() => jest.fn()),
-}));
-
 jest.mock('@/stores/auth-store');
 
 const splashScreen = jest.requireMock('expo-splash-screen') as {

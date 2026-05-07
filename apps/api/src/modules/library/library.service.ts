@@ -4,16 +4,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { LibraryBookCopyStatus, LibraryLoanStatus, Role } from '@prisma/client';
+import {
+  LibraryBookCopyStatus,
+  LibraryLoanRequestStatus,
+  LibraryLoanStatus,
+  Role,
+} from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AvatarStorageService, type AvatarUploadFile } from '../storage/avatar-storage.service';
 
 import type {
   CheckoutLibraryLoanDto,
   CreateLibraryBookDto,
   CreateLibraryCopyDto,
+  CreateLibraryLoanRequestDto,
   CreateReservationDto,
   ListLibraryBooksQueryDto,
+  UpdateLibraryCopyDto,
   UpdateLibraryBookDto,
 } from './dto/create-library-book.dto';
 
@@ -24,6 +32,7 @@ const LECTURER_MAX_BORROWED = 5;
 const LECTURER_BORROW_DAYS = 30;
 const LECTURER_MAX_RENEW = 2;
 const RESERVATION_EXPIRES_HOURS = 48;
+const ACTIVE_LOAN_STATUSES: LibraryLoanStatus[] = [LibraryLoanStatus.borrowed, LibraryLoanStatus.overdue];
 
 function normalizePaging(page?: number, limit?: number) {
   const safePage = Number.isInteger(page) && page && page > 0 ? page : 1;
@@ -53,7 +62,10 @@ function getBorrowPolicy(role: Role) {
 
 @Injectable()
 export class LibraryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatarStorageService: AvatarStorageService,
+  ) {}
 
   async listBooks(query: ListLibraryBooksQueryDto) {
     const { page, limit, skip } = normalizePaging(query.page, query.limit);
@@ -136,7 +148,7 @@ export class LibraryService {
     });
 
     if (!book || !book.isActive) {
-      throw new NotFoundException('Không tìm thấy sách');
+      throw new NotFoundException('Khong tim thay sach');
     }
 
     return {
@@ -197,8 +209,387 @@ export class LibraryService {
         bookId,
         copyCode: dto.copyCode.trim(),
         conditionNote: dto.conditionNote?.trim() || null,
+        acquiredAt: dto.acquiredAt ? this.parseOptionalDate(dto.acquiredAt, 'Ngay nhap ban sao khong hop le') : null,
       },
     });
+  }
+
+  async listAdminBooks() {
+    const books = await this.prisma.libraryBook.findMany({
+      include: {
+        copies: {
+          select: {
+            id: true,
+            copyCode: true,
+            status: true,
+            conditionNote: true,
+            acquiredAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ copyCode: 'asc' }],
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { title: 'asc' }],
+    });
+
+    return books.map((book) => ({
+      id: book.id,
+      openLibraryId: book.openLibraryId,
+      isbn13: book.isbn13,
+      title: book.title,
+      subtitle: book.subtitle,
+      authors: book.authors,
+      subjects: book.subjects,
+      publisher: book.publisher,
+      publishedAt: book.publishedAt,
+      language: book.language,
+      coverUrl: book.coverUrl,
+      description: book.description,
+      shelfCode: book.shelfCode,
+      isActive: book.isActive,
+      createdAt: book.createdAt.toISOString(),
+      updatedAt: book.updatedAt.toISOString(),
+      availableCopies: book.copies.filter((copy) => copy.status === LibraryBookCopyStatus.available).length,
+      copies: book.copies.map((copy) => ({
+        id: copy.id,
+        copyCode: copy.copyCode,
+        status: copy.status,
+        conditionNote: copy.conditionNote,
+        acquiredAt: toISO(copy.acquiredAt),
+        updatedAt: copy.updatedAt.toISOString(),
+      })),
+    }));
+  }
+
+  async uploadBookCover(actorId: string, file: AvatarUploadFile) {
+    return this.avatarStorageService.uploadLibraryBookCover(actorId, file);
+  }
+
+  async deleteBook(bookId: string) {
+    const book = await this.prisma.libraryBook.findUnique({
+      where: { id: bookId },
+      select: {
+        id: true,
+        copies: { select: { id: true }, take: 1 },
+        loanRequests: { select: { id: true }, take: 1 },
+        reservations: { select: { id: true }, take: 1 },
+      },
+    });
+    if (!book) {
+      throw new NotFoundException('Khong tim thay sach');
+    }
+    if (book.copies.length > 0 || book.loanRequests.length > 0 || book.reservations.length > 0) {
+      throw new BadRequestException('Sach da phat sinh du lieu lien quan nen khong the xoa');
+    }
+
+    await this.prisma.libraryBook.delete({
+      where: { id: bookId },
+    });
+
+    return { id: bookId, deleted: true };
+  }
+
+  async updateCopy(copyId: string, dto: UpdateLibraryCopyDto) {
+    await this.assertCopyExists(copyId);
+    return this.prisma.libraryBookCopy.update({
+      where: { id: copyId },
+      data: {
+        ...(dto.copyCode !== undefined ? { copyCode: dto.copyCode.trim() } : {}),
+        ...(dto.conditionNote !== undefined ? { conditionNote: dto.conditionNote?.trim() || null } : {}),
+        ...(dto.acquiredAt !== undefined
+          ? {
+              acquiredAt: dto.acquiredAt
+                ? this.parseOptionalDate(dto.acquiredAt, 'Ngay nhap ban sao khong hop le')
+                : null,
+            }
+          : {}),
+      },
+    });
+  }
+
+  async deleteCopy(copyId: string) {
+    const copy = await this.prisma.libraryBookCopy.findUnique({
+      where: { id: copyId },
+      select: {
+        id: true,
+        loans: { select: { id: true }, take: 1 },
+        loanRequests: { select: { id: true }, take: 1 },
+      },
+    });
+    if (!copy) {
+      throw new NotFoundException('Khong tim thay ban sao sach');
+    }
+    if (copy.loans.length > 0 || copy.loanRequests.length > 0) {
+      throw new BadRequestException('Ban sao da phat sinh du lieu lien quan nen khong the xoa');
+    }
+
+    await this.prisma.libraryBookCopy.delete({
+      where: { id: copyId },
+    });
+
+    return { id: copyId, deleted: true };
+  }
+
+  async createLoanRequest(userId: string, dto: CreateLibraryLoanRequestDto) {
+    const borrower = await this.getEligibleBorrower(userId);
+    await this.assertBorrowCapacity(borrower.id, borrower.role);
+
+    const copy = await this.prisma.libraryBookCopy.findUnique({
+      where: { id: dto.copyId },
+      include: {
+        book: {
+          select: {
+            id: true,
+            title: true,
+            authors: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!copy || copy.bookId !== dto.bookId) {
+      throw new BadRequestException('Ban sao sach khong thuoc dau sach da chon');
+    }
+    if (!copy.book.isActive) {
+      throw new NotFoundException('Khong tim thay sach');
+    }
+    if (copy.status !== LibraryBookCopyStatus.available) {
+      throw new BadRequestException('Ban sao sach hien khong o trang thai san sang');
+    }
+
+    const existing = await this.prisma.libraryLoanRequest.findFirst({
+      where: {
+        requesterId: borrower.id,
+        copyId: copy.id,
+        status: LibraryLoanRequestStatus.pending,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException('Ban da co don muon dang cho duyet cho ban sao nay');
+    }
+
+    const createdRequest = await this.prisma.libraryLoanRequest.create({
+      data: {
+        bookId: copy.bookId,
+        copyId: copy.id,
+        requesterId: borrower.id,
+        note: dto.note?.trim() || null,
+      },
+      include: this.loanRequestInclude,
+    });
+
+    return this.mapLoanRequest(createdRequest);
+  }
+
+  async listMyLoanRequests(userId: string, status?: LibraryLoanRequestStatus) {
+    const items = await this.prisma.libraryLoanRequest.findMany({
+      where: {
+        requesterId: userId,
+        ...(status ? { status } : {}),
+      },
+      include: this.loanRequestInclude,
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return items.map((item) => this.mapLoanRequest(item));
+  }
+
+  async getLoanRequest(requestId: string, userId: string, isAdmin: boolean) {
+    const request = await this.prisma.libraryLoanRequest.findUnique({
+      where: { id: requestId },
+      include: this.loanRequestInclude,
+    });
+    if (!request) {
+      throw new NotFoundException('Khong tim thay don muon');
+    }
+    if (!isAdmin && request.requesterId !== userId) {
+      throw new ForbiddenException('Ban khong co quyen xem don muon nay');
+    }
+
+    return this.mapLoanRequest(request);
+  }
+
+  async cancelLoanRequest(requestId: string, userId: string) {
+    const request = await this.prisma.libraryLoanRequest.findUnique({
+      where: { id: requestId },
+      include: this.loanRequestInclude,
+    });
+    if (!request) {
+      throw new NotFoundException('Khong tim thay don muon');
+    }
+    if (request.requesterId !== userId) {
+      throw new ForbiddenException('Ban khong co quyen huy don muon nay');
+    }
+    if (request.status !== LibraryLoanRequestStatus.pending) {
+      throw new BadRequestException('Chi co the huy don muon dang cho duyet');
+    }
+
+    const updatedRequest = await this.prisma.libraryLoanRequest.update({
+      where: { id: request.id },
+      data: {
+        status: LibraryLoanRequestStatus.cancelled,
+      },
+      include: this.loanRequestInclude,
+    });
+
+    return this.mapLoanRequest(updatedRequest);
+  }
+
+  async deleteLoanRequest(requestId: string, userId: string) {
+    const request = await this.prisma.libraryLoanRequest.findUnique({
+      where: { id: requestId },
+      select: {
+        id: true,
+        requesterId: true,
+        status: true,
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('Khong tim thay don muon');
+    }
+    if (request.requesterId !== userId) {
+      throw new ForbiddenException('Ban khong co quyen xoa don muon nay');
+    }
+    if (request.status !== LibraryLoanRequestStatus.cancelled) {
+      throw new BadRequestException('Chi co the xoa don muon da huy');
+    }
+
+    await this.prisma.libraryLoanRequest.delete({
+      where: { id: request.id },
+    });
+
+    return { id: request.id, deleted: true };
+  }
+
+  async listAdminLoanRequests(status?: LibraryLoanRequestStatus) {
+    const items = await this.prisma.libraryLoanRequest.findMany({
+      where: status ? { status } : {},
+      include: this.loanRequestInclude,
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return items.map((item) => this.mapLoanRequest(item));
+  }
+
+  async approveLoanRequest(requestId: string, approverId: string) {
+    const now = new Date();
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
+      const request = await tx.libraryLoanRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          book: {
+            select: {
+              id: true,
+              title: true,
+              authors: true,
+              isActive: true,
+            },
+          },
+          copy: {
+            select: {
+              id: true,
+              bookId: true,
+              copyCode: true,
+              status: true,
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              studentId: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              isActive: true,
+            },
+          },
+          approvedBy: {
+            select: {
+              id: true,
+              studentId: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      if (!request) {
+        throw new NotFoundException('Khong tim thay don muon');
+      }
+      if (request.status !== LibraryLoanRequestStatus.pending) {
+        throw new BadRequestException('Chi co the duyet don dang cho');
+      }
+      if (!request.requester.isActive) {
+        throw new NotFoundException('Khong tim thay nguoi muon');
+      }
+      if (!request.book.isActive || request.copy.bookId !== request.bookId) {
+        throw new BadRequestException('Du lieu don muon khong hop le');
+      }
+      if (request.copy.status !== LibraryBookCopyStatus.available) {
+        throw new BadRequestException('Ban sao sach hien khong o trang thai san sang');
+      }
+
+      await this.assertBorrowCapacity(request.requester.id, request.requester.role, tx);
+
+      const dueAt = new Date(now);
+      dueAt.setDate(dueAt.getDate() + getBorrowPolicy(request.requester.role).borrowDays);
+
+      await tx.libraryLoan.create({
+        data: {
+          copyId: request.copyId,
+          borrowerId: request.requesterId,
+          dueAt,
+          borrowNote: request.note,
+        },
+      });
+
+      await tx.libraryBookCopy.update({
+        where: { id: request.copyId },
+        data: { status: LibraryBookCopyStatus.borrowed },
+      });
+
+      return tx.libraryLoanRequest.update({
+        where: { id: request.id },
+        data: {
+          status: LibraryLoanRequestStatus.approved,
+          approvedById: approverId,
+          approvedAt: now,
+        },
+        include: this.loanRequestInclude,
+      });
+    });
+
+    return this.mapLoanRequest(updatedRequest);
+  }
+
+  async rejectLoanRequest(requestId: string, approverId: string) {
+    const request = await this.prisma.libraryLoanRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, status: true },
+    });
+    if (!request) {
+      throw new NotFoundException('Khong tim thay don muon');
+    }
+    if (request.status !== LibraryLoanRequestStatus.pending) {
+      throw new BadRequestException('Chi co the tu choi don dang cho');
+    }
+
+    const updatedRequest = await this.prisma.libraryLoanRequest.update({
+      where: { id: request.id },
+      data: {
+        status: LibraryLoanRequestStatus.rejected,
+        approvedById: approverId,
+        approvedAt: new Date(),
+      },
+      include: this.loanRequestInclude,
+    });
+
+    return this.mapLoanRequest(updatedRequest);
   }
 
   async markCopyStatus(copyId: string, status: LibraryBookCopyStatus, conditionNote?: string) {
@@ -207,7 +598,7 @@ export class LibraryService {
       select: { id: true },
     });
     if (!copy) {
-      throw new NotFoundException('Không tìm thấy bản sao sách');
+      throw new NotFoundException('Khong tim thay ban sao sach');
     }
     return this.prisma.libraryBookCopy.update({
       where: { id: copyId },
@@ -219,30 +610,8 @@ export class LibraryService {
   }
 
   async checkout(dto: CheckoutLibraryLoanDto) {
-    const borrower = await this.prisma.user.findUnique({
-      where: { id: dto.borrowerId },
-      select: { id: true, role: true, isActive: true },
-    });
-
-    if (!borrower || !borrower.isActive) {
-      throw new NotFoundException('Không tìm thấy người mượn');
-    }
-    if (borrower.role !== Role.student && borrower.role !== Role.lecturer) {
-      throw new BadRequestException('Chỉ sinh viên hoặc giảng viên được mượn sách');
-    }
-
-    const policy = getBorrowPolicy(borrower.role);
-    const activeLoanCount = await this.prisma.libraryLoan.count({
-      where: {
-        borrowerId: borrower.id,
-        status: {
-          in: [LibraryLoanStatus.borrowed, LibraryLoanStatus.overdue],
-        },
-      },
-    });
-    if (activeLoanCount >= policy.maxBorrowed) {
-      throw new BadRequestException('Đã vượt quá số lượng sách có thể mượn');
-    }
+    const borrower = await this.getEligibleBorrower(dto.borrowerId);
+    await this.assertBorrowCapacity(borrower.id, borrower.role);
 
     const copy = dto.copyId
       ? await this.prisma.libraryBookCopy.findUnique({
@@ -262,14 +631,14 @@ export class LibraryService {
       }));
 
     if (!selectedCopy || !selectedCopy.book.isActive) {
-      throw new NotFoundException('Không tìm thấy bản sao sách có thể mượn');
+      throw new NotFoundException('Khong tim thay ban sao sach co the muon');
     }
     if (selectedCopy.status !== LibraryBookCopyStatus.available) {
-      throw new BadRequestException('Bản sao sách hiện không ở trạng thái sẵn sàng');
+      throw new BadRequestException('Ban sao sach hien khong o trang thai san sang');
     }
 
     const dueAt = new Date();
-    dueAt.setDate(dueAt.getDate() + policy.borrowDays);
+    dueAt.setDate(dueAt.getDate() + getBorrowPolicy(borrower.role).borrowDays);
 
     return this.prisma.$transaction(async (tx) => {
       const loan = await tx.libraryLoan.create({
@@ -315,7 +684,7 @@ export class LibraryService {
       },
     });
     if (!loan) {
-      throw new NotFoundException('Không tìm thấy phiếu mượn');
+      throw new NotFoundException('Khong tim thay phieu muon');
     }
     if (loan.status === LibraryLoanStatus.returned) {
       return loan;
@@ -336,6 +705,94 @@ export class LibraryService {
       });
       return updatedLoan;
     });
+  }
+
+  async listAdminLoans() {
+    const loans = await this.prisma.libraryLoan.findMany({
+      where: {
+        status: {
+          in: ACTIVE_LOAN_STATUSES,
+        },
+      },
+      include: {
+        borrower: {
+          select: {
+            id: true,
+            studentId: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+        copy: {
+          include: {
+            book: {
+              select: {
+                id: true,
+                title: true,
+                authors: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ dueAt: 'asc' }, { borrowedAt: 'desc' }],
+    });
+
+    const now = new Date();
+
+    return loans.map((loan) => ({
+      id: loan.id,
+      status:
+        loan.status !== LibraryLoanStatus.returned && loan.dueAt < now
+          ? LibraryLoanStatus.overdue
+          : loan.status,
+      borrowedAt: loan.borrowedAt.toISOString(),
+      dueAt: loan.dueAt.toISOString(),
+      returnedAt: toISO(loan.returnedAt),
+      renewedCount: loan.renewedCount,
+      borrowNote: loan.borrowNote,
+      returnNote: loan.returnNote,
+      borrower: {
+        id: loan.borrower.id,
+        studentId: loan.borrower.studentId,
+        fullName: `${loan.borrower.firstName} ${loan.borrower.lastName}`.trim(),
+        email: loan.borrower.email,
+        role: loan.borrower.role,
+      },
+      book: {
+        id: loan.copy.book.id,
+        title: loan.copy.book.title,
+        authors: loan.copy.book.authors,
+      },
+      copy: {
+        id: loan.copy.id,
+        copyCode: loan.copy.copyCode,
+      },
+    }));
+  }
+
+  async deleteReturnedLoan(loanId: string, userId?: string | null, isAdmin = false) {
+    const loan = await this.prisma.libraryLoan.findUnique({
+      where: { id: loanId },
+      select: { id: true, status: true, borrowerId: true },
+    });
+    if (!loan) {
+      throw new NotFoundException('Khong tim thay phieu muon');
+    }
+    if (!isAdmin && loan.borrowerId !== userId) {
+      throw new ForbiddenException('Ban khong co quyen xoa phieu muon nay');
+    }
+    if (loan.status !== LibraryLoanStatus.returned) {
+      throw new BadRequestException('Chi co the xoa phieu muon da tra');
+    }
+
+    await this.prisma.libraryLoan.delete({
+      where: { id: loan.id },
+    });
+
+    return { id: loan.id, deleted: true };
   }
 
   async listMyLoans(userId: string) {
@@ -387,20 +844,20 @@ export class LibraryService {
       },
     });
     if (!loan) {
-      throw new NotFoundException('Không tìm thấy phiếu mượn');
+      throw new NotFoundException('Khong tim thay phieu muon');
     }
     if (loan.borrowerId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền gia hạn phiếu mượn này');
+      throw new ForbiddenException('Ban khong co quyen gia han phieu muon nay');
     }
     if (loan.status === LibraryLoanStatus.returned) {
-      throw new BadRequestException('Phiếu mượn đã trả không thể gia hạn');
+      throw new BadRequestException('Phieu muon da tra khong the gia han');
     }
     if (loan.dueAt < new Date()) {
-      throw new BadRequestException('Phiếu mượn đã quá hạn nên không thể gia hạn');
+      throw new BadRequestException('Phieu muon da qua han nen khong the gia han');
     }
     const policy = getBorrowPolicy(role);
     if (loan.renewedCount >= policy.maxRenew) {
-      throw new BadRequestException('Đã hết số lần gia hạn cho phép');
+      throw new BadRequestException('Da het so lan gia han cho phep');
     }
 
     const nextDueAt = new Date(loan.dueAt);
@@ -451,7 +908,7 @@ export class LibraryService {
       select: { id: true, isActive: true },
     });
     if (!book || !book.isActive) {
-      throw new NotFoundException('Không tìm thấy sách');
+      throw new NotFoundException('Khong tim thay sach');
     }
 
     const existing = await this.prisma.libraryReservation.findFirst({
@@ -463,7 +920,7 @@ export class LibraryService {
       select: { id: true },
     });
     if (existing) {
-      throw new BadRequestException('Bạn đã có yêu cầu giữ chỗ còn hiệu lực cho sách này');
+      throw new BadRequestException('Ban da co yeu cau giu cho con hieu luc cho sach nay');
     }
 
     const expiresAt = new Date();
@@ -489,10 +946,10 @@ export class LibraryService {
       },
     });
     if (!reservation) {
-      throw new NotFoundException('Không tìm thấy yêu cầu giữ chỗ');
+      throw new NotFoundException('Khong tim thay yeu cau giu cho');
     }
     if (!isAdmin && reservation.requesterId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền hủy yêu cầu này');
+      throw new ForbiddenException('Ban khong co quyen huy yeu cau nay');
     }
     if (reservation.status !== 'active') {
       return reservation;
@@ -513,7 +970,148 @@ export class LibraryService {
       select: { id: true },
     });
     if (!book) {
-      throw new NotFoundException('Không tìm thấy sách');
+      throw new NotFoundException('Khong tim thay sach');
     }
+  }
+
+  private async assertCopyExists(copyId: string) {
+    const copy = await this.prisma.libraryBookCopy.findUnique({
+      where: { id: copyId },
+      select: { id: true },
+    });
+    if (!copy) {
+      throw new NotFoundException('Khong tim thay ban sao sach');
+    }
+  }
+
+  private parseOptionalDate(value: string, message: string) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(message);
+    }
+    return parsed;
+  }
+
+  private async getEligibleBorrower(userId: string) {
+    const borrower = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!borrower || !borrower.isActive) {
+      throw new NotFoundException('Khong tim thay nguoi muon');
+    }
+    if (borrower.role !== Role.student && borrower.role !== Role.lecturer) {
+      throw new BadRequestException('Chi sinh vien hoac giang vien duoc muon sach');
+    }
+
+    return borrower;
+  }
+
+  private async assertBorrowCapacity(
+    borrowerId: string,
+    role: Role,
+    prismaClient: Pick<PrismaService, 'libraryLoan'> = this.prisma,
+  ) {
+    const policy = getBorrowPolicy(role);
+    const activeLoanCount = await prismaClient.libraryLoan.count({
+      where: {
+        borrowerId,
+        status: {
+          in: ACTIVE_LOAN_STATUSES,
+        },
+      },
+    });
+    if (activeLoanCount >= policy.maxBorrowed) {
+      throw new BadRequestException('Da vuot qua so luong sach co the muon');
+    }
+  }
+
+  private readonly loanRequestInclude = {
+    book: {
+      select: {
+        id: true,
+        title: true,
+        authors: true,
+      },
+    },
+    copy: {
+      select: {
+        id: true,
+        copyCode: true,
+      },
+    },
+    requester: {
+      select: {
+        id: true,
+        studentId: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    },
+    approvedBy: {
+      select: {
+        id: true,
+        studentId: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    },
+  } as const;
+
+  private mapLoanRequest(
+    request: {
+      id: string;
+      status: LibraryLoanRequestStatus;
+      note: string | null;
+      createdAt: Date;
+      approvedAt: Date | null;
+      book: { id: string; title: string; authors: string };
+      copy: { id: string; copyCode: string };
+      requester: {
+        id: string;
+        studentId: string | null;
+        email: string;
+        firstName: string;
+        lastName: string;
+      };
+      approvedBy?: {
+        id: string;
+        studentId: string | null;
+        email: string;
+        firstName: string;
+        lastName: string;
+      } | null;
+    },
+  ) {
+    return {
+      id: request.id,
+      status: request.status,
+      note: request.note,
+      createdAt: request.createdAt.toISOString(),
+      approvedAt: toISO(request.approvedAt),
+      requester: {
+        id: request.requester.id,
+        studentId: request.requester.studentId,
+        fullName: this.buildFullName(request.requester.firstName, request.requester.lastName),
+        email: request.requester.email,
+      },
+      approvedBy: request.approvedBy
+        ? {
+            id: request.approvedBy.id,
+            studentId: request.approvedBy.studentId,
+            fullName: this.buildFullName(request.approvedBy.firstName, request.approvedBy.lastName),
+            email: request.approvedBy.email,
+          }
+        : null,
+      book: request.book,
+      copy: request.copy,
+    };
+  }
+
+  private buildFullName(firstName?: string | null, lastName?: string | null) {
+    return `${firstName ?? ''} ${lastName ?? ''}`.trim();
   }
 }

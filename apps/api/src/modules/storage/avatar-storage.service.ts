@@ -27,6 +27,11 @@ export interface UploadedCanteenProductImageAsset {
   imageUrl: string;
 }
 
+export interface UploadedLibraryBookCoverAsset {
+  key: string;
+  imageUrl: string;
+}
+
 @Injectable()
 export class AvatarStorageService {
   private readonly bucket: string;
@@ -66,6 +71,19 @@ export class AvatarStorageService {
     file: AvatarUploadFile,
   ): Promise<UploadedCanteenProductImageAsset> {
     const key = this.buildScopedImageKey(['canteen-products', actorId], file.mimetype);
+    const publicUrl = await this.uploadImageObject(key, file);
+
+    return {
+      key,
+      imageUrl: publicUrl,
+    };
+  }
+
+  async uploadLibraryBookCover(
+    actorId: string,
+    file: AvatarUploadFile,
+  ): Promise<UploadedLibraryBookCoverAsset> {
+    const key = this.buildScopedImageKey(['library-books', actorId], file.mimetype);
     const publicUrl = await this.uploadImageObject(key, file);
 
     return {

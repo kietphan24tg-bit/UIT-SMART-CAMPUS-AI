@@ -71,7 +71,10 @@ export function useDashboardSnapshot(role?: string | null) {
     },
     enabled: isHydrated && isAuthenticated,
     placeholderData: createEmptySnapshot(resolvedRole),
-    refetchInterval: connectionState === 'live' ? false : 10_000,
+    refetchInterval: (query) => {
+      if (connectionState === 'live') return false;
+      return query.state.error ? 60_000 : 10_000;
+    },
   });
   useNowTick(10_000);
 

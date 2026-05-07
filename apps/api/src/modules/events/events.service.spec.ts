@@ -187,7 +187,7 @@ describe('EventsService', () => {
       .mockRejectedValueOnce(new Error('refresh failed'));
 
     await service.listEvents('student-1', 1, 10);
-    jest.advanceTimersByTime(configValues.UIT_EVENTS_CACHE_TTL_MS + 1);
+    jest.advanceTimersByTime((configValues.UIT_EVENTS_CACHE_TTL_MS ?? 3_600_000) + 1);
 
     const result = await service.listEvents('student-1', 1, 10);
 

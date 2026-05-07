@@ -9,9 +9,33 @@ import { notificationsApi } from '@/services/api/notifications';
 export const NOTIFICATION_PROMPTED_KEY = 'notif_prompted';
 
 const EXPO_PUSH_TOKEN_CACHE_KEY = 'expo_push_token_cache';
+let pushNotificationsUnsupportedReason: string | null = null;
+
+function isFirebaseInitializationError(error: unknown) {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error ?? '');
+
+  return message.includes('FirebaseApp.initializeApp') ||
+    message.includes('Default FirebaseApp is not initialized');
+}
+
+function markPushNotificationsUnsupported(error: unknown) {
+  if (Platform.OS !== 'android' || !isFirebaseInitializationError(error)) {
+    return false;
+  }
+
+  pushNotificationsUnsupportedReason =
+    'Push notifications are unavailable on this Android build because Firebase is not configured yet.';
+  return true;
+}
 
 export function canUseRemotePushNotifications() {
-  return !(Platform.OS === 'android' && Constants.appOwnership === 'expo');
+  return !(Platform.OS === 'android' && Constants.appOwnership === 'expo') &&
+    !pushNotificationsUnsupportedReason;
 }
 
 export async function readCachedExpoPushToken(): Promise<string | null> {
@@ -40,18 +64,28 @@ function resolveProjectId() {
 }
 
 async function getExpoPushTokenFromDevice(): Promise<string> {
-  const projectId = resolveProjectId();
-  const tokenResponse = projectId
-    ? await Notifications.getExpoPushTokenAsync({ projectId })
-    : await Notifications.getExpoPushTokenAsync();
+  try {
+    const projectId = resolveProjectId();
+    const tokenResponse = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
 
-  return tokenResponse.data;
+    return tokenResponse.data;
+  } catch (error) {
+    if (markPushNotificationsUnsupported(error)) {
+      throw new Error(pushNotificationsUnsupportedReason ?? 'Push notifications are unavailable.');
+    }
+    throw error;
+  }
 }
 
 /** Fetches token from Expo, updates local cache. */
 export async function fetchExpoPushTokenAndCache(): Promise<string> {
   if (!canUseRemotePushNotifications()) {
-    throw new Error('Remote push notifications are disabled in Expo Go on Android.');
+    throw new Error(
+      pushNotificationsUnsupportedReason ??
+        'Remote push notifications are disabled in Expo Go on Android.',
+    );
   }
 
   await ensureAndroidChannel();
@@ -70,9 +104,7 @@ export async function syncPushToken() {
   }
 
   if (!canUseRemotePushNotifications()) {
-    throw new Error(
-      'Remote push notifications are disabled in Expo Go on Android. Use a development build or a release build instead.',
-    );
+    return;
   }
 
   await ensureAndroidChannel();
@@ -91,11 +123,18 @@ export async function syncPushToken() {
     throw new Error('Notification permission was not granted on this device.');
   }
 
-  const expoPushToken = await fetchExpoPushTokenAndCache();
-  await notificationsApi.registerPushToken({
-    expoPushToken,
-    platform: Platform.OS,
-  });
+  try {
+    const expoPushToken = await fetchExpoPushTokenAndCache();
+    await notificationsApi.registerPushToken({
+      expoPushToken,
+      platform: Platform.OS,
+    });
+  } catch (error) {
+    if (markPushNotificationsUnsupported(error)) {
+      return;
+    }
+    throw error;
+  }
 }
 
 /** Best-effort: remove this device's token for the current user (call before clearing JWT). */

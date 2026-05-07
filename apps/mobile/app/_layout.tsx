@@ -4,36 +4,22 @@ import {
   Inter_600SemiBold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
 import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
-import {
-  configureForegroundNotificationHandler,
-  flushPendingNotificationNavigation,
-  subscribePushNotificationEvents,
-} from '@/services/notifications/push-receiver';
-import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
+import { appQueryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
-configureForegroundNotificationHandler();
 
 const STARTUP_MINIMUM_MS = 1500;
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-});
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -42,7 +28,6 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
   const isHydrated = useAuthStore((state) => state.isHydrated);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [isStartupScreenVisible, setIsStartupScreenVisible] = useState(true);
   const hasHiddenNativeSplashRef = useRef(false);
   const minimumVisibleUntilRef = useRef(Date.now() + STARTUP_MINIMUM_MS);
@@ -69,23 +54,26 @@ export default function RootLayout() {
   }, [isAppReady, isStartupScreenVisible]);
 
   useEffect(() => {
-    const unsubscribe = subscribeExpoPushTokenChanges();
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = subscribePushNotificationEvents(queryClient);
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (isHydrated && isAuthenticated) {
-      flushPendingNotificationNavigation();
-    }
-  }, [isAuthenticated, isHydrated]);
-
-  useEffect(() => {
     void useAuthStore.getState().hydrate();
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        return;
+      }
+
+      const { isAuthenticated, accessToken } = useAuthStore.getState();
+      if (!isAuthenticated && !accessToken) {
+        return;
+      }
+
+      void useAuthStore.getState().hydrate();
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -107,7 +95,7 @@ export default function RootLayout() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={appQueryClient}>
       <ThemePreferenceProvider>
         <ParkingRealtimeProvider>
           <>
@@ -156,6 +144,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/attendance/history" />
         <Stack.Screen name="services/campus-map/view" />
         <Stack.Screen name="services/library/index" />
+        <Stack.Screen name="services/library/admin" />
         <Stack.Screen name="services/canteen/index" />
         <Stack.Screen name="services/canteen/admin" />
         <Stack.Screen name="services/gps-sos/index" />

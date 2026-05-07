@@ -5,6 +5,7 @@ import { notificationsApi } from '@/services/api/notifications';
 import { parkingApi } from '@/services/api/parking';
 import { safetyApi } from '@/services/api/safety';
 import { scheduleApi } from '@/services/api/schedule';
+import { useAuthStore } from '@/stores/auth-store';
 import { useParkingRealtimeStore } from '@/stores/parking-realtime-store';
 import type {
   FireAlertsPayload,
@@ -19,9 +20,14 @@ import type {
 import { isAdminRole } from '@/utils/app';
 
 export function useScheduleScreenData(selectedSemesterId?: string) {
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const canQuery = isHydrated && isAuthenticated;
+
   const allSemestersQuery = useQuery({
     queryKey: ['schedule', 'semesters-with-sessions'],
     queryFn: scheduleApi.getAllSemestersWithSchedules,
+    enabled: canQuery,
   });
 
   const resolvedSemesterId =
@@ -32,7 +38,7 @@ export function useScheduleScreenData(selectedSemesterId?: string) {
   const scheduleQuery = useQuery({
     queryKey: ['schedule', 'semester', resolvedSemesterId],
     queryFn: () => scheduleApi.getScheduleBySemesterId(resolvedSemesterId as string),
-    enabled: Boolean(resolvedSemesterId),
+    enabled: canQuery && Boolean(resolvedSemesterId),
     placeholderData: undefined as SemesterScheduleRecord | undefined,
   });
 
@@ -59,6 +65,8 @@ export function useScheduleScreenData(selectedSemesterId?: string) {
 }
 
 export function useOperationsScreenData(role?: string | null) {
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const connectionState = useParkingRealtimeStore(
     (state) => state.connectionState,
   );
@@ -97,6 +105,10 @@ export function useOperationsScreenData(role?: string | null) {
         gpa,
       };
     },
-    refetchInterval: connectionState === 'live' ? false : 10_000,
+    enabled: isHydrated && isAuthenticated,
+    refetchInterval: (query) => {
+      if (connectionState === 'live') return false;
+      return query.state.error ? 60_000 : 10_000;
+    },
   });
 }

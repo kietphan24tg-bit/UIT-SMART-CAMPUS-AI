@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { LibraryLoanRequestStatus } from '@prisma/client';
+import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateLibraryBookDto {
   @ApiProperty()
@@ -78,7 +79,14 @@ export class CreateLibraryCopyDto {
   @IsOptional()
   @IsString()
   conditionNote?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  acquiredAt?: string;
 }
+
+export class UpdateLibraryCopyDto extends PartialType(CreateLibraryCopyDto) {}
 
 export class CheckoutLibraryLoanDto {
   @ApiProperty()
@@ -105,6 +113,28 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class CreateLibraryLoanRequestDto {
+  @ApiProperty()
+  @IsString()
+  bookId!: string;
+
+  @ApiProperty()
+  @IsString()
+  copyId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class ListLibraryLoanRequestsQueryDto {
+  @ApiPropertyOptional({ enum: LibraryLoanRequestStatus })
+  @IsOptional()
+  @IsEnum(LibraryLoanRequestStatus)
+  status?: LibraryLoanRequestStatus;
 }
 
 export class ListLibraryBooksQueryDto {

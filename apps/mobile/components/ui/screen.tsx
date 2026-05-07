@@ -177,7 +177,7 @@ export function Screen({
             </ScrollView>
           ) : (
             <View style={[styles.staticContent, contentContainerStyle]}>
-              <View style={styles.inner}>{children}</View>
+              <View style={[styles.inner, styles.innerFill]}>{children}</View>
             </View>
           )}
         </View>
@@ -205,7 +205,7 @@ export function Screen({
             </ScrollView>
           ) : (
             <View style={[styles.staticContent, contentContainerStyle]}>
-              <View style={styles.inner}>{children}</View>
+              <View style={[styles.inner, styles.innerFill]}>{children}</View>
             </View>
           )}
         </SafeAreaView>
@@ -233,5 +233,8 @@ const styles = StyleSheet.create({
   },
   inner: {
     gap: 0,
+  },
+  innerFill: {
+    flex: 1,
   },
 });

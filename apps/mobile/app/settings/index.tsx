@@ -49,7 +49,7 @@ export default function SettingsScreen() {
 
         <SectionCard title="Tài khoản" subtitle="Bảo mật" variant="outlined">
           <View style={styles.column}>
-            <SecondaryButton label="Khôi phục mật khẩu" onPress={() => router.push('/forgot-password')} />
+            <SecondaryButton label="Đổi mật khẩu" onPress={() => router.push('/settings/change-password')} />
             <SecondaryButton label="Xóa tài khoản" onPress={() => router.push('/account/delete')} />
           </View>
         </SectionCard>

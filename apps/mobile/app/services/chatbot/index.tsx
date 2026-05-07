@@ -1,284 +1,430 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
+import { useCallback, useRef, useState } from 'react';
 import {
-  ContentStack,
-  EmptyState,
-  FormField,
-  PrimaryButton,
-  Screen,
-  SectionCard,
-  StatusBadge,
-  TopHero,
-} from '@/components/ui';
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+import { Screen, TopHero } from '@/components/ui';
 import { chatbotApi } from '@/services/api/chatbot';
 import { useAppTheme } from '@/theme';
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface DisplayMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  intent?: string | null;
+  confidence?: number | null;
+  deepLinks?: unknown;
+  suggestedQuestions?: string[];
+  createdAt: string;
+}
+
+const INITIAL_SUGGESTIONS = [
+  'Đơn canteen của tôi',
+  'Sách tôi đang mượn',
+  'Lịch học hôm nay',
+  'Sự kiện sắp tới',
+  'Thông báo chưa đọc',
+  'SOS gần đây',
+];
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function ChatbotScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const queryClient = useQueryClient();
+
   const [message, setMessage] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
 
-  const sessionsQuery = useQuery({
-    queryKey: ['chatbot', 'sessions'],
-    queryFn: () => chatbotApi.listSessions(),
-  });
-  const messagesQuery = useQuery({
-    queryKey: ['chatbot', 'messages', sessionId],
-    queryFn: () => chatbotApi.getMessages(sessionId!),
-    enabled: Boolean(sessionId),
-  });
+  const listRef = useRef<FlatList<DisplayMessage>>(null);
+
+  const scrollToEnd = useCallback(() => {
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+  }, []);
 
   const queryMutation = useMutation({
-    mutationFn: () =>
-      chatbotApi.query({
-        message: message.trim(),
-        ...(sessionId ? { sessionId } : {}),
-      }),
-    onSuccess: async (response) => {
-      setMessage('');
+    mutationFn: (text: string) =>
+      chatbotApi.query({ message: text.trim(), ...(sessionId ? { sessionId } : {}) }),
+    onSuccess: (response, sentMessage) => {
+      const now = new Date().toISOString();
+      const userMsg: DisplayMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: sentMessage,
+        createdAt: now,
+      };
+      const botMsg: DisplayMessage = {
+        id: `bot-${Date.now()}`,
+        role: 'assistant',
+        content: response.answer,
+        intent: response.intent,
+        confidence: response.confidence,
+        deepLinks: response.deepLinks,
+        suggestedQuestions: response.suggestedQuestions,
+        createdAt: now,
+      };
+      setMessages((prev) => [...prev, userMsg, botMsg]);
       setSessionId(response.sessionId);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['chatbot', 'sessions'] }),
-        queryClient.invalidateQueries({ queryKey: ['chatbot', 'messages', response.sessionId] }),
-      ]);
+      setMessage('');
+      scrollToEnd();
     },
   });
 
-  const activeSession = useMemo(
-    () => sessionsQuery.data?.find((item) => item.id === sessionId) ?? null,
-    [sessionId, sessionsQuery.data],
+  const send = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || queryMutation.isPending) return;
+      queryMutation.mutate(trimmed);
+    },
+    [queryMutation],
   );
 
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setSessionId(undefined);
+    setMessage('');
+  }, []);
+
+  const lastSuggestions =
+    messages.length === 0
+      ? INITIAL_SUGGESTIONS
+      : (messages.findLast((m) => m.role === 'assistant')?.suggestedQuestions ?? []);
+
+  // ---------------------------------------------------------------------------
+  // Render helpers
+  // ---------------------------------------------------------------------------
+  const renderMessage = useCallback(
+    ({ item }: { item: DisplayMessage }) => {
+      const isUser = item.role === 'user';
+      return (
+        <View style={[styles.bubbleRow, isUser ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
+          {!isUser && (
+            <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="sparkles" size={12} color="#fff" />
+            </View>
+          )}
+          <View
+            style={[
+              styles.bubble,
+              isUser
+                ? { backgroundColor: theme.colors.primary }
+                : { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border, borderWidth: 1 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.bubbleText,
+                {
+                  color: isUser ? '#fff' : theme.colors.text,
+                  fontFamily: theme.fonts.regular,
+                },
+              ]}
+            >
+              {item.content}
+            </Text>
+
+            {!isUser && item.deepLinks && Array.isArray(item.deepLinks) && (item.deepLinks as string[]).length > 0 && (
+              <View style={styles.linkRow}>
+                {(item.deepLinks as string[]).map((link) => (
+                  <Pressable
+                    key={link}
+                    onPress={() => router.push(link as never)}
+                    style={({ pressed }) => [
+                      styles.linkChip,
+                      { borderColor: theme.colors.primary, opacity: pressed ? 0.75 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="arrow-forward-circle-outline" size={12} color={theme.colors.primary} />
+                    <Text style={[styles.linkText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                      {link}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {!isUser && item.confidence != null && (
+              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                {(item.confidence * 100).toFixed(0)}% độ tin cậy
+              </Text>
+            )}
+          </View>
+        </View>
+      );
+    },
+    [theme, router],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Layout
+  // ---------------------------------------------------------------------------
   return (
-    <Screen>
+    <Screen scroll={false}>
       <TopHero
         eyebrow="Dịch vụ campus"
         title="AI Chatbot"
-        subtitle="Trợ lý nội bộ dùng dữ liệu thật của app, không gọi AI ngoài."
+        subtitle="Trợ lý nội bộ dùng dữ liệu thật của app."
         showBrand
         variant="accent"
       />
 
-      <ContentStack overlapHero={false}>
-        <SectionCard title="Chat nội bộ" subtitle="Hỏi đáp theo quyền tài khoản hiện tại." variant="highlight" tone="academic">
-          <View style={styles.stack}>
-            <FormField
-              label="Câu hỏi"
-              value={message}
-              onChangeText={setMessage}
-              placeholder='Ví dụ: "Đơn canteen của tôi", "Sách tôi đang mượn", "SOS gần đây"...'
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-            <PrimaryButton
-              label="Gửi câu hỏi"
-              loading={queryMutation.isPending}
-              disabled={!message.trim()}
-              onPress={() => queryMutation.mutate()}
-            />
-            {queryMutation.isError ? (
-              <Text style={[styles.errorText, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}>
-                {(queryMutation.error as Error)?.message ?? 'Không gửi được câu hỏi.'}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={80}
+      >
+        {/* Message list */}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.messageList}
+          onContentSizeChange={scrollToEnd}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                Xin chào! Mình có thể giúp gì?
               </Text>
-            ) : null}
-            {queryMutation.data ? (
-              <View
-                style={[
-                  styles.answerCard,
-                  {
-                    backgroundColor: theme.colors.surfaceSubtle,
-                    borderColor: theme.colors.border,
-                  },
+              <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                Hỏi về lịch học, đặt phòng, canteen, thư viện và nhiều hơn nữa.
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Suggested questions */}
+        {lastSuggestions.length > 0 && !queryMutation.isPending && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.suggestStrip, { borderTopColor: theme.colors.border }]}
+            contentContainerStyle={styles.suggestContent}
+          >
+            {lastSuggestions.map((q) => (
+              <Pressable
+                key={q}
+                onPress={() => send(q)}
+                style={({ pressed }) => [
+                  styles.suggestChip,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, opacity: pressed ? 0.75 : 1 },
                 ]}
               >
-                <View style={styles.rowBetween}>
-                  <StatusBadge label={`Intent: ${queryMutation.data.intent}`} tone="info" size="sm" />
-                  <StatusBadge
-                    label={`Confidence ${(queryMutation.data.confidence * 100).toFixed(0)}%`}
-                    tone={queryMutation.data.confidence >= 0.7 ? 'success' : 'warning'}
-                    size="sm"
-                  />
-                </View>
-                <Text style={[styles.answerText, { color: theme.colors.text, fontFamily: theme.fonts.regular }]}>
-                  {queryMutation.data.answer}
+                <Text style={[styles.suggestText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                  {q}
                 </Text>
-                {queryMutation.data.deepLinks?.length ? (
-                  <View style={styles.linkRow}>
-                    {queryMutation.data.deepLinks.map((link) => (
-                      <Pressable
-                        key={link}
-                        accessibilityRole="button"
-                        onPress={() => router.push(link as never)}
-                        style={({ pressed }) => [
-                          styles.deepLinkChip,
-                          {
-                            borderColor: theme.colors.border,
-                            backgroundColor: theme.colors.surface,
-                            opacity: pressed ? 0.84 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.deepLinkText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
-                          {link}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        </SectionCard>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
-        <SectionCard title="Phiên chat" subtitle="Lịch sử trao đổi theo tài khoản." variant="glass" tone="campus">
-          {sessionsQuery.isLoading ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-              Đang tải phiên chat...
-            </Text>
-          ) : (sessionsQuery.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="chatbubble-outline" title="Chưa có phiên chat" description="Phiên mới được tạo sau câu hỏi đầu tiên." />
-          ) : (
-            <View style={styles.stack}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sessionRow}>
-                {sessionsQuery.data?.map((session) => (
-                  <Pressable
-                    key={session.id}
-                    accessibilityRole="button"
-                    onPress={() => setSessionId(session.id)}
-                    style={({ pressed }) => [
-                      styles.sessionChip,
-                      {
-                        borderColor: sessionId === session.id ? theme.colors.primary : theme.colors.border,
-                        backgroundColor: sessionId === session.id ? theme.colors.primarySurface : theme.colors.surfaceSubtle,
-                        opacity: pressed ? 0.84 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.sessionText, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
-                      {session.title}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              {activeSession ? (
-                <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                  Phiên hiện tại: {activeSession.title}
-                </Text>
-              ) : null}
-            </View>
+        {/* Input bar */}
+        <View style={[styles.inputBar, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+          {messages.length > 0 && (
+            <Pressable
+              onPress={clearChat}
+              style={({ pressed }) => [
+                styles.clearBtn,
+                { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSubtle, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={theme.colors.textMuted} />
+            </Pressable>
           )}
-        </SectionCard>
-
-        <SectionCard title="Lịch sử tin nhắn" subtitle="Nội dung trong phiên đang chọn." variant="outlined">
-          {!sessionId ? (
-            <EmptyState icon="chatbox-ellipses-outline" title="Chưa chọn phiên chat" description="Chọn một phiên để xem lịch sử." />
-          ) : messagesQuery.isLoading ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-              Đang tải tin nhắn...
-            </Text>
-          ) : (messagesQuery.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="chatbox-outline" title="Phiên chưa có tin nhắn" description="Tin nhắn sẽ xuất hiện sau khi gửi câu hỏi." />
-          ) : (
-            <View style={styles.stack}>
-              {messagesQuery.data?.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.messageCard,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: item.role === 'assistant' ? theme.colors.primarySurface : theme.colors.surfaceSubtle,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.roleText, { color: theme.colors.primary, fontFamily: theme.fonts.semibold }]}>
-                    {item.role === 'assistant' ? 'Trợ lý' : 'Bạn'}
-                  </Text>
-                  <Text style={[styles.answerText, { color: theme.colors.text, fontFamily: theme.fonts.regular }]}>
-                    {item.content}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </SectionCard>
-
-        <PrimaryButton label="Quay lại dịch vụ" onPress={() => router.replace('/services')} />
-      </ContentStack>
+          <TextInput
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Nhập câu hỏi..."
+            placeholderTextColor={theme.colors.textMuted}
+            style={[
+              styles.textInput,
+              {
+                color: theme.colors.text,
+                backgroundColor: theme.colors.surfaceSubtle,
+                fontFamily: theme.fonts.regular,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            multiline
+            maxLength={500}
+            onSubmitEditing={() => send(message)}
+            returnKeyType="send"
+            blurOnSubmit
+          />
+          <Pressable
+            onPress={() => send(message)}
+            disabled={!message.trim() || queryMutation.isPending}
+            style={({ pressed }) => [
+              styles.sendBtn,
+              {
+                backgroundColor:
+                  message.trim() && !queryMutation.isPending
+                    ? theme.colors.primary
+                    : theme.colors.border,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            {queryMutation.isPending ? (
+              <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+            ) : (
+              <Ionicons name="send" size={18} color="#fff" />
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  stack: {
+  messageList: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 10,
+    flexGrow: 1,
   },
-  rowBetween: {
+  bubbleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  body: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  errorText: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  answerCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
+    alignItems: 'flex-end',
     gap: 8,
+    marginBottom: 4,
   },
-  answerText: {
-    fontSize: 13,
-    lineHeight: 19,
+  bubbleRowLeft: {
+    justifyContent: 'flex-start',
+  },
+  bubbleRowRight: {
+    justifyContent: 'flex-end',
+  },
+  avatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  bubble: {
+    maxWidth: '78%',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  bubbleText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   linkRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    marginTop: 2,
   },
-  deepLinkChip: {
+  linkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  deepLinkText: {
-    fontSize: 12,
+  linkText: {
+    fontSize: 11,
   },
-  sessionRow: {
+  metaText: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  suggestStrip: {
+    borderTopWidth: 1,
+    maxHeight: 52,
+  },
+  suggestContent: {
     flexDirection: 'row',
     gap: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
   },
-  sessionChip: {
+  suggestChip: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: 260,
+    paddingVertical: 6,
   },
-  sessionText: {
+  suggestText: {
     fontSize: 12,
   },
-  messageCard: {
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  clearBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  roleText: {
-    fontSize: 12,
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    maxHeight: 100,
+  },
+  sendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

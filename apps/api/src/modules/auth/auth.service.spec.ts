@@ -230,6 +230,50 @@ describe('AuthService', () => {
     });
   });
 
+  describe('changePassword', () => {
+    it('should update password when current password is correct', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-new-password');
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+
+      const result = await authService.changePassword('user-1', 'OldPassword123', 'NewPassword456');
+
+      expect(bcrypt.compare).toHaveBeenCalledWith('OldPassword123', 'hashed-password');
+      expect(bcrypt.hash).toHaveBeenCalledWith('NewPassword456', 10);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { passwordHash: 'hashed-new-password' },
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should throw UnauthorizedException when user not found', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        authService.changePassword('user-999', 'OldPassword123', 'NewPassword456'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when current password is wrong', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        authService.changePassword('user-1', 'WrongPassword', 'NewPassword456'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException for inactive user', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, isActive: false });
+
+      await expect(
+        authService.changePassword('user-1', 'OldPassword123', 'NewPassword456'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
   describe('password reset', () => {
     it('should create a password reset OTP for an active user', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);

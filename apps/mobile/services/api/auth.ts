@@ -1,5 +1,7 @@
 import type {
   AuthTokens,
+  ChangePasswordRequest,
+  ChangePasswordResult,
   LoginRequest,
   PasswordResetChallenge,
   PasswordResetConfirmRequest,
@@ -42,6 +44,12 @@ export const authApi = {
     data: PasswordResetConfirmRequest,
   ): Promise<PasswordResetConfirmResult> => {
     return apiClient.post('/auth/password-reset/reset', data);
+  },
+
+  changePassword: async (
+    data: ChangePasswordRequest,
+  ): Promise<ChangePasswordResult> => {
+    return apiClient.post('/auth/change-password', data);
   },
 
   getMe: async (token: string): Promise<UserProfile> => {

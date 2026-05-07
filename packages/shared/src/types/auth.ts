@@ -49,3 +49,12 @@ export interface PasswordResetOtpVerifyResult {
 export interface PasswordResetConfirmResult {
   success: boolean;
 }
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResult {
+  success: boolean;
+}

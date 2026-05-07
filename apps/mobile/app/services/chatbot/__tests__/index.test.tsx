@@ -18,15 +18,11 @@ jest.mock('expo-router', () => ({
 jest.mock('@/services/api/chatbot', () => ({
   chatbotApi: {
     query: jest.fn(),
-    listSessions: jest.fn(),
-    getMessages: jest.fn(),
   },
 }));
 
 const mockChatbotApi = chatbotApi as unknown as {
   query: jest.Mock;
-  listSessions: jest.Mock;
-  getMessages: jest.Mock;
 };
 
 function renderWithClient(ui: React.ReactElement) {
@@ -44,13 +40,12 @@ function renderWithClient(ui: React.ReactElement) {
 describe('ChatbotScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockChatbotApi.listSessions.mockResolvedValue([]);
-    mockChatbotApi.getMessages.mockResolvedValue([]);
     mockChatbotApi.query.mockResolvedValue({
       sessionId: 'session-1',
       answer: 'Bạn có 1 đơn canteen đang chờ thanh toán.',
       citations: [{ type: 'db', table: 'canteen_orders' }],
       deepLinks: ['/services/canteen'],
+      suggestedQuestions: ['Canteen mở cửa giờ nào?', 'Làm sao thanh toán online?'],
       confidence: 0.95,
       intent: 'canteen_order_status',
     });
@@ -59,8 +54,8 @@ describe('ChatbotScreen', () => {
   it('submits question and renders chatbot answer', async () => {
     const { getByPlaceholderText, getByText } = renderWithClient(<ChatbotScreen />);
 
-    fireEvent.changeText(getByPlaceholderText(/Ví dụ:/i), 'Đơn canteen của tôi');
-    fireEvent.press(getByText('Gửi câu hỏi'));
+    fireEvent.changeText(getByPlaceholderText(/Nhập câu hỏi/i), 'Đơn canteen của tôi');
+    fireEvent.press(getByText(/Gửi/i));
 
     await waitFor(() => {
       expect(mockChatbotApi.query).toHaveBeenCalledWith({
@@ -70,5 +65,20 @@ describe('ChatbotScreen', () => {
     await waitFor(() =>
       expect(getByText('Bạn có 1 đơn canteen đang chờ thanh toán.')).toBeTruthy(),
     );
+  });
+
+  it('shows suggested questions after receiving answer', async () => {
+    const { getByPlaceholderText, getByText, findByText } = renderWithClient(<ChatbotScreen />);
+
+    fireEvent.changeText(getByPlaceholderText(/Nhập câu hỏi/i), 'Đơn canteen của tôi');
+    fireEvent.press(getByText(/Gửi/i));
+
+    expect(await findByText('Canteen mở cửa giờ nào?')).toBeTruthy();
+  });
+
+  it('shows initial suggested questions when no messages exist', () => {
+    const { getByText } = renderWithClient(<ChatbotScreen />);
+    expect(getByText('Đơn canteen của tôi')).toBeTruthy();
+    expect(getByText('Lịch học hôm nay')).toBeTruthy();
   });
 });

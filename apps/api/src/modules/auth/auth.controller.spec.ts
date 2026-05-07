@@ -31,6 +31,7 @@ describe('AuthController', () => {
             requestPasswordReset: jest.fn().mockResolvedValue(passwordResetChallenge),
             verifyPasswordResetOtp: jest.fn().mockResolvedValue({ verified: true }),
             resetPassword: jest.fn().mockResolvedValue({ success: true }),
+            changePassword: jest.fn().mockResolvedValue({ success: true }),
             logout: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -85,6 +86,21 @@ describe('AuthController', () => {
       await controller.logout('user-1');
 
       expect(authService.logout).toHaveBeenCalledWith('user-1');
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should call authService.changePassword with userId and dto fields', async () => {
+      const dto = { currentPassword: 'OldPassword123', newPassword: 'NewPassword456' };
+
+      const result = await controller.changePassword('user-1', dto);
+
+      expect(authService.changePassword).toHaveBeenCalledWith(
+        'user-1',
+        dto.currentPassword,
+        dto.newPassword,
+      );
+      expect(result).toEqual({ success: true });
     });
   });
 

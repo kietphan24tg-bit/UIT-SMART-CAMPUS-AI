@@ -37,6 +37,7 @@ describe('app utils', () => {
     const operatorCanteen = adminEntries.find((item) => item.id === 'canteen');
     const operatorAttendance = adminEntries.find((item) => item.id === 'attendance');
     const library = studentEntries.find((item) => item.id === 'library');
+    const adminLibrary = adminEntries.find((item) => item.id === 'library');
     const chatbot = studentEntries.find((item) => item.id === 'chatbot');
     const sos = studentEntries.find((item) => item.id === 'gps-sos');
 
@@ -48,6 +49,8 @@ describe('app utils', () => {
     expect(operatorAttendance?.isInteractive).toBe(false);
     expect(operatorAttendance?.route).toBe('/services/attendance');
     expect(library?.supportState).toBe('live');
+    expect(library?.route).toBe('/services/library');
+    expect(adminLibrary?.route).toBe('/services/library/admin');
     expect(chatbot?.supportState).toBe('live');
     expect(sos?.route).toBe('/services/gps-sos');
   });

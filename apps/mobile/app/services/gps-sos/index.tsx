@@ -36,6 +36,7 @@ export default function GpsSosScreen() {
   const [note, setNote] = useState('');
   const [viewerLocation, setViewerLocation] = useState<ViewerLocation>(null);
   const [routeNote, setRouteNote] = useState<string | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   const activeQuery = useQuery({
     queryKey: ['sos', 'active'],
@@ -120,6 +121,7 @@ export default function GpsSosScreen() {
       return sosApi.getRoute(sosId, location.lat, location.lng);
     },
     onSuccess: (payload) => {
+      setRouteError(null);
       const route = (payload.route?.routes as Array<Record<string, unknown>> | undefined)?.[0];
       const distanceMeters = Number(route?.distance ?? 0);
       const durationSeconds = Number(route?.duration ?? 0);
@@ -130,6 +132,13 @@ export default function GpsSosScreen() {
       } else {
         setRouteNote('Đã nhận lộ trình từ server.');
       }
+    },
+    onError: (error: unknown) => {
+      setRouteNote(null);
+      const message =
+        (error as { message?: string })?.message ??
+        'Không thể lấy lộ trình. Vui lòng thử lại.';
+      setRouteError(message);
     },
   });
 
@@ -288,6 +297,11 @@ export default function GpsSosScreen() {
               {routeNote ? (
                 <Text style={[styles.body, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
                   {routeNote}
+                </Text>
+              ) : null}
+              {routeError ? (
+                <Text style={[styles.errorText, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}>
+                  {routeError}
                 </Text>
               ) : null}
             </View>
