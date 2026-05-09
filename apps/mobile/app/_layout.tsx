@@ -155,6 +155,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/chatbot/index" />
         <Stack.Screen name="services/events/index" />
         <Stack.Screen name="services/events/[slug]" />
+        <Stack.Screen name="services/parking/index" />
         <Stack.Screen name="alerts/[id]" />
         <Stack.Screen name="settings/index" />
         <Stack.Screen name="settings/[task]" />

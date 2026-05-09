@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -275,6 +275,35 @@ describe('AuthService', () => {
   });
 
   describe('password reset', () => {
+    it('should throw when password reset email is not registered', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(authService.requestPasswordReset('missing@uit.edu.vn')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(authService.requestPasswordReset('missing@uit.edu.vn')).rejects.toThrow(
+        'Email chưa được đăng ký tài khoản.',
+      );
+      expect(prisma.passwordResetOtp.create).not.toHaveBeenCalled();
+      expect(passwordResetMailerService.sendOtpEmail).not.toHaveBeenCalled();
+    });
+
+    it('should throw when password reset email belongs to an inactive user', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        isActive: false,
+      });
+
+      await expect(authService.requestPasswordReset('inactive@uit.edu.vn')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(authService.requestPasswordReset('inactive@uit.edu.vn')).rejects.toThrow(
+        'Email chưa được đăng ký tài khoản.',
+      );
+      expect(prisma.passwordResetOtp.create).not.toHaveBeenCalled();
+      expect(passwordResetMailerService.sendOtpEmail).not.toHaveBeenCalled();
+    });
+
     it('should create a password reset OTP for an active user', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');

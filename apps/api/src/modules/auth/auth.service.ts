@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -13,6 +18,7 @@ import type { RegisterDto } from './dto/register.dto';
 import { PasswordResetMailerService } from './password-reset-mailer.service';
 
 const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_EMAIL_NOT_REGISTERED_MESSAGE = 'Email chưa được đăng ký tài khoản.';
 
 @Injectable()
 export class AuthService {
@@ -84,7 +90,7 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      return baseResponse;
+      throw new BadRequestException(PASSWORD_RESET_EMAIL_NOT_REGISTERED_MESSAGE);
     }
 
     const otp = this.generateOtp();

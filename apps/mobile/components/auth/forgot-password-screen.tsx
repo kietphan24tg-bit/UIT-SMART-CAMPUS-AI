@@ -14,6 +14,26 @@ import { useAppTheme } from '@/theme';
 type ResetStep = 'request' | 'verify' | 'reset' | 'done';
 type FeedbackTone = 'success' | 'danger' | 'warning' | 'info';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const errorRecord = error as { message?: unknown };
+
+    if (typeof errorRecord.message === 'string' && errorRecord.message.trim()) {
+      return errorRecord.message;
+    }
+
+    if (Array.isArray(errorRecord.message) && typeof errorRecord.message[0] === 'string') {
+      return errorRecord.message[0];
+    }
+  }
+
+  return fallback;
+}
+
 function isValidUitEmail(value: string) {
   return /@(gm\.)?uit\.edu\.vn$/i.test(value.trim());
 }
@@ -91,7 +111,7 @@ export function ForgotPasswordScreen() {
         label: 'OTP đã được tạo. Kiểm tra email của bạn để tiếp tục.',
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể gửi OTP lúc này.';
+      const message = getErrorMessage(error, 'Không thể gửi OTP lúc này.');
       setFeedback({ tone: 'danger', label: message });
     } finally {
       setLoading(false);
@@ -115,7 +135,7 @@ export function ForgotPasswordScreen() {
       setStep('reset');
       setFeedback({ tone: 'success', label: 'OTP hợp lệ. Bạn có thể tạo mật khẩu mới.' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'OTP không hợp lệ hoặc đã hết hạn.';
+      const message = getErrorMessage(error, 'OTP không hợp lệ hoặc đã hết hạn.');
       setFeedback({ tone: 'danger', label: message });
     } finally {
       setLoading(false);
@@ -146,7 +166,7 @@ export function ForgotPasswordScreen() {
       setStep('done');
       setFeedback({ tone: 'success', label: 'Mật khẩu đã được cập nhật thành công.' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể cập nhật mật khẩu.';
+      const message = getErrorMessage(error, 'Không thể cập nhật mật khẩu.');
       setFeedback({ tone: 'danger', label: message });
     } finally {
       setLoading(false);

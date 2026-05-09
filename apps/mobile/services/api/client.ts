@@ -95,6 +95,11 @@ function buildAxiosDebugPayload(error: AxiosError) {
   };
 }
 
+function isExpectedClientError(error: AxiosError) {
+  const status = error.response?.status;
+  return status != null && status >= 400 && status < 500;
+}
+
 async function buildStoredAuthDebugPayload() {
   const [accessToken, refreshToken] = await Promise.all([
     SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
@@ -228,11 +233,13 @@ apiClient.interceptors.response.use(
     const isRecoverable401 = isRefreshableUnauthorizedError(error, originalRequest);
 
     if (!isRecoverable401) {
-      console.error('[apiClient] request failed', {
-        ...buildAxiosDebugPayload(error),
-        ...authDebugPayload,
-        hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
-      });
+      if (!isExpectedClientError(error)) {
+        console.error('[apiClient] request failed', {
+          ...buildAxiosDebugPayload(error),
+          ...authDebugPayload,
+          hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
+        });
+      }
       if (isCanteenDebugRequest(error.config)) {
         console.warn('[apiClient] canteen response auth debug', {
           method: error.config?.method?.toUpperCase() ?? 'GET',

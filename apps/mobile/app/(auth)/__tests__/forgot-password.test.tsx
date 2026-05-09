@@ -69,6 +69,27 @@ describe('ForgotPasswordRoute', () => {
     });
   });
 
+  it('shows an API error and stays on the email step when account does not exist', async () => {
+    mockedAuthApi.requestPasswordReset.mockRejectedValue(
+      new Error('Email chưa được đăng ký tài khoản.'),
+    );
+
+    const screen = render(<ForgotPasswordRoute />);
+
+    fireEvent.changeText(
+      screen.getByPlaceholderText('student@gm.uit.edu.vn'),
+      '24521189@gm.uit.edu.vn',
+    );
+    fireEvent.press(screen.getByRole('button', { name: 'Gá»­i OTP' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Email chưa được đăng ký tài khoản.')).toBeTruthy();
+    });
+
+    expect(screen.queryByRole('button', { name: 'XÃ¡c thá»±c OTP' })).toBeNull();
+    expect(screen.queryByPlaceholderText('123456')).toBeNull();
+  });
+
   it('shows two password visibility toggles in the reset step', async () => {
     mockedAuthApi.requestPasswordReset.mockResolvedValue({
       maskedEmail: 'st***@gm.uit.edu.vn',

@@ -368,7 +368,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       isInteractive: true,
       lastVerifiedSource: 'parking',
       primaryAction: 'Mở Parking',
-      route: '/parking',
+      route: '/services/parking',
       description: 'Hỗ trợ A1-A2, cảm biến môi trường, đăng ký xe và thanh toán MoMo.',
     },
     {

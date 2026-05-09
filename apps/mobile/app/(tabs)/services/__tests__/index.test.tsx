@@ -61,6 +61,14 @@ describe('ServicesScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/services/room-booking');
   });
 
+  it('opens parking inside the services route tree', () => {
+    const { getByText } = render(<ServicesScreen />);
+
+    fireEvent.press(getByText('Parking + IoT'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/parking');
+  });
+
   it('renders live and unavailable service groups', () => {
     const { getByText } = render(<ServicesScreen />);
 

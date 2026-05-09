@@ -1,4 +1,5 @@
 import {
+  getRoleQuickActions,
   getRoleLabel,
   getRoleScopedTabTitle,
   getServiceEntries,
@@ -53,6 +54,16 @@ describe('app utils', () => {
     expect(adminLibrary?.route).toBe('/services/library/admin');
     expect(chatbot?.supportState).toBe('live');
     expect(sos?.route).toBe('/services/gps-sos');
+  });
+
+  it('should keep parking routes scoped by entry source', () => {
+    const studentParkingService = getServiceEntries('student').find((item) => item.id === 'parking');
+    const studentParkingQuickAction = getRoleQuickActions('student').find((item) => item.id === 'parking');
+    const adminParkingQuickAction = getRoleQuickActions('admin').find((item) => item.id === 'parking');
+
+    expect(studentParkingService?.route).toBe('/services/parking');
+    expect(studentParkingQuickAction?.route).toBe('/parking');
+    expect(adminParkingQuickAction?.route).toBe('/parking');
   });
 
   it('should route grades by role', () => {

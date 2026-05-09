@@ -8,18 +8,18 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://20.196.153.39:3000/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://uitsmartcampus.id.vn/api/v1"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://20.196.153.39:3000/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://uitsmartcampus.id.vn/api/v1"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://20.196.153.39:3000/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://uitsmartcampus.id.vn/api/v1"
       }
     }
   },

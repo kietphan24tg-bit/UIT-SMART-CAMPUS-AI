@@ -15,6 +15,26 @@ import type {
 
 import { apiClient } from './client';
 
+function toAuthApiError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const errorRecord = error as { message?: unknown };
+
+    if (typeof errorRecord.message === 'string' && errorRecord.message.trim()) {
+      return new Error(errorRecord.message);
+    }
+
+    if (Array.isArray(errorRecord.message) && typeof errorRecord.message[0] === 'string') {
+      return new Error(errorRecord.message[0]);
+    }
+  }
+
+  return new Error(fallback);
+}
+
 export const authApi = {
   login: async (data: LoginRequest): Promise<AuthTokens> => {
     return apiClient.post('/auth/login', data);
@@ -31,19 +51,31 @@ export const authApi = {
   requestPasswordReset: async (
     data: PasswordResetRequest,
   ): Promise<PasswordResetChallenge> => {
-    return apiClient.post('/auth/password-reset/request', data);
+    try {
+      return await apiClient.post('/auth/password-reset/request', data);
+    } catch (error) {
+      throw toAuthApiError(error, 'Không thể gửi OTP lúc này.');
+    }
   },
 
   verifyPasswordResetOtp: async (
     data: PasswordResetOtpVerifyRequest,
   ): Promise<PasswordResetOtpVerifyResult> => {
-    return apiClient.post('/auth/password-reset/verify', data);
+    try {
+      return await apiClient.post('/auth/password-reset/verify', data);
+    } catch (error) {
+      throw toAuthApiError(error, 'OTP không hợp lệ hoặc đã hết hạn.');
+    }
   },
 
   resetPassword: async (
     data: PasswordResetConfirmRequest,
   ): Promise<PasswordResetConfirmResult> => {
-    return apiClient.post('/auth/password-reset/reset', data);
+    try {
+      return await apiClient.post('/auth/password-reset/reset', data);
+    } catch (error) {
+      throw toAuthApiError(error, 'Không thể cập nhật mật khẩu.');
+    }
   },
 
   changePassword: async (
