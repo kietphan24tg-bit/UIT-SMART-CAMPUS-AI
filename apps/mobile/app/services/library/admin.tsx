@@ -9,7 +9,9 @@ import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -94,8 +96,9 @@ function isApiRouteMissing(error: unknown) {
 
   const candidate = error as { statusCode?: unknown; status?: unknown; message?: unknown };
   const message = typeof candidate.message === 'string' ? candidate.message : '';
-  return (candidate.statusCode === 404 || candidate.status === 404) &&
-    message.includes('Cannot GET');
+  return (
+    (candidate.statusCode === 404 || candidate.status === 404) && message.includes('Cannot GET')
+  );
 }
 
 function parseSubjectsInput(value: string) {
@@ -136,6 +139,45 @@ function toCopyForm(copy?: LibraryBookCopyRecord | null): CopyFormState {
     conditionNote: copy.conditionNote ?? '',
     acquiredAt: copy.acquiredAt ? new Date(copy.acquiredAt).toISOString().slice(0, 10) : '',
   };
+}
+
+function normalizeDateOnlyInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function serializeCopyAcquiredAt(value: string) {
+  const normalized = normalizeDateOnlyInput(value);
+  if (!normalized) {
+    throw new Error('Ngày nhập không hợp lệ. Vui lòng dùng định dạng YYYY-MM-DD.');
+  }
+
+  return `${normalized}T00:00:00.000Z`;
 }
 
 function resolveImageMimeType(mimeType?: string | null) {
@@ -300,7 +342,10 @@ export default function LibraryAdminScreen() {
     [editingCopyId, selectedBook],
   );
 
-  const pendingRequests = useMemo(() => requests.filter((item) => item.status === 'pending'), [requests]);
+  const pendingRequests = useMemo(
+    () => requests.filter((item) => item.status === 'pending'),
+    [requests],
+  );
   const activeLoans = useMemo(() => loans.filter((item) => item.status !== 'returned'), [loans]);
   const isAdminLoansEndpointUnavailable = isApiRouteMissing(adminLoansQuery.error);
 
@@ -393,7 +438,9 @@ export default function LibraryAdminScreen() {
       libraryApi.createBookCopy(selectedBookId ?? '', {
         copyCode: copyForm.copyCode.trim(),
         conditionNote: copyForm.conditionNote.trim() || undefined,
-        acquiredAt: copyForm.acquiredAt.trim() ? `${copyForm.acquiredAt.trim()}T00:00:00.000Z` : undefined,
+        acquiredAt: copyForm.acquiredAt.trim()
+          ? serializeCopyAcquiredAt(copyForm.acquiredAt)
+          : undefined,
       }),
     onSuccess: async () => {
       closeCopySheet();
@@ -407,7 +454,7 @@ export default function LibraryAdminScreen() {
       libraryApi.updateBookCopy(editingCopyId ?? '', {
         copyCode: copyForm.copyCode.trim(),
         conditionNote: copyForm.conditionNote.trim() || '',
-        acquiredAt: copyForm.acquiredAt.trim() ? `${copyForm.acquiredAt.trim()}T00:00:00.000Z` : '',
+        acquiredAt: copyForm.acquiredAt.trim() ? serializeCopyAcquiredAt(copyForm.acquiredAt) : '',
       }),
     onSuccess: async () => {
       closeCopySheet();
@@ -593,6 +640,11 @@ export default function LibraryAdminScreen() {
       return;
     }
 
+    if (copyForm.acquiredAt.trim() && !normalizeDateOnlyInput(copyForm.acquiredAt)) {
+      Alert.alert('Bản copy', 'Ngày nhập không hợp lệ. Vui lòng dùng định dạng YYYY-MM-DD.');
+      return;
+    }
+
     if (editingCopyId) {
       updateCopyMutation.mutate();
       return;
@@ -616,7 +668,12 @@ export default function LibraryAdminScreen() {
       <ContentStack gap={14} overlapHero={false}>
         <View style={styles.headerBlock}>
           <View style={styles.headerTextWrap}>
-            <Text style={[styles.headerTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>
+            <Text
+              style={[
+                styles.headerTitle,
+                { color: theme.colors.text, fontFamily: theme.fonts.bold },
+              ]}
+            >
               Thư viện Admin
             </Text>
             <Text
@@ -625,7 +682,8 @@ export default function LibraryAdminScreen() {
                 { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
               ]}
             >
-              Quản lý danh mục sách, xét duyệt yêu cầu mượn và theo dõi quá trình trả sách trên một màn hình.
+              Quản lý danh mục sách, xét duyệt yêu cầu mượn và theo dõi quá trình trả sách trên một
+              màn hình.
             </Text>
           </View>
         </View>
@@ -662,9 +720,21 @@ export default function LibraryAdminScreen() {
               { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border },
             ]}
           >
-            <TabChip label="Đầu sách" active={activeTab === 'books'} onPress={() => setActiveTab('books')} />
-            <TabChip label="Chờ xử lý" active={activeTab === 'requests'} onPress={() => setActiveTab('requests')} />
-            <TabChip label="Đang mượn" active={activeTab === 'loans'} onPress={() => setActiveTab('loans')} />
+            <TabChip
+              label="Đầu sách"
+              active={activeTab === 'books'}
+              onPress={() => setActiveTab('books')}
+            />
+            <TabChip
+              label="Chờ xử lý"
+              active={activeTab === 'requests'}
+              onPress={() => setActiveTab('requests')}
+            />
+            <TabChip
+              label="Đang mượn"
+              active={activeTab === 'loans'}
+              onPress={() => setActiveTab('loans')}
+            />
           </View>
           <Pressable
             accessibilityRole="button"
@@ -714,10 +784,18 @@ export default function LibraryAdminScreen() {
                 <View
                   style={[
                     styles.panel,
-                    { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border },
+                    {
+                      backgroundColor: theme.colors.surfaceElevated,
+                      borderColor: theme.colors.border,
+                    },
                   ]}
                 >
-                  <Text style={[styles.panelTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  <Text
+                    style={[
+                      styles.panelTitle,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
                     Quản lý đầu sách
                   </Text>
                   <FormField
@@ -760,7 +838,11 @@ export default function LibraryAdminScreen() {
                             ]}
                           >
                             {book.coverUrl ? (
-                              <Image source={{ uri: book.coverUrl }} style={styles.thumbnail} contentFit="cover" />
+                              <Image
+                                source={{ uri: book.coverUrl }}
+                                style={styles.thumbnail}
+                                contentFit="cover"
+                              />
                             ) : (
                               <View
                                 style={[
@@ -771,7 +853,11 @@ export default function LibraryAdminScreen() {
                                   },
                                 ]}
                               >
-                                <Ionicons name="book-outline" size={20} color={theme.colors.textSoft} />
+                                <Ionicons
+                                  name="book-outline"
+                                  size={20}
+                                  color={theme.colors.textSoft}
+                                />
                               </View>
                             )}
                             <View style={styles.bookMeta}>
@@ -787,7 +873,10 @@ export default function LibraryAdminScreen() {
                                 <Text
                                   style={[
                                     styles.body,
-                                    { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                                    {
+                                      color: theme.colors.textMuted,
+                                      fontFamily: theme.fonts.regular,
+                                    },
                                   ]}
                                 >
                                   {book.authors}
@@ -795,7 +884,10 @@ export default function LibraryAdminScreen() {
                                 <Text
                                   style={[
                                     styles.meta,
-                                    { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                                    {
+                                      color: theme.colors.textSoft,
+                                      fontFamily: theme.fonts.medium,
+                                    },
                                   ]}
                                 >
                                   Số lượng: {book.availableCopies}/{book.copies.length}
@@ -813,8 +905,15 @@ export default function LibraryAdminScreen() {
                           </Pressable>
 
                           {expanded ? (
-                            <View style={[styles.detailPanel, { borderColor: theme.colors.border }]}>
-                              <View style={[styles.bookActionRow, isCompact && styles.bookActionRowCompact]}>
+                            <View
+                              style={[styles.detailPanel, { borderColor: theme.colors.border }]}
+                            >
+                              <View
+                                style={[
+                                  styles.bookActionRow,
+                                  isCompact && styles.bookActionRowCompact,
+                                ]}
+                              >
                                 <SecondaryButton
                                   label="Sửa sách"
                                   onPress={() => openEditBookSheet(book)}
@@ -823,25 +922,34 @@ export default function LibraryAdminScreen() {
                                 <SmallDangerButton
                                   label="Xóa đầu sách"
                                   onPress={() =>
-                                    Alert.alert('Xóa đầu sách', 'Bạn có chắc muốn xóa đầu sách này?', [
-                                      { text: 'Hủy', style: 'cancel' },
-                                      {
-                                        text: 'Xóa',
-                                        style: 'destructive',
-                                        onPress: () => deleteBookMutation.mutate(book.id),
-                                      },
-                                    ])
+                                    Alert.alert(
+                                      'Xóa đầu sách',
+                                      'Bạn có chắc muốn xóa đầu sách này?',
+                                      [
+                                        { text: 'Hủy', style: 'cancel' },
+                                        {
+                                          text: 'Xóa',
+                                          style: 'destructive',
+                                          onPress: () => deleteBookMutation.mutate(book.id),
+                                        },
+                                      ],
+                                    )
                                   }
                                   style={styles.bookDangerButton}
                                 />
                               </View>
 
                               <View style={styles.detailBlock}>
-                                <View style={[styles.rowBetween, isCompact && styles.rowBetweenCompact]}>
+                                <View
+                                  style={[styles.rowBetween, isCompact && styles.rowBetweenCompact]}
+                                >
                                   <Text
                                     style={[
                                       styles.detailTitle,
-                                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                      {
+                                        color: theme.colors.text,
+                                        fontFamily: theme.fonts.semibold,
+                                      },
                                     ]}
                                   >
                                     Bản copy ({book.copies.length})
@@ -866,7 +974,10 @@ export default function LibraryAdminScreen() {
                                   <Text
                                     style={[
                                       styles.body,
-                                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                                      {
+                                        color: theme.colors.textMuted,
+                                        fontFamily: theme.fonts.regular,
+                                      },
                                     ]}
                                   >
                                     Chưa có bản copy nào cho đầu sách này.
@@ -884,12 +995,20 @@ export default function LibraryAdminScreen() {
                                           },
                                         ]}
                                       >
-                                        <View style={[styles.rowBetween, isCompact && styles.rowBetweenCompact]}>
+                                        <View
+                                          style={[
+                                            styles.rowBetween,
+                                            isCompact && styles.rowBetweenCompact,
+                                          ]}
+                                        >
                                           <View style={styles.flexWrap}>
                                             <Text
                                               style={[
                                                 styles.copyTitle,
-                                                { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                                {
+                                                  color: theme.colors.text,
+                                                  fontFamily: theme.fonts.semibold,
+                                                },
                                               ]}
                                             >
                                               {copy.copyCode}
@@ -897,19 +1016,27 @@ export default function LibraryAdminScreen() {
                                             <Text
                                               style={[
                                                 styles.meta,
-                                                { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+                                                {
+                                                  color: theme.colors.textSoft,
+                                                  fontFamily: theme.fonts.regular,
+                                                },
                                               ]}
                                             >
                                               Ngày nhập:{' '}
                                               {copy.acquiredAt
-                                                ? new Date(copy.acquiredAt).toLocaleDateString('vi-VN')
+                                                ? new Date(copy.acquiredAt).toLocaleDateString(
+                                                    'vi-VN',
+                                                  )
                                                 : 'Chưa cập nhật'}
                                             </Text>
                                             {copy.conditionNote ? (
                                               <Text
                                                 style={[
                                                   styles.meta,
-                                                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                                                  {
+                                                    color: theme.colors.textMuted,
+                                                    fontFamily: theme.fonts.regular,
+                                                  },
                                                 ]}
                                               >
                                                 Ghi chú: {copy.conditionNote}
@@ -918,7 +1045,12 @@ export default function LibraryAdminScreen() {
                                           </View>
                                         </View>
 
-                                        <View style={[styles.copyActionRow, isCompact && styles.copyActionRowCompact]}>
+                                        <View
+                                          style={[
+                                            styles.copyActionRow,
+                                            isCompact && styles.copyActionRowCompact,
+                                          ]}
+                                        >
                                           <SecondaryButton
                                             label="Sửa"
                                             onPress={() => openEditCopySheet(book.id, copy)}
@@ -927,14 +1059,19 @@ export default function LibraryAdminScreen() {
                                           <SmallDangerButton
                                             label="Xóa"
                                             onPress={() =>
-                                              Alert.alert('Xóa bản copy', 'Bạn có chắc muốn xóa bản copy này?', [
-                                                { text: 'Hủy', style: 'cancel' },
-                                                {
-                                                  text: 'Xóa',
-                                                  style: 'destructive',
-                                                  onPress: () => deleteCopyMutation.mutate(copy.id),
-                                                },
-                                              ])
+                                              Alert.alert(
+                                                'Xóa bản copy',
+                                                'Bạn có chắc muốn xóa bản copy này?',
+                                                [
+                                                  { text: 'Hủy', style: 'cancel' },
+                                                  {
+                                                    text: 'Xóa',
+                                                    style: 'destructive',
+                                                    onPress: () =>
+                                                      deleteCopyMutation.mutate(copy.id),
+                                                  },
+                                                ],
+                                              )
                                             }
                                             style={styles.bookDangerButton}
                                           />
@@ -968,7 +1105,10 @@ export default function LibraryAdminScreen() {
                       key={request.id}
                       style={[
                         styles.card,
-                        { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border },
+                        {
+                          backgroundColor: theme.colors.surfaceElevated,
+                          borderColor: theme.colors.border,
+                        },
                       ]}
                     >
                       <View style={[styles.rowBetween, isCompact && styles.rowBetweenCompact]}>
@@ -987,7 +1127,8 @@ export default function LibraryAdminScreen() {
                               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                             ]}
                           >
-                            {request.requester.fullName} · {request.requester.studentId || request.requester.email}
+                            {request.requester.fullName} ·{' '}
+                            {request.requester.studentId || request.requester.email}
                           </Text>
                           <Text
                             style={[
@@ -1009,7 +1150,11 @@ export default function LibraryAdminScreen() {
                             </Text>
                           ) : null}
                         </View>
-                        <StatusBadge label={getRequestStatusLabel(request.status)} tone={getRequestStatusTone(request.status)} size="sm" />
+                        <StatusBadge
+                          label={getRequestStatusLabel(request.status)}
+                          tone={getRequestStatusTone(request.status)}
+                          size="sm"
+                        />
                       </View>
 
                       <View style={styles.actionRow}>
@@ -1052,7 +1197,10 @@ export default function LibraryAdminScreen() {
                       key={loan.id}
                       style={[
                         styles.card,
-                        { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border },
+                        {
+                          backgroundColor: theme.colors.surfaceElevated,
+                          borderColor: theme.colors.border,
+                        },
                       ]}
                     >
                       <View style={[styles.rowBetween, isCompact && styles.rowBetweenCompact]}>
@@ -1071,7 +1219,8 @@ export default function LibraryAdminScreen() {
                               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                             ]}
                           >
-                            {loan.borrower.fullName} · {loan.borrower.studentId || loan.borrower.email}
+                            {loan.borrower.fullName} ·{' '}
+                            {loan.borrower.studentId || loan.borrower.email}
                           </Text>
                           <Text
                             style={[
@@ -1093,19 +1242,27 @@ export default function LibraryAdminScreen() {
                             </Text>
                           ) : null}
                         </View>
-                        <StatusBadge label={getLoanStatusLabel(loan.status)} tone={getLoanStatusTone(loan.status)} size="sm" />
+                        <StatusBadge
+                          label={getLoanStatusLabel(loan.status)}
+                          tone={getLoanStatusTone(loan.status)}
+                          size="sm"
+                        />
                       </View>
 
                       <PrimaryButton
                         label="Xác nhận trả sách"
                         onPress={() =>
-                          Alert.alert('Xác nhận trả sách', 'Xác nhận bạn đã nhận lại cuốn sách này?', [
-                            { text: 'Hủy', style: 'cancel' },
-                            {
-                              text: 'Xác nhận',
-                              onPress: () => checkInMutation.mutate(loan.id),
-                            },
-                          ])
+                          Alert.alert(
+                            'Xác nhận trả sách',
+                            'Xác nhận bạn đã nhận lại cuốn sách này?',
+                            [
+                              { text: 'Hủy', style: 'cancel' },
+                              {
+                                text: 'Xác nhận',
+                                onPress: () => checkInMutation.mutate(loan.id),
+                              },
+                            ],
+                          )
                         }
                         loading={checkInMutation.isPending}
                       />
@@ -1125,20 +1282,52 @@ export default function LibraryAdminScreen() {
         onClose={closeBookSheet}
       >
         <View style={styles.sheetContent}>
-          <FormField label="Tên sách" value={bookForm.title} onChangeText={(value) => setBookForm((prev) => ({ ...prev, title: value }))} />
-          <FormField label="Tác giả" value={bookForm.authors} onChangeText={(value) => setBookForm((prev) => ({ ...prev, authors: value }))} />
-          <FormField label="Phụ đề" value={bookForm.subtitle} onChangeText={(value) => setBookForm((prev) => ({ ...prev, subtitle: value }))} />
-          <FormField label="ISBN-13" value={bookForm.isbn13} onChangeText={(value) => setBookForm((prev) => ({ ...prev, isbn13: value }))} />
+          <FormField
+            label="Tên sách"
+            value={bookForm.title}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, title: value }))}
+          />
+          <FormField
+            label="Tác giả"
+            value={bookForm.authors}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, authors: value }))}
+          />
+          <FormField
+            label="Phụ đề"
+            value={bookForm.subtitle}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, subtitle: value }))}
+          />
+          <FormField
+            label="ISBN-13"
+            value={bookForm.isbn13}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, isbn13: value }))}
+          />
           <FormField
             label="Chủ đề"
             value={bookForm.subjects}
             onChangeText={(value) => setBookForm((prev) => ({ ...prev, subjects: value }))}
             hint="Nhập nhiều chủ đề, ngăn cách bằng dấu phẩy."
           />
-          <FormField label="Nhà xuất bản" value={bookForm.publisher} onChangeText={(value) => setBookForm((prev) => ({ ...prev, publisher: value }))} />
-          <FormField label="Năm xuất bản" value={bookForm.publishedAt} onChangeText={(value) => setBookForm((prev) => ({ ...prev, publishedAt: value }))} />
-          <FormField label="Ngôn ngữ" value={bookForm.language} onChangeText={(value) => setBookForm((prev) => ({ ...prev, language: value }))} />
-          <FormField label="Mã kệ" value={bookForm.shelfCode} onChangeText={(value) => setBookForm((prev) => ({ ...prev, shelfCode: value }))} />
+          <FormField
+            label="Nhà xuất bản"
+            value={bookForm.publisher}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, publisher: value }))}
+          />
+          <FormField
+            label="Năm xuất bản"
+            value={bookForm.publishedAt}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, publishedAt: value }))}
+          />
+          <FormField
+            label="Ngôn ngữ"
+            value={bookForm.language}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, language: value }))}
+          />
+          <FormField
+            label="Mã kệ"
+            value={bookForm.shelfCode}
+            onChangeText={(value) => setBookForm((prev) => ({ ...prev, shelfCode: value }))}
+          />
           <FormField
             label="Mô tả"
             value={bookForm.description}
@@ -1149,7 +1338,11 @@ export default function LibraryAdminScreen() {
           />
 
           <View style={styles.imageBlock}>
-            <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>Ảnh bìa sách</Text>
+            <Text
+              style={[styles.label, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}
+            >
+              Ảnh bìa sách
+            </Text>
             <View
               style={[
                 styles.imageUploadCard,
@@ -1171,11 +1364,22 @@ export default function LibraryAdminScreen() {
                   ]}
                 >
                   <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.primary} />
-                  <Text style={[styles.body, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>Tải ảnh</Text>
+                  <Text
+                    style={[
+                      styles.body,
+                      { color: theme.colors.text, fontFamily: theme.fonts.medium },
+                    ]}
+                  >
+                    Tải ảnh
+                  </Text>
                 </Pressable>
               ) : (
                 <View style={styles.imageUploadPreviewWrap}>
-                  <Image source={{ uri: bookForm.coverUrl }} style={styles.imageUploadPreviewImage} contentFit="cover" />
+                  <Image
+                    source={{ uri: bookForm.coverUrl }}
+                    style={styles.imageUploadPreviewImage}
+                    contentFit="cover"
+                  />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Xóa ảnh bìa"
@@ -1200,14 +1404,24 @@ export default function LibraryAdminScreen() {
               {isUploadingCover ? (
                 <View style={styles.imageUploadProgress}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
-                  <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
+                  <Text
+                    style={[
+                      styles.meta,
+                      { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                    ]}
+                  >
                     Đang tải ảnh...
                   </Text>
                 </View>
               ) : null}
             </View>
             {bookImageError ? (
-              <Text style={[styles.errorText, { color: theme.colors.danger, fontFamily: theme.fonts.regular }]}>
+              <Text
+                style={[
+                  styles.errorText,
+                  { color: theme.colors.danger, fontFamily: theme.fonts.regular },
+                ]}
+              >
                 {bookImageError}
               </Text>
             ) : null}
@@ -1228,7 +1442,11 @@ export default function LibraryAdminScreen() {
       <BottomSheet
         visible={copySheetVisible}
         title={editingCopy ? 'Chỉnh sửa bản copy' : 'Thêm bản copy'}
-        subtitle={selectedBook ? `Đầu sách: ${selectedBook.title}` : 'Hãy chọn đầu sách trước khi thêm copy.'}
+        subtitle={
+          selectedBook
+            ? `Đầu sách: ${selectedBook.title}`
+            : 'Hãy chọn đầu sách trước khi thêm copy.'
+        }
         onClose={closeCopySheet}
       >
         <View style={styles.sheetContent}>
@@ -1351,9 +1569,24 @@ function MetricCard({
         },
       ]}
     >
-      <Text style={[styles.metricLabel, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>{label}</Text>
-      <Text style={[styles.metricValue, { color: toneStyles.valueColor, fontFamily: theme.fonts.bold }]}>{value}</Text>
-      <Text style={[styles.metricHelper, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>{helper}</Text>
+      <Text
+        style={[styles.metricLabel, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[styles.metricValue, { color: toneStyles.valueColor, fontFamily: theme.fonts.bold }]}
+      >
+        {value}
+      </Text>
+      <Text
+        style={[
+          styles.metricHelper,
+          { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+        ]}
+      >
+        {helper}
+      </Text>
     </View>
   );
 }
@@ -1370,11 +1603,21 @@ function InlineActionLink({
   const theme = useAppTheme();
 
   const color =
-    tone === 'danger' ? theme.colors.danger : tone === 'warning' ? theme.colors.warning : theme.colors.primary;
+    tone === 'danger'
+      ? theme.colors.danger
+      : tone === 'warning'
+        ? theme.colors.warning
+        : theme.colors.primary;
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.72 : 1 }]}>
-      <Text style={[styles.inlineActionLink, { color, fontFamily: theme.fonts.semibold }]}>{label}</Text>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [{ opacity: pressed ? 0.72 : 1 }]}
+    >
+      <Text style={[styles.inlineActionLink, { color, fontFamily: theme.fonts.semibold }]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -1405,7 +1648,12 @@ function SmallDangerButton({
         style,
       ]}
     >
-      <Text style={[styles.smallDangerButtonLabel, { color: theme.colors.danger, fontFamily: theme.fonts.semibold }]}>
+      <Text
+        style={[
+          styles.smallDangerButtonLabel,
+          { color: theme.colors.danger, fontFamily: theme.fonts.semibold },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -1430,28 +1678,59 @@ function BottomSheet({
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalRoot}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: theme.colors.overlay }]} onPress={onClose} />
-        <View style={[styles.sheetPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={styles.sheetHandleWrap}>
-            <View style={[styles.sheetHandle, { backgroundColor: theme.colors.border }]} />
-          </View>
-          <View style={styles.sheetHeader}>
-            <View style={styles.flexWrap}>
-              <Text style={[styles.sheetTitle, { color: theme.colors.text, fontFamily: theme.fonts.bold }]}>{title}</Text>
-              {subtitle ? (
-                <Text style={[styles.sheetSubtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-                  {subtitle}
-                </Text>
-              ) : null}
+        <Pressable
+          style={[styles.modalBackdrop, { backgroundColor: theme.colors.overlay }]}
+          onPress={onClose}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+          style={styles.sheetKeyboardAvoider}
+        >
+          <View
+            style={[
+              styles.sheetPanel,
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+            ]}
+          >
+            <View style={styles.sheetHandleWrap}>
+              <View style={[styles.sheetHandle, { backgroundColor: theme.colors.border }]} />
             </View>
-            <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetClose}>
-              <Ionicons name="close" size={20} color={theme.colors.text} />
-            </Pressable>
+            <View style={styles.sheetHeader}>
+              <View style={styles.flexWrap}>
+                <Text
+                  style={[
+                    styles.sheetTitle,
+                    { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                  ]}
+                >
+                  {title}
+                </Text>
+                {subtitle ? (
+                  <Text
+                    style={[
+                      styles.sheetSubtitle,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                    ]}
+                  >
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetClose}>
+                <Ionicons name="close" size={20} color={theme.colors.text} />
+              </Pressable>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              contentContainerStyle={styles.sheetScrollContent}
+            >
+              {children}
+            </ScrollView>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetScrollContent}>
-            {children}
-          </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -1784,12 +2063,17 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
+  sheetKeyboardAvoider: {
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
   sheetPanel: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
     borderBottomWidth: 0,
     maxHeight: '86%',
+    minHeight: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 20,
@@ -1826,7 +2110,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   sheetScrollContent: {
-    paddingBottom: 8,
+    paddingBottom: 20,
   },
   sheetContent: {
     gap: 14,

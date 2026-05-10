@@ -59,7 +59,9 @@ describe('LibraryService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback(prisma));
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback(prisma),
+    );
     service = new LibraryService(prisma, storageService as never);
   });
 
@@ -306,6 +308,21 @@ describe('LibraryService', () => {
     expect(result).toEqual({ id: 'request-1', deleted: true });
   });
 
+  it('deletes an approved loan request for owner without touching the loan record', async () => {
+    prisma.libraryLoanRequest.findUnique.mockResolvedValue({
+      id: 'request-2',
+      requesterId: 'student-1',
+      status: LibraryLoanRequestStatus.approved,
+    });
+    prisma.libraryLoanRequest.delete.mockResolvedValue({ id: 'request-2' });
+
+    const result = await service.deleteLoanRequest('request-2', 'student-1');
+
+    expect(prisma.libraryLoanRequest.delete).toHaveBeenCalledWith({ where: { id: 'request-2' } });
+    expect(prisma.libraryLoan.delete).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'request-2', deleted: true });
+  });
+
   it('forbids deleting another user cancelled loan request', async () => {
     prisma.libraryLoanRequest.findUnique.mockResolvedValue({
       id: 'request-1',
@@ -363,7 +380,10 @@ describe('LibraryService', () => {
     });
     prisma.libraryLoan.count.mockResolvedValue(0);
     prisma.libraryLoan.create.mockResolvedValue({ id: 'loan-1' });
-    prisma.libraryBookCopy.update.mockResolvedValue({ id: 'copy-1', status: LibraryBookCopyStatus.borrowed });
+    prisma.libraryBookCopy.update.mockResolvedValue({
+      id: 'copy-1',
+      status: LibraryBookCopyStatus.borrowed,
+    });
     prisma.libraryLoanRequest.update.mockResolvedValue({
       id: 'request-1',
       status: LibraryLoanRequestStatus.approved,
@@ -472,9 +492,9 @@ describe('LibraryService', () => {
       status: 'active',
     });
 
-    await expect(service.cancelReservation('student-1', 'reservation-1', false)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.cancelReservation('student-1', 'reservation-1', false),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('deletes only returned loans', async () => {
@@ -516,7 +536,10 @@ describe('LibraryService', () => {
   });
 
   it('creates library book with cover url', async () => {
-    prisma.libraryBook.create.mockResolvedValue({ id: 'book-1', coverUrl: 'https://img.test/book.jpg' });
+    prisma.libraryBook.create.mockResolvedValue({
+      id: 'book-1',
+      coverUrl: 'https://img.test/book.jpg',
+    });
 
     await service.createBook({
       title: 'Clean Architecture',
@@ -582,17 +605,21 @@ describe('LibraryService', () => {
 
   it('creates and updates library copy metadata', async () => {
     prisma.libraryBook.findUnique.mockResolvedValue({ id: 'book-1' });
-    prisma.libraryBookCopy.create.mockResolvedValue({ id: 'copy-1', copyCode: 'LIB-001', acquiredAt: new Date('2026-05-07') });
+    prisma.libraryBookCopy.create.mockResolvedValue({
+      id: 'copy-1',
+      copyCode: 'LIB-001',
+      acquiredAt: new Date('2026-05-07'),
+    });
     prisma.libraryBookCopy.findUnique.mockResolvedValue({ id: 'copy-1' });
     prisma.libraryBookCopy.update.mockResolvedValue({ id: 'copy-1', copyCode: 'LIB-001-A' });
 
     await service.addCopy('book-1', {
       copyCode: 'LIB-001',
-      acquiredAt: '2026-05-07T00:00:00.000Z',
+      acquiredAt: '2026-5-7',
     });
     await service.updateCopy('copy-1', {
       copyCode: 'LIB-001-A',
-      acquiredAt: '2026-05-08T00:00:00.000Z',
+      acquiredAt: '2026-5-8',
     });
 
     expect(prisma.libraryBookCopy.create).toHaveBeenCalled();

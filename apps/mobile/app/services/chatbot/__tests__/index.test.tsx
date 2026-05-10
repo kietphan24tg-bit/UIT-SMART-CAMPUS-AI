@@ -52,10 +52,10 @@ describe('ChatbotScreen', () => {
   });
 
   it('submits question and renders chatbot answer', async () => {
-    const { getByPlaceholderText, getByText } = renderWithClient(<ChatbotScreen />);
+    const { getByPlaceholderText, getByLabelText, getByText } = renderWithClient(<ChatbotScreen />);
 
     fireEvent.changeText(getByPlaceholderText(/Nhập câu hỏi/i), 'Đơn canteen của tôi');
-    fireEvent.press(getByText(/Gửi/i));
+    fireEvent.press(getByLabelText(/Gửi câu hỏi/i));
 
     await waitFor(() => {
       expect(mockChatbotApi.query).toHaveBeenCalledWith({
@@ -68,10 +68,12 @@ describe('ChatbotScreen', () => {
   });
 
   it('shows suggested questions after receiving answer', async () => {
-    const { getByPlaceholderText, getByText, findByText } = renderWithClient(<ChatbotScreen />);
+    const { getByPlaceholderText, getByLabelText, findByText } = renderWithClient(
+      <ChatbotScreen />,
+    );
 
     fireEvent.changeText(getByPlaceholderText(/Nhập câu hỏi/i), 'Đơn canteen của tôi');
-    fireEvent.press(getByText(/Gửi/i));
+    fireEvent.press(getByLabelText(/Gửi câu hỏi/i));
 
     expect(await findByText('Canteen mở cửa giờ nào?')).toBeTruthy();
   });

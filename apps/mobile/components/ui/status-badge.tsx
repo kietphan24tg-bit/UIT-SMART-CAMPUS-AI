@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     maxWidth: '100%',
     minWidth: 0,
+    flexShrink: 0,
     borderRadius: 999,
     borderWidth: 1,
   },

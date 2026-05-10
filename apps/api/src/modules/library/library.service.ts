@@ -32,7 +32,10 @@ const LECTURER_MAX_BORROWED = 5;
 const LECTURER_BORROW_DAYS = 30;
 const LECTURER_MAX_RENEW = 2;
 const RESERVATION_EXPIRES_HOURS = 48;
-const ACTIVE_LOAN_STATUSES: LibraryLoanStatus[] = [LibraryLoanStatus.borrowed, LibraryLoanStatus.overdue];
+const ACTIVE_LOAN_STATUSES: LibraryLoanStatus[] = [
+  LibraryLoanStatus.borrowed,
+  LibraryLoanStatus.overdue,
+];
 
 function normalizePaging(page?: number, limit?: number) {
   const safePage = Number.isInteger(page) && page && page > 0 ? page : 1;
@@ -118,8 +121,9 @@ export class LibraryService {
         language: item.language,
         coverUrl: item.coverUrl,
         shelfCode: item.shelfCode,
-        availableCopies: item.copies.filter((copy) => copy.status === LibraryBookCopyStatus.available)
-          .length,
+        availableCopies: item.copies.filter(
+          (copy) => copy.status === LibraryBookCopyStatus.available,
+        ).length,
         totalCopies: item.copies.length,
       })),
       page,
@@ -186,7 +190,9 @@ export class LibraryService {
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.subtitle !== undefined ? { subtitle: dto.subtitle?.trim() || null } : {}),
         ...(dto.authors !== undefined ? { authors: dto.authors.trim() } : {}),
-        ...(dto.openLibraryId !== undefined ? { openLibraryId: dto.openLibraryId?.trim() || null } : {}),
+        ...(dto.openLibraryId !== undefined
+          ? { openLibraryId: dto.openLibraryId?.trim() || null }
+          : {}),
         ...(dto.isbn13 !== undefined ? { isbn13: dto.isbn13?.trim() || null } : {}),
         ...(dto.subjects !== undefined
           ? { subjects: dto.subjects.map((item) => item.trim()).filter(Boolean) }
@@ -209,7 +215,9 @@ export class LibraryService {
         bookId,
         copyCode: dto.copyCode.trim(),
         conditionNote: dto.conditionNote?.trim() || null,
-        acquiredAt: dto.acquiredAt ? this.parseOptionalDate(dto.acquiredAt, 'Ngay nhap ban sao khong hop le') : null,
+        acquiredAt: dto.acquiredAt
+          ? this.parseOptionalDate(dto.acquiredAt, 'Ngay nhap ban sao khong hop le')
+          : null,
       },
     });
   }
@@ -249,7 +257,8 @@ export class LibraryService {
       isActive: book.isActive,
       createdAt: book.createdAt.toISOString(),
       updatedAt: book.updatedAt.toISOString(),
-      availableCopies: book.copies.filter((copy) => copy.status === LibraryBookCopyStatus.available).length,
+      availableCopies: book.copies.filter((copy) => copy.status === LibraryBookCopyStatus.available)
+        .length,
       copies: book.copies.map((copy) => ({
         id: copy.id,
         copyCode: copy.copyCode,
@@ -295,7 +304,9 @@ export class LibraryService {
       where: { id: copyId },
       data: {
         ...(dto.copyCode !== undefined ? { copyCode: dto.copyCode.trim() } : {}),
-        ...(dto.conditionNote !== undefined ? { conditionNote: dto.conditionNote?.trim() || null } : {}),
+        ...(dto.conditionNote !== undefined
+          ? { conditionNote: dto.conditionNote?.trim() || null }
+          : {}),
         ...(dto.acquiredAt !== undefined
           ? {
               acquiredAt: dto.acquiredAt
@@ -452,8 +463,12 @@ export class LibraryService {
     if (request.requesterId !== userId) {
       throw new ForbiddenException('Ban khong co quyen xoa don muon nay');
     }
-    if (request.status !== LibraryLoanRequestStatus.cancelled) {
-      throw new BadRequestException('Chi co the xoa don muon da huy');
+    if (
+      request.status !== LibraryLoanRequestStatus.cancelled &&
+      request.status !== LibraryLoanRequestStatus.rejected &&
+      request.status !== LibraryLoanRequestStatus.approved
+    ) {
+      throw new BadRequestException('Chi co the xoa don muon da duoc xu ly hoac da huy');
     }
 
     await this.prisma.libraryLoanRequest.delete({
@@ -985,7 +1000,27 @@ export class LibraryService {
   }
 
   private parseOptionalDate(value: string, message: string) {
-    const parsed = new Date(value);
+    const trimmed = value.trim();
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]);
+      const day = Number(dateOnlyMatch[3]);
+      const parsedDateOnly = new Date(Date.UTC(year, month - 1, day));
+
+      if (
+        parsedDateOnly.getUTCFullYear() !== year ||
+        parsedDateOnly.getUTCMonth() !== month - 1 ||
+        parsedDateOnly.getUTCDate() !== day
+      ) {
+        throw new BadRequestException(message);
+      }
+
+      return parsedDateOnly;
+    }
+
+    const parsed = new Date(trimmed);
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException(message);
     }
@@ -1061,31 +1096,29 @@ export class LibraryService {
     },
   } as const;
 
-  private mapLoanRequest(
-    request: {
+  private mapLoanRequest(request: {
+    id: string;
+    status: LibraryLoanRequestStatus;
+    note: string | null;
+    createdAt: Date;
+    approvedAt: Date | null;
+    book: { id: string; title: string; authors: string };
+    copy: { id: string; copyCode: string };
+    requester: {
       id: string;
-      status: LibraryLoanRequestStatus;
-      note: string | null;
-      createdAt: Date;
-      approvedAt: Date | null;
-      book: { id: string; title: string; authors: string };
-      copy: { id: string; copyCode: string };
-      requester: {
-        id: string;
-        studentId: string | null;
-        email: string;
-        firstName: string;
-        lastName: string;
-      };
-      approvedBy?: {
-        id: string;
-        studentId: string | null;
-        email: string;
-        firstName: string;
-        lastName: string;
-      } | null;
-    },
-  ) {
+      studentId: string | null;
+      email: string;
+      firstName: string;
+      lastName: string;
+    };
+    approvedBy?: {
+      id: string;
+      studentId: string | null;
+      email: string;
+      firstName: string;
+      lastName: string;
+    } | null;
+  }) {
     return {
       id: request.id,
       status: request.status,

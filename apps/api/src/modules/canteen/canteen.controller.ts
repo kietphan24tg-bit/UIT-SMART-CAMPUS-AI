@@ -3,13 +3,18 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
+  ParseFilePipeBuilder,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { USER_ROLES } from '@smart-campus/shared';
 
@@ -17,6 +22,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { AvatarUploadFile } from '../storage/avatar-storage.service';
+import { MAX_AVATAR_UPLOAD_SIZE_BYTES } from '../storage/avatar-upload.constants';
 
 import { CanteenService } from './canteen.service';
 import {
@@ -26,6 +33,18 @@ import {
   UpdateCanteenCategoryDto,
   UpdateCanteenProductDto,
 } from './dto/canteen.dto';
+
+const productImageUploadPipe = new ParseFilePipeBuilder()
+  .addFileTypeValidator({
+    fileType: /^(image\/jpeg|image\/jpg|image\/png|image\/webp)$/,
+  })
+  .addMaxSizeValidator({
+    maxSize: MAX_AVATAR_UPLOAD_SIZE_BYTES,
+  })
+  .build({
+    fileIsRequired: true,
+    errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+  });
 
 @ApiTags('Canteen')
 @Controller('canteen')
@@ -178,6 +197,32 @@ export class CanteenController {
   @ApiOperation({ summary: 'Update canteen product' })
   updateProduct(@Param('id') productId: string, @Body() dto: UpdateCanteenProductDto) {
     return this.canteenService.updateProduct(productId, dto);
+  }
+
+  @Post('products/image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_AVATAR_UPLOAD_SIZE_BYTES } }))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload canteen product image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['image'],
+      properties: {
+        image: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  uploadProductImage(
+    @CurrentUser('id') actorId: string,
+    @UploadedFile(productImageUploadPipe) file: AvatarUploadFile,
+  ) {
+    return this.canteenService.uploadProductImage(actorId, file);
   }
 
   @Delete('products/:id')

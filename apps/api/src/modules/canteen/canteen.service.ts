@@ -13,6 +13,7 @@ import { CanteenOrderStatus, Prisma, Role } from '@prisma/client';
 import type { PaymentCheckout } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
+import { AvatarStorageService, type AvatarUploadFile } from '../storage/avatar-storage.service';
 
 import type {
   CreateCanteenCategoryDto,
@@ -78,6 +79,7 @@ export class CanteenService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly avatarStorageService: AvatarStorageService,
   ) {}
 
   async getCatalog() {
@@ -162,7 +164,9 @@ export class CanteenService {
         where: { id: categoryId },
         data: {
           ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+          ...(dto.description !== undefined
+            ? { description: dto.description?.trim() || null }
+            : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
         },
@@ -213,7 +217,9 @@ export class CanteenService {
         data: {
           ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
           ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+          ...(dto.description !== undefined
+            ? { description: dto.description?.trim() || null }
+            : {}),
           ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl?.trim() || null } : {}),
           ...(dto.price !== undefined ? { price: dto.price } : {}),
           ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
@@ -224,6 +230,10 @@ export class CanteenService {
     } catch (error) {
       this.rethrowCatalogConflict(error, 'Sản phẩm canteen');
     }
+  }
+
+  async uploadProductImage(actorId: string, file: AvatarUploadFile) {
+    return this.avatarStorageService.uploadCanteenProductImage(actorId, file);
   }
 
   async removeProduct(productId: string) {
@@ -374,7 +384,9 @@ export class CanteenService {
       CanteenOrderStatus.payment_failed,
     ];
     if (!deletableStatuses.includes(order.status)) {
-      throw new BadRequestException('Chá»‰ cÃ³ thá»ƒ xÃ³a Ä‘Æ¡n chÆ°a thanh toÃ¡n hoáº·c thanh toÃ¡n lá»—i');
+      throw new BadRequestException(
+        'Chá»‰ cÃ³ thá»ƒ xÃ³a Ä‘Æ¡n chÆ°a thanh toÃ¡n hoáº·c thanh toÃ¡n lá»—i',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -552,7 +564,9 @@ export class CanteenService {
       CanteenOrderStatus.payment_failed,
     ];
     if (!payableStatuses.includes(order.status)) {
-      throw new BadRequestException('ÄÆ¡n hÃ ng khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i cho phÃ©p thanh toÃ¡n');
+      throw new BadRequestException(
+        'ÄÆ¡n hÃ ng khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i cho phÃ©p thanh toÃ¡n',
+      );
     }
 
     const sepayConfig = this.getSepayConfigOrThrow();
@@ -931,11 +945,7 @@ export class CanteenService {
     };
   }
 
-  private buildSepayCheckoutUrl(
-    config: SepayConfig,
-    amount: number,
-    transferDescription: string,
-  ) {
+  private buildSepayCheckoutUrl(config: SepayConfig, amount: number, transferDescription: string) {
     const params = new URLSearchParams({
       acc: config.accountNumber,
       bank: config.bankName,

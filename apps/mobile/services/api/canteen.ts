@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, postMultipart } from './client';
 
 export type CanteenOrderStatus =
   | 'pending_payment'
@@ -127,18 +127,14 @@ export const canteenApi = {
   },
 
   deleteOrder: async (orderId: string) => {
-    return (await apiClient.delete(
-      `/canteen/orders/${encodeURIComponent(orderId)}`,
-    )) as {
+    return (await apiClient.delete(`/canteen/orders/${encodeURIComponent(orderId)}`)) as {
       id: string;
       deleted: boolean;
     };
   },
 
   deleteAdminOrder: async (orderId: string) => {
-    return (await apiClient.delete(
-      `/canteen/orders/admin/${encodeURIComponent(orderId)}`,
-    )) as {
+    return (await apiClient.delete(`/canteen/orders/admin/${encodeURIComponent(orderId)}`)) as {
       id: string;
       deleted: boolean;
       restoredStock: boolean;
@@ -152,9 +148,7 @@ export const canteenApi = {
   },
 
   createPayment: async (orderId: string) => {
-    return (await apiClient.post(
-      `/canteen/orders/${encodeURIComponent(orderId)}/pay`,
-    )) as {
+    return (await apiClient.post(`/canteen/orders/${encodeURIComponent(orderId)}/pay`)) as {
       transactionId: string;
       provider: 'momo';
       mode: 'sandbox';
@@ -165,9 +159,7 @@ export const canteenApi = {
   },
 
   createSepayPayment: async (orderId: string) => {
-    return (await apiClient.post(
-      `/canteen/orders/${encodeURIComponent(orderId)}/pay/sepay`,
-    )) as {
+    return (await apiClient.post(`/canteen/orders/${encodeURIComponent(orderId)}/pay/sepay`)) as {
       transactionId: string;
       provider: 'sepay';
       mode: 'qr';
@@ -213,9 +205,7 @@ export const canteenApi = {
   },
 
   removeCategory: async (categoryId: string) => {
-    return (await apiClient.delete(
-      `/canteen/categories/${encodeURIComponent(categoryId)}`,
-    )) as {
+    return (await apiClient.delete(`/canteen/categories/${encodeURIComponent(categoryId)}`)) as {
       id: string;
       isActive: boolean;
     };
@@ -265,10 +255,17 @@ export const canteenApi = {
     };
   },
 
+  uploadProductImage: async (uri: string, fileName = 'product.jpg', mimeType = 'image/jpeg') => {
+    return postMultipart<{ imageUrl: string }>('/canteen/products/image', {
+      fieldName: 'image',
+      uri,
+      fileName,
+      mimeType,
+    });
+  },
+
   removeProduct: async (productId: string) => {
-    return (await apiClient.delete(
-      `/canteen/products/${encodeURIComponent(productId)}`,
-    )) as {
+    return (await apiClient.delete(`/canteen/products/${encodeURIComponent(productId)}`)) as {
       id: string;
       isActive: boolean;
     };

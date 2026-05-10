@@ -170,7 +170,9 @@ export default function LibraryScreen() {
       return;
     }
 
-    const firstAvailableCopy = selectedBookQuery.data.copies.find((copy) => copy.status === 'available');
+    const firstAvailableCopy = selectedBookQuery.data.copies.find(
+      (copy) => copy.status === 'available',
+    );
     if (firstAvailableCopy) {
       setSelectedCopyId((current) => current ?? firstAvailableCopy.id);
     }
@@ -181,7 +183,9 @@ export default function LibraryScreen() {
   const loanRequests = loanRequestsQuery.data ?? [];
   const activeLoans = loans.filter((item) => item.status !== 'returned');
   const pendingRequests = loanRequests.filter((item) => item.status === 'pending');
-  const availableCopies = (selectedBookQuery.data?.copies ?? []).filter((copy) => copy.status === 'available');
+  const availableCopies = (selectedBookQuery.data?.copies ?? []).filter(
+    (copy) => copy.status === 'available',
+  );
   const subjects = useMemo(() => {
     const all = new Set<string>();
     for (const item of books) {
@@ -257,10 +261,19 @@ export default function LibraryScreen() {
       />
 
       <ContentStack overlapHero={false}>
-        <MetricGrid items={metrics} layoutPreset="mobileTwoByTwo" compactColumns={2} cardMinHeight={112} />
+        <MetricGrid
+          items={metrics}
+          layoutPreset="mobileTwoByTwo"
+          compactColumns={2}
+          cardMinHeight={112}
+        />
 
         <View style={styles.tabRow}>
-          <TabButton label="Tìm sách" active={activeTab === 'discover'} onPress={() => setActiveTab('discover')} />
+          <TabButton
+            label="Tìm sách"
+            active={activeTab === 'discover'}
+            onPress={() => setActiveTab('discover')}
+          />
           <TabButton
             label="Yêu cầu của tôi"
             active={activeTab === 'requests'}
@@ -275,15 +288,26 @@ export default function LibraryScreen() {
             variant="outlined"
             tone="neutral"
           >
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-              Student và lecturer mới có thể gửi yêu cầu mượn sách. Hiện tại bạn vẫn có thể tìm sách và xem tồn kho.
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
+              Student và lecturer mới có thể gửi yêu cầu mượn sách. Hiện tại bạn vẫn có thể tìm sách
+              và xem tồn kho.
             </Text>
           </SectionCard>
         ) : null}
 
         {activeTab === 'discover' ? (
           <>
-            <SectionCard title="Tìm sách" subtitle="Lọc theo từ khóa hoặc chủ đề." variant="highlight" tone="academic">
+            <SectionCard
+              title="Tìm sách"
+              subtitle="Lọc theo từ khóa hoặc chủ đề."
+              variant="highlight"
+              tone="academic"
+            >
               <View style={styles.stack}>
                 <FormField
                   label="Từ khóa"
@@ -292,8 +316,16 @@ export default function LibraryScreen() {
                   placeholder="Tên sách, tác giả, mã ISBN..."
                 />
                 {subjects.length > 0 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
-                    <SubjectChip label="Tất cả" active={!selectedSubject} onPress={() => setSelectedSubject(undefined)} />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.subjectRow}
+                  >
+                    <SubjectChip
+                      label="Tất cả"
+                      active={!selectedSubject}
+                      onPress={() => setSelectedSubject(undefined)}
+                    />
                     {subjects.map((subject) => (
                       <SubjectChip
                         key={subject}
@@ -307,9 +339,19 @@ export default function LibraryScreen() {
               </View>
             </SectionCard>
 
-            <SectionCard title="Danh mục sách" subtitle={`${books.length} mục đang hiển thị`} variant="glass" tone="campus">
+            <SectionCard
+              title="Danh mục sách"
+              subtitle={`${books.length} mục đang hiển thị`}
+              variant="glass"
+              tone="campus"
+            >
               {booksQuery.isLoading ? (
-                <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                <Text
+                  style={[
+                    styles.body,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                  ]}
+                >
                   Đang tải danh mục...
                 </Text>
               ) : booksQuery.isError ? (
@@ -321,7 +363,11 @@ export default function LibraryScreen() {
                   onActionPress={() => void booksQuery.refetch()}
                 />
               ) : books.length === 0 ? (
-                <EmptyState icon="book-outline" title="Không có đầu sách" description="Bộ lọc hiện tại chưa có kết quả." />
+                <EmptyState
+                  icon="book-outline"
+                  title="Không có đầu sách"
+                  description="Bộ lọc hiện tại chưa có kết quả."
+                />
               ) : (
                 <View style={styles.stack}>
                   {books.map((item) => (
@@ -331,9 +377,15 @@ export default function LibraryScreen() {
                       canBorrow={canBorrow}
                       selected={selectedBookId === item.id}
                       onSelect={() => setSelectedBookId(item.id)}
-                      selectedBookDetail={selectedBookId === item.id ? selectedBookQuery.data ?? null : null}
-                      selectedBookLoading={selectedBookId === item.id ? selectedBookQuery.isLoading : false}
-                      selectedBookError={selectedBookId === item.id ? selectedBookQuery.isError : false}
+                      selectedBookDetail={
+                        selectedBookId === item.id ? (selectedBookQuery.data ?? null) : null
+                      }
+                      selectedBookLoading={
+                        selectedBookId === item.id ? selectedBookQuery.isLoading : false
+                      }
+                      selectedBookError={
+                        selectedBookId === item.id ? selectedBookQuery.isError : false
+                      }
                       availableCopies={selectedBookId === item.id ? availableCopies : []}
                       selectedCopyId={selectedCopyId}
                       requestNote={requestNote}
@@ -351,9 +403,18 @@ export default function LibraryScreen() {
           </>
         ) : (
           <>
-            <SectionCard title="Yêu cầu mượn của tôi" subtitle="Theo dõi và hủy các req đang chờ duyệt." variant="outlined">
+            <SectionCard
+              title="Yêu cầu mượn của tôi"
+              subtitle="Theo dõi và hủy các req đang chờ duyệt."
+              variant="outlined"
+            >
               {loanRequestsQuery.isLoading ? (
-                <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                <Text
+                  style={[
+                    styles.body,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                  ]}
+                >
                   Đang tải danh sách yêu cầu...
                 </Text>
               ) : !canBorrow ? (
@@ -384,7 +445,12 @@ export default function LibraryScreen() {
                       ]}
                     >
                       <View style={styles.rowBetween}>
-                        <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                        <Text
+                          style={[
+                            styles.cardTitle,
+                            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                          ]}
+                        >
                           {request.book.title}
                         </Text>
                         <StatusBadge
@@ -393,19 +459,40 @@ export default function LibraryScreen() {
                           size="sm"
                         />
                       </View>
-                      <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                      <Text
+                        style={[
+                          styles.body,
+                          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                        ]}
+                      >
                         {request.book.authors}
                       </Text>
-                      <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-                        Bản sao: {request.copy.copyCode} · Tạo lúc {new Date(request.createdAt).toLocaleString('vi-VN')}
+                      <Text
+                        style={[
+                          styles.meta,
+                          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                        ]}
+                      >
+                        Bản sao: {request.copy.copyCode} · Tạo lúc{' '}
+                        {new Date(request.createdAt).toLocaleString('vi-VN')}
                       </Text>
                       {request.note ? (
-                        <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+                        <Text
+                          style={[
+                            styles.meta,
+                            { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+                          ]}
+                        >
                           Ghi chú: {request.note}
                         </Text>
                       ) : null}
                       {request.approvedBy ? (
-                        <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+                        <Text
+                          style={[
+                            styles.meta,
+                            { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+                          ]}
+                        >
                           Người xử lý: {request.approvedBy.fullName}
                         </Text>
                       ) : null}
@@ -416,7 +503,7 @@ export default function LibraryScreen() {
                           onPress={() => cancelLoanRequestMutation.mutate(request.id)}
                         />
                       ) : null}
-                      {(request.status === 'cancelled' || request.status === 'rejected') ? (
+                      {request.status !== 'pending' ? (
                         <SecondaryButton
                           label="Xóa yêu cầu"
                           loading={deleteLoanRequestMutation.isPending}
@@ -430,9 +517,18 @@ export default function LibraryScreen() {
             </SectionCard>
 
             {canBorrow ? (
-              <SectionCard title="Phiếu mượn của tôi" subtitle="Kiểm tra hạn trả hiện tại." variant="outlined">
+              <SectionCard
+                title="Phiếu mượn của tôi"
+                subtitle="Kiểm tra hạn trả hiện tại."
+                variant="outlined"
+              >
                 {loansQuery.isLoading ? (
-                  <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                  <Text
+                    style={[
+                      styles.body,
+                      { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                    ]}
+                  >
                     Đang tải phiếu mượn...
                   </Text>
                 ) : activeLoans.length === 0 ? (
@@ -455,7 +551,12 @@ export default function LibraryScreen() {
                         ]}
                       >
                         <View style={styles.rowBetween}>
-                          <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                          <Text
+                            style={[
+                              styles.cardTitle,
+                              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                            ]}
+                          >
                             {loan.book.title}
                           </Text>
                           <StatusBadge
@@ -464,11 +565,22 @@ export default function LibraryScreen() {
                             size="sm"
                           />
                         </View>
-                        <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                        <Text
+                          style={[
+                            styles.body,
+                            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                          ]}
+                        >
                           {loan.book.authors}
                         </Text>
-                        <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-                          Hạn trả: {new Date(loan.dueAt).toLocaleDateString('vi-VN')} · Mã copy: {loan.copy.copyCode}
+                        <Text
+                          style={[
+                            styles.meta,
+                            { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                          ]}
+                        >
+                          Hạn trả: {new Date(loan.dueAt).toLocaleDateString('vi-VN')} · Mã copy:{' '}
+                          {loan.copy.copyCode}
                         </Text>
                       </View>
                     ))}
@@ -485,7 +597,15 @@ export default function LibraryScreen() {
   );
 }
 
-function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function TabButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   const theme = useAppTheme();
 
   return (
@@ -516,7 +636,15 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
-function SubjectChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function SubjectChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   const theme = useAppTheme();
 
   return (
@@ -535,7 +663,10 @@ function SubjectChip({ label, active, onPress }: { label: string; active: boolea
       <Text
         style={[
           styles.subjectChipText,
-          { color: active ? theme.colors.primary : theme.colors.textMuted, fontFamily: theme.fonts.medium },
+          {
+            color: active ? theme.colors.primary : theme.colors.textMuted,
+            fontFamily: theme.fonts.medium,
+          },
         ]}
       >
         {label}
@@ -579,7 +710,12 @@ function CopyChip({
       >
         {copy.copyCode}
       </Text>
-      <Text style={[styles.copyChipMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+      <Text
+        style={[
+          styles.copyChipMeta,
+          { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+        ]}
+      >
         Sẵn sàng
       </Text>
     </Pressable>
@@ -658,7 +794,12 @@ function BookCard({
 
         <View style={styles.bookCardContent}>
           <View style={styles.rowBetween}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+            <Text
+              style={[
+                styles.cardTitle,
+                { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+              ]}
+            >
               {item.title}
             </Text>
             <StatusBadge
@@ -667,14 +808,26 @@ function BookCard({
               size="sm"
             />
           </View>
-          <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+          <Text
+            style={[
+              styles.body,
+              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+            ]}
+          >
             {item.authors}
           </Text>
-          <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
+          <Text
+            style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}
+          >
             {item.publisher || 'Chưa cập nhật NXB'} · {item.publishedAt || 'Năm chưa rõ'}
           </Text>
           {item.subjects.length > 0 ? (
-            <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.meta,
+                { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Chủ đề: {item.subjects.slice(0, 3).join(', ')}
             </Text>
           ) : null}
@@ -685,7 +838,13 @@ function BookCard({
           label={selected ? 'Đang chọn' : available ? 'Chọn sách này' : 'Hết bản sẵn sàng'}
           disabled={!available}
           onPress={onSelect}
-          icon={<Ionicons name={selected ? 'checkmark-circle-outline' : 'book-outline'} size={16} color={theme.colors.onPrimary} />}
+          icon={
+            <Ionicons
+              name={selected ? 'checkmark-circle-outline' : 'book-outline'}
+              size={16}
+              color={theme.colors.onPrimary}
+            />
+          }
         />
       ) : null}
 
@@ -699,15 +858,27 @@ function BookCard({
             },
           ]}
         >
-          <Text style={[styles.inlineRequestTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.inlineRequestTitle,
+              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+            ]}
+          >
             Mượn sách này
           </Text>
-          <Text style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}>
+          <Text
+            style={[styles.meta, { color: theme.colors.textSoft, fontFamily: theme.fonts.regular }]}
+          >
             Chọn một bản sao sẵn sàng rồi gửi yêu cầu đến thủ thư.
           </Text>
 
           {selectedBookLoading ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Đang tải danh sách bản sao...
             </Text>
           ) : selectedBookError ? (
@@ -727,7 +898,14 @@ function BookCard({
           ) : (
             <>
               <View style={styles.stack}>
-                <Text style={[styles.label, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>Chọn bản sao</Text>
+                <Text
+                  style={[
+                    styles.label,
+                    { color: theme.colors.text, fontFamily: theme.fonts.medium },
+                  ]}
+                >
+                  Chọn bản sao
+                </Text>
                 <View style={styles.copyGrid}>
                   {availableCopies.map((copy) => (
                     <CopyChip
@@ -796,7 +974,7 @@ const styles = StyleSheet.create({
   },
   rowBetween: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 10,
   },

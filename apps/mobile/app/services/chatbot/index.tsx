@@ -105,6 +105,7 @@ export default function ChatbotScreen() {
     messages.length === 0
       ? INITIAL_SUGGESTIONS
       : (messages.findLast((m) => m.role === 'assistant')?.suggestedQuestions ?? []);
+  const hasSuggestions = lastSuggestions.length > 0 && !queryMutation.isPending;
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -124,7 +125,11 @@ export default function ChatbotScreen() {
               styles.bubble,
               isUser
                 ? { backgroundColor: theme.colors.primary }
-                : { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border, borderWidth: 1 },
+                : {
+                    backgroundColor: theme.colors.surfaceSubtle,
+                    borderColor: theme.colors.border,
+                    borderWidth: 1,
+                  },
             ]}
           >
             <Text
@@ -139,28 +144,45 @@ export default function ChatbotScreen() {
               {item.content}
             </Text>
 
-            {!isUser && item.deepLinks && Array.isArray(item.deepLinks) && (item.deepLinks as string[]).length > 0 && (
-              <View style={styles.linkRow}>
-                {(item.deepLinks as string[]).map((link) => (
-                  <Pressable
-                    key={link}
-                    onPress={() => router.push(link as never)}
-                    style={({ pressed }) => [
-                      styles.linkChip,
-                      { borderColor: theme.colors.primary, opacity: pressed ? 0.75 : 1 },
-                    ]}
-                  >
-                    <Ionicons name="arrow-forward-circle-outline" size={12} color={theme.colors.primary} />
-                    <Text style={[styles.linkText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
-                      {link}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
+            {!isUser &&
+              item.deepLinks &&
+              Array.isArray(item.deepLinks) &&
+              (item.deepLinks as string[]).length > 0 && (
+                <View style={styles.linkRow}>
+                  {(item.deepLinks as string[]).map((link) => (
+                    <Pressable
+                      key={link}
+                      onPress={() => router.push(link as never)}
+                      style={({ pressed }) => [
+                        styles.linkChip,
+                        { borderColor: theme.colors.primary, opacity: pressed ? 0.75 : 1 },
+                      ]}
+                    >
+                      <Ionicons
+                        name="arrow-forward-circle-outline"
+                        size={12}
+                        color={theme.colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.linkText,
+                          { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                        ]}
+                      >
+                        {link}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
 
             {!isUser && item.confidence != null && (
-              <Text style={[styles.metaText, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+              <Text
+                style={[
+                  styles.metaText,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                ]}
+              >
                 {(item.confidence * 100).toFixed(0)}% độ tin cậy
               </Text>
             )}
@@ -192,102 +214,138 @@ export default function ChatbotScreen() {
         {/* Message list */}
         <FlatList
           ref={listRef}
+          style={styles.messageListViewport}
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
           onContentSizeChange={scrollToEnd}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                ]}
+              >
                 Xin chào! Mình có thể giúp gì?
               </Text>
-              <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+              <Text
+                style={[
+                  styles.emptySubtitle,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                ]}
+              >
                 Hỏi về lịch học, đặt phòng, canteen, thư viện và nhiều hơn nữa.
               </Text>
             </View>
           }
         />
 
-        {/* Suggested questions */}
-        {lastSuggestions.length > 0 && !queryMutation.isPending && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={[styles.suggestStrip, { borderTopColor: theme.colors.border }]}
-            contentContainerStyle={styles.suggestContent}
-          >
-            {lastSuggestions.map((q) => (
+        <View
+          style={[
+            styles.composer,
+            { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface },
+          ]}
+        >
+          {/* Suggested questions */}
+          {hasSuggestions && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.suggestStrip}
+              contentContainerStyle={styles.suggestContent}
+            >
+              {lastSuggestions.map((q) => (
+                <Pressable
+                  key={q}
+                  onPress={() => send(q)}
+                  style={({ pressed }) => [
+                    styles.suggestChip,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.surface,
+                      opacity: pressed ? 0.75 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.suggestText,
+                      { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                    ]}
+                  >
+                    {q}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Input bar */}
+          <View style={styles.inputBar}>
+            {messages.length > 0 && (
               <Pressable
-                key={q}
-                onPress={() => send(q)}
+                onPress={clearChat}
+                accessibilityRole="button"
+                accessibilityLabel="Xóa cuộc trò chuyện"
                 style={({ pressed }) => [
-                  styles.suggestChip,
-                  { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, opacity: pressed ? 0.75 : 1 },
+                  styles.clearBtn,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.surfaceSubtle,
+                    opacity: pressed ? 0.7 : 1,
+                  },
                 ]}
               >
-                <Text style={[styles.suggestText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
-                  {q}
-                </Text>
+                <Ionicons name="trash-outline" size={18} color={theme.colors.textMuted} />
               </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Input bar */}
-        <View style={[styles.inputBar, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-          {messages.length > 0 && (
+            )}
+            <TextInput
+              value={message}
+              onChangeText={setMessage}
+              placeholder="Nhập câu hỏi..."
+              placeholderTextColor={theme.colors.textMuted}
+              style={[
+                styles.textInput,
+                {
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.surfaceSubtle,
+                  fontFamily: theme.fonts.regular,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              multiline
+              maxLength={500}
+              onSubmitEditing={() => send(message)}
+              returnKeyType="send"
+              blurOnSubmit
+            />
             <Pressable
-              onPress={clearChat}
+              onPress={() => send(message)}
+              disabled={!message.trim() || queryMutation.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Gửi câu hỏi"
               style={({ pressed }) => [
-                styles.clearBtn,
-                { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSubtle, opacity: pressed ? 0.7 : 1 },
+                styles.sendBtn,
+                {
+                  backgroundColor:
+                    message.trim() && !queryMutation.isPending
+                      ? theme.colors.primary
+                      : theme.colors.border,
+                  opacity: pressed ? 0.8 : 1,
+                },
               ]}
             >
-              <Ionicons name="trash-outline" size={18} color={theme.colors.textMuted} />
+              {queryMutation.isPending ? (
+                <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+              ) : (
+                <Ionicons name="send" size={18} color="#fff" />
+              )}
             </Pressable>
-          )}
-          <TextInput
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Nhập câu hỏi..."
-            placeholderTextColor={theme.colors.textMuted}
-            style={[
-              styles.textInput,
-              {
-                color: theme.colors.text,
-                backgroundColor: theme.colors.surfaceSubtle,
-                fontFamily: theme.fonts.regular,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            multiline
-            maxLength={500}
-            onSubmitEditing={() => send(message)}
-            returnKeyType="send"
-            blurOnSubmit
-          />
-          <Pressable
-            onPress={() => send(message)}
-            disabled={!message.trim() || queryMutation.isPending}
-            style={({ pressed }) => [
-              styles.sendBtn,
-              {
-                backgroundColor:
-                  message.trim() && !queryMutation.isPending
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-          >
-            {queryMutation.isPending ? (
-              <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
-            ) : (
-              <Ionicons name="send" size={18} color="#fff" />
-            )}
-          </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -298,6 +356,9 @@ export default function ChatbotScreen() {
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
+  messageListViewport: {
+    flex: 1,
+  },
   messageList: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -374,9 +435,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
   },
-  suggestStrip: {
+  composer: {
     borderTopWidth: 1,
-    maxHeight: 52,
+  },
+  suggestStrip: {
+    maxHeight: 56,
   },
   suggestContent: {
     flexDirection: 'row',
@@ -398,8 +461,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    borderTopWidth: 1,
     paddingHorizontal: 16,
+    paddingTop: 8,
     paddingVertical: 10,
   },
   clearBtn: {

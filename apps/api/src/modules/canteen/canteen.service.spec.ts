@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CanteenOrderStatus, Prisma } from '@prisma/client';
 
 import { CanteenService } from './canteen.service';
@@ -30,6 +35,9 @@ describe('CanteenService', () => {
   const configService = {
     get: jest.fn(),
   };
+  const storageService = {
+    uploadCanteenProductImage: jest.fn(),
+  };
 
   let service: CanteenService;
   let fetchSpy: jest.SpyInstance;
@@ -50,10 +58,12 @@ describe('CanteenService', () => {
       };
       return values[key];
     });
-    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as never);
-    service = new CanteenService(prisma, configService as never);
-    prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) =>
-      callback(prisma),
+    fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: true, json: async () => ({}) } as never);
+    service = new CanteenService(prisma, configService as never, storageService as never);
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma),
     );
   });
 
@@ -73,6 +83,26 @@ describe('CanteenService', () => {
     await expect(service.createMomoPayment('student-1', 'order-1')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('uploads product image through storage service', async () => {
+    const file = {
+      buffer: Buffer.from('image-bytes'),
+      mimetype: 'image/jpeg',
+      size: 128,
+      originalname: 'product.jpg',
+    };
+    storageService.uploadCanteenProductImage.mockResolvedValue({
+      key: 'canteen-products/admin-1/product.jpg',
+      imageUrl: 'https://cdn.uit.edu.vn/canteen-products/admin-1/product.jpg',
+    });
+
+    await expect(service.uploadProductImage('admin-1', file)).resolves.toEqual({
+      key: 'canteen-products/admin-1/product.jpg',
+      imageUrl: 'https://cdn.uit.edu.vn/canteen-products/admin-1/product.jpg',
+    });
+
+    expect(storageService.uploadCanteenProductImage).toHaveBeenCalledWith('admin-1', file);
   });
 
   it('rejects payment creation when order status is not payable', async () => {
@@ -266,7 +296,9 @@ describe('CanteenService', () => {
   it('rejects admin history deletion when order does not exist', async () => {
     prisma.canteenOrder.findUnique.mockResolvedValue(null);
 
-    await expect(service.deleteAdminOrder('missing-order')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.deleteAdminOrder('missing-order')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('maps duplicate category create conflict to conflict exception', async () => {

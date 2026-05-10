@@ -18,7 +18,13 @@ describe('ChatbotService', () => {
       findFirst: jest.fn(),
       count: jest.fn(),
     },
+    canteenCategory: {
+      findMany: jest.fn(),
+    },
     libraryLoan: {
+      findMany: jest.fn(),
+    },
+    libraryLoanRequest: {
       findMany: jest.fn(),
     },
     sosRequest: {
@@ -113,6 +119,74 @@ describe('ChatbotService', () => {
     expect(result.intent).toBe('schedule_today');
     expect(result.answer).toContain('Toán cao cấp');
     expect(result.deepLinks).toEqual(['/services/schedule']);
+  });
+
+  it('returns schedule_week intent when asking about weekly schedule', async () => {
+    prisma.chatSession.create.mockResolvedValue({ id: 'session-week' });
+    prisma.chatMessage.create.mockResolvedValue(undefined);
+    prisma.classEnrollment.findMany.mockResolvedValue([
+      {
+        classSection: {
+          course: { name: 'Cáº¥u trÃºc dá»¯ liá»‡u' },
+          meetings: [
+            { dayOfWeek: 1, startTime: '07:30', endTime: '09:00', room: 'A101' },
+            { dayOfWeek: 3, startTime: '13:00', endTime: '15:00', room: 'B203' },
+          ],
+        },
+      },
+    ]);
+
+    const result = await service.query('student-1', Role.student, {
+      message: 'lich hoc tuan nay cua toi',
+    });
+
+    expect(result.intent).toBe('schedule_week');
+    expect(result.answer).toContain('Thứ 2');
+    expect(result.answer).toContain('Thứ 4');
+  });
+
+  it('returns canteen catalog intent when asking what food is available', async () => {
+    prisma.chatSession.create.mockResolvedValue({ id: 'session-catalog' });
+    prisma.chatMessage.create.mockResolvedValue(undefined);
+    prisma.canteenCategory.findMany.mockResolvedValue([
+      {
+        id: 'cat-1',
+        name: 'Cơm phần',
+        products: [
+          { id: 'product-1', name: 'Cơm gà', price: 35000 },
+          { id: 'product-2', name: 'Cơm sườn', price: 38000 },
+        ],
+      },
+    ]);
+
+    const result = await service.query('student-1', Role.student, {
+      message: 'hom nay canteen ban gi',
+    });
+
+    expect(result.intent).toBe('canteen_catalog');
+    expect(result.answer).toContain('Cơm gà');
+    expect(result.deepLinks).toEqual(['/services/canteen']);
+  });
+
+  it('returns library loan request intent when asking about pending requests', async () => {
+    prisma.chatSession.create.mockResolvedValue({ id: 'session-library-request' });
+    prisma.chatMessage.create.mockResolvedValue(undefined);
+    prisma.libraryLoanRequest.findMany.mockResolvedValue([
+      {
+        id: 'request-1',
+        status: 'pending',
+        book: { id: 'book-1', title: 'Clean Code', authors: 'Robert C. Martin' },
+        copy: { id: 'copy-1', copyCode: 'LIB-001-1' },
+      },
+    ]);
+
+    const result = await service.query('student-1', Role.student, {
+      message: 'yeu cau muon cua toi',
+    });
+
+    expect(result.intent).toBe('library_loan_requests');
+    expect(result.answer).toContain('Clean Code');
+    expect(result.deepLinks).toEqual(['/services/library']);
   });
 
   it('returns event_upcoming intent when asking about events', async () => {

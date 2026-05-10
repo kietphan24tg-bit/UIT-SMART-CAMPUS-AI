@@ -1,9 +1,5 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { EventStatus, LibraryLoanStatus, Role } from '@prisma/client';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventStatus, LibraryLoanRequestStatus, LibraryLoanStatus, Role } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -16,11 +12,55 @@ const MAX_KB_MATCHES = 4;
 // Vietnamese stopwords — ignored during keyword matching
 // ---------------------------------------------------------------------------
 const STOPWORDS = new Set([
-  'ban', 'toi', 'cua', 'cho', 'voi', 'the', 'mot', 'cac', 'nhung', 'duoc',
-  'khong', 'khi', 'nhu', 'tren', 'trong', 'den', 'hay', 'nao', 'nay', 'day',
-  'tat', 'rat', 'gan', 'biet', 'bao', 'biet', 'moi', 'dau', 'sao', 'the',
-  'con', 'roi', 'het', 'xem', 'qua', 'lai', 'vai', 'hon', 'nam', 'gio',
-  'ngay', 'tuan', 'thang', 'hom', 'xin', 'vui', 'long', 'hien', 'tai',
+  'ban',
+  'toi',
+  'cua',
+  'cho',
+  'voi',
+  'the',
+  'mot',
+  'cac',
+  'nhung',
+  'duoc',
+  'khong',
+  'khi',
+  'nhu',
+  'tren',
+  'trong',
+  'den',
+  'hay',
+  'nao',
+  'nay',
+  'day',
+  'tat',
+  'rat',
+  'gan',
+  'biet',
+  'bao',
+  'biet',
+  'moi',
+  'dau',
+  'sao',
+  'the',
+  'con',
+  'roi',
+  'het',
+  'xem',
+  'qua',
+  'lai',
+  'vai',
+  'hon',
+  'nam',
+  'gio',
+  'ngay',
+  'tuan',
+  'thang',
+  'hom',
+  'xin',
+  'vui',
+  'long',
+  'hien',
+  'tai',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -32,9 +72,9 @@ const SYNONYMS: Record<string, string> = {
   'quan an': 'canteen',
   'dat mon': 'canteen',
   'thu vien': 'library',
-  'sach': 'library',
+  sach: 'library',
   'muon sach': 'library',
-  'gps': 'sos',
+  gps: 'sos',
   'khan cap': 'sos',
   'lich hoc': 'schedule',
   'lich giang': 'schedule',
@@ -56,16 +96,54 @@ function applyAliases(text: string): string {
   return result;
 }
 
-function tokenize(input: string): string[] {
-  const normalized = input
+function normalizeSearchText(input: string) {
+  return input
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '');
+}
+
+function tokenize(input: string): string[] {
+  const normalized = normalizeSearchText(input);
   const aliased = applyAliases(normalized);
   return aliased
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
+}
+
+function getWeekdayLabel(dayOfWeek: number) {
+  switch (dayOfWeek) {
+    case 0:
+      return 'Chủ nhật';
+    case 1:
+      return 'Thứ 2';
+    case 2:
+      return 'Thứ 3';
+    case 3:
+      return 'Thứ 4';
+    case 4:
+      return 'Thứ 5';
+    case 5:
+      return 'Thứ 6';
+    case 6:
+      return 'Thứ 7';
+    default:
+      return `Ngày ${dayOfWeek}`;
+  }
+}
+
+function getLoanRequestStatusLabel(status: LibraryLoanRequestStatus) {
+  switch (status) {
+    case LibraryLoanRequestStatus.approved:
+      return 'đã duyệt';
+    case LibraryLoanRequestStatus.rejected:
+      return 'bị từ chối';
+    case LibraryLoanRequestStatus.cancelled:
+      return 'đã hủy';
+    default:
+      return 'đang chờ duyệt';
+  }
 }
 
 function toInputJson(value: unknown) {
@@ -91,14 +169,26 @@ const SUGGESTED: Record<string, string[]> = {
     'Ai nhận được thông báo SOS của tôi?',
     'SOS theo dõi vị trí realtime không?',
   ],
-  canteen_admin_queue: [
-    'Xem chi tiết đơn đã thanh toán?',
-    'Đánh dấu đơn hoàn thành như thế nào?',
-  ],
+  canteen_admin_queue: ['Xem chi tiết đơn đã thanh toán?', 'Đánh dấu đơn hoàn thành như thế nào?'],
   schedule_today: [
     'Lịch học tuần này như thế nào?',
     'Môn nào tôi chưa điểm danh?',
     'Phòng học hôm nay ở đâu?',
+  ],
+  schedule_week: [
+    'Hôm nay tôi học môn gì?',
+    'Ngày mai tôi có lịch học không?',
+    'Phòng học tuần này ở đâu?',
+  ],
+  canteen_catalog: [
+    'Canteen hôm nay còn món nào?',
+    'Món nào đang hết hàng?',
+    'Giá đồ uống hôm nay bao nhiêu?',
+  ],
+  library_loan_requests: [
+    'Yêu cầu mượn gần nhất của tôi đang ở trạng thái nào?',
+    'Tôi còn sách nào đang mượn không?',
+    'Vào đâu để theo dõi yêu cầu mượn?',
   ],
   room_booking_status: [
     'Đặt phòng mới ở đâu?',
@@ -110,14 +200,8 @@ const SUGGESTED: Record<string, string[]> = {
     'Xem danh sách sự kiện đầy đủ?',
     'Sự kiện này diễn ra ở đâu?',
   ],
-  notification_unread: [
-    'Xem tất cả thông báo?',
-    'Bật thông báo đẩy như thế nào?',
-  ],
-  kb_retrieval: [
-    'Hỏi thêm về dịch vụ này?',
-    'Tôi cần hỗ trợ trực tiếp?',
-  ],
+  notification_unread: ['Xem tất cả thông báo?', 'Bật thông báo đẩy như thế nào?'],
+  kb_retrieval: ['Hỏi thêm về dịch vụ này?', 'Tôi cần hỗ trợ trực tiếp?'],
   unknown: [
     'Đơn canteen của tôi',
     'Sách tôi đang mượn',
@@ -296,11 +380,38 @@ export class ChatbotService {
 
   private async answerByIntent(userId: string, role: Role, message: string) {
     const tokens = tokenize(message);
+    const normalizedMessage = normalizeSearchText(message);
     const has = (...keywords: string[]) =>
       keywords.every((kw) => tokens.some((t) => t.includes(kw)));
+    const includesPhrase = (...phrases: string[]) =>
+      phrases.some((phrase) => normalizedMessage.includes(phrase));
+
+    const asksCanteenOrder =
+      includesPhrase('don canteen', 'hoa don canteen', 'don hang canteen') ||
+      (has('canteen') && (has('don') || has('order') || has('hoa')));
+    const asksCanteenCatalog =
+      ((has('canteen') || includesPhrase('can tin', 'nha an', 'quan an')) &&
+        (has('menu') ||
+          has('gia') ||
+          includesPhrase('ban gi', 'con mon', 'mon nao', 'do uong', 'mon an', 'gia mon'))) ||
+      includesPhrase('mon gi hom nay', 'mon nao hom nay', 'dat duoc nhung mon gi', 'do an hom nay');
+    const asksLibraryRequests =
+      includesPhrase('yeu cau muon', 'don muon') || (has('library') && has('yeu'));
+    const asksLibraryLoans =
+      has('library') || has('sach') || includesPhrase('thu vien', 'muon sach', 'sach dang muon');
+    const asksSos = has('sos') || includesPhrase('khan cap');
+    const asksSchedule =
+      has('schedule') ||
+      includesPhrase('lich hoc', 'mon hoc', 'tiet hoc', 'lich giang') ||
+      (has('lich') && (has('hoc') || has('mon') || has('tiet')));
+    const asksScheduleWeek =
+      asksSchedule && includesPhrase('tuan nay', 'lich tuan', 'ca tuan', 'week');
+    const asksRoomBooking = has('room') || includesPhrase('dat phong', 'phong hop', 'phong trong');
+    const asksEvent = has('event') || includesPhrase('su kien', 'hoat dong');
+    const asksNotification = has('notification') || includesPhrase('thong bao', 'tin tuc');
 
     // ---- Canteen order status (user) ----------------------------------------
-    if (has('canteen') || (has('don') && tokens.includes('canteen'))) {
+    if (asksCanteenOrder) {
       const latestOrder = await this.prisma.canteenOrder.findFirst({
         where: { createdById: userId },
         orderBy: [{ createdAt: 'desc' }],
@@ -325,8 +436,130 @@ export class ChatbotService {
       };
     }
 
+    // ---- Canteen catalog (user) ---------------------------------------------
+    if (asksCanteenCatalog) {
+      const categories = await this.prisma.canteenCategory.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: {
+          products: {
+            where: {
+              isActive: true,
+              stock: { gt: 0 },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+            take: 3,
+          },
+        },
+        take: 3,
+      });
+
+      const availableProducts = categories
+        .flatMap((category) =>
+          category.products.map((product) => ({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            categoryName: category.name,
+          })),
+        )
+        .slice(0, 6);
+
+      if (!availableProducts.length) {
+        return {
+          answer: 'Hiện canteen chưa có món nào còn hàng để hiển thị.',
+          citations: [],
+          deepLinks: ['/services/canteen'],
+          suggestedQuestions: getSuggested('canteen_catalog'),
+          confidence: 0.9,
+          intent: 'canteen_catalog',
+        };
+      }
+
+      return {
+        answer: `Hiện canteen đang có ${availableProducts.length} món còn hàng: ${availableProducts
+          .map(
+            (product) =>
+              `${product.name} (${product.price.toLocaleString('vi-VN')}đ, ${product.categoryName})`,
+          )
+          .join('; ')}.`,
+        citations: availableProducts.map((product) => ({
+          type: 'db',
+          table: 'canteen_products',
+          id: product.id,
+        })),
+        deepLinks: ['/services/canteen'],
+        suggestedQuestions: getSuggested('canteen_catalog'),
+        confidence: 0.94,
+        intent: 'canteen_catalog',
+      };
+    }
+
+    // ---- Library loan requests (user) ---------------------------------------
+    if (asksLibraryRequests) {
+      const requests = await this.prisma.libraryLoanRequest.findMany({
+        where: {
+          requesterId: userId,
+          status: {
+            in: [
+              LibraryLoanRequestStatus.pending,
+              LibraryLoanRequestStatus.approved,
+              LibraryLoanRequestStatus.rejected,
+              LibraryLoanRequestStatus.cancelled,
+            ],
+          },
+        },
+        include: {
+          book: {
+            select: {
+              id: true,
+              title: true,
+              authors: true,
+            },
+          },
+          copy: {
+            select: {
+              id: true,
+              copyCode: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 3,
+      });
+
+      if (!requests.length) {
+        return {
+          answer: 'Bạn chưa có yêu cầu mượn sách nào gần đây.',
+          citations: [],
+          deepLinks: ['/services/library'],
+          suggestedQuestions: getSuggested('library_loan_requests'),
+          confidence: 0.95,
+          intent: 'library_loan_requests',
+        };
+      }
+
+      return {
+        answer: `Bạn có ${requests.length} yêu cầu mượn gần nhất: ${requests
+          .map(
+            (request) =>
+              `"${request.book.title}" (${getLoanRequestStatusLabel(request.status)}, copy ${request.copy.copyCode})`,
+          )
+          .join('; ')}.`,
+        citations: requests.map((request) => ({
+          type: 'db',
+          table: 'library_loan_requests',
+          id: request.id,
+        })),
+        deepLinks: ['/services/library'],
+        suggestedQuestions: getSuggested('library_loan_requests'),
+        confidence: 0.96,
+        intent: 'library_loan_requests',
+      };
+    }
+
     // ---- Library loans (user) ------------------------------------------------
-    if (has('library') || has('sach') || has('muon') || has('thu')) {
+    if (asksLibraryLoans) {
       const loans = await this.prisma.libraryLoan.findMany({
         where: {
           borrowerId: userId,
@@ -362,7 +595,7 @@ export class ChatbotService {
     }
 
     // ---- SOS ----------------------------------------------------------------
-    if (has('sos') || has('khan') || has('cap')) {
+    if (asksSos) {
       const sos = await this.prisma.sosRequest.findFirst({
         where: { requesterId: userId },
         orderBy: [{ createdAt: 'desc' }],
@@ -387,8 +620,8 @@ export class ChatbotService {
       };
     }
 
-    // ---- Schedule today (student) -------------------------------------------
-    if (has('schedule') || has('lich') || has('hoc') || has('mon') || has('tiet')) {
+    // ---- Schedule today / week (student) ------------------------------------
+    if (asksSchedule) {
       const todayDow = new Date().getDay(); // 0=Sun,1=Mon,...
       const enrollments = await this.prisma.classEnrollment.findMany({
         where: { studentId: userId, status: 'active' },
@@ -396,14 +629,69 @@ export class ChatbotService {
           classSection: {
             include: {
               course: true,
-              meetings: {
-                where: { dayOfWeek: todayDow },
-                orderBy: [{ startTime: 'asc' }],
-              },
+              meetings: asksScheduleWeek
+                ? {
+                    orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+                  }
+                : {
+                    where: { dayOfWeek: todayDow },
+                    orderBy: [{ startTime: 'asc' }],
+                  },
             },
           },
         },
       });
+
+      if (asksScheduleWeek) {
+        const weeklyMeetings = enrollments.flatMap((enrollment) =>
+          enrollment.classSection.meetings.map((meeting) => ({
+            course: enrollment.classSection.course.name,
+            startTime: meeting.startTime,
+            endTime: meeting.endTime,
+            room: meeting.room ?? 'chưa xác định',
+            dayOfWeek: meeting.dayOfWeek,
+          })),
+        );
+
+        if (!weeklyMeetings.length) {
+          return {
+            answer: 'Tuần này bạn chưa có lịch học nào.',
+            citations: [],
+            deepLinks: ['/services/schedule'],
+            suggestedQuestions: getSuggested('schedule_week'),
+            confidence: 0.95,
+            intent: 'schedule_week',
+          };
+        }
+
+        const groupedSummary = Array.from(
+          weeklyMeetings.reduce((groups, meeting) => {
+            const current = groups.get(meeting.dayOfWeek) ?? [];
+            current.push(meeting);
+            groups.set(meeting.dayOfWeek, current);
+            return groups;
+          }, new Map<number, typeof weeklyMeetings>()),
+        )
+          .map(
+            ([dayOfWeek, items]) =>
+              `${getWeekdayLabel(dayOfWeek)}: ${items
+                .map(
+                  (item) =>
+                    `${item.course} (${item.startTime}-${item.endTime}, phòng ${item.room})`,
+                )
+                .join('; ')}`,
+          )
+          .join(' | ');
+
+        return {
+          answer: `Lịch học tuần hiện tại của bạn: ${groupedSummary}.`,
+          citations: [],
+          deepLinks: ['/services/schedule'],
+          suggestedQuestions: getSuggested('schedule_week'),
+          confidence: 0.95,
+          intent: 'schedule_week',
+        };
+      }
 
       const todayMeetings = enrollments.flatMap((e) =>
         e.classSection.meetings.map((m) => ({
@@ -438,7 +726,7 @@ export class ChatbotService {
     }
 
     // ---- Room booking status (user) -----------------------------------------
-    if (has('room') || has('phong') || has('dat') || has('phong')) {
+    if (asksRoomBooking) {
       const booking = await this.prisma.roomBooking.findFirst({
         where: { userId },
         include: { room: { select: { name: true } } },
@@ -465,7 +753,7 @@ export class ChatbotService {
     }
 
     // ---- Upcoming events ---------------------------------------------------
-    if (has('event') || has('kien') || has('hoat')) {
+    if (asksEvent) {
       const events = await this.prisma.event.findMany({
         where: {
           status: EventStatus.open,
@@ -498,7 +786,7 @@ export class ChatbotService {
     }
 
     // ---- Unread notifications -----------------------------------------------
-    if (has('notification') || has('thong') || has('tin')) {
+    if (asksNotification) {
       const unreadCount = await this.prisma.notification.count({
         where: { userId, isRead: false },
       });
@@ -527,7 +815,10 @@ export class ChatbotService {
     }
 
     // ---- Canteen admin queue ------------------------------------------------
-    if (role === Role.canteen_admin && has('hoan') && has('don')) {
+    if (
+      (role === Role.canteen_admin || role === Role.admin || role === Role.super_admin) &&
+      (includesPhrase('don da thanh toan', 'hoan thanh don') || (has('hoan') && has('don')))
+    ) {
       const pendingOrders = await this.prisma.canteenOrder.count({
         where: { status: 'paid' },
       });
@@ -613,7 +904,9 @@ export class ChatbotService {
       };
     }
 
-    const answer = ranked.map((item, index) => `${index + 1}. ${item.chunk.contentText}`).join('\n');
+    const answer = ranked
+      .map((item, index) => `${index + 1}. ${item.chunk.contentText}`)
+      .join('\n');
     const citations = ranked.map((item) => ({
       type: 'kb',
       documentId: item.chunk.document.id,
