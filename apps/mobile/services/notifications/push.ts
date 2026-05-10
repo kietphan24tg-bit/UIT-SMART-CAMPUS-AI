@@ -158,3 +158,7 @@ export async function unregisterPushTokenFromBackend() {
     // best-effort
   }
 }
+
+export async function clearCachedExpoPushToken() {
+  await SecureStore.deleteItemAsync(EXPO_PUSH_TOKEN_CACHE_KEY);
+}

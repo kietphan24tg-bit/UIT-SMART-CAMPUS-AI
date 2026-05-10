@@ -14,6 +14,13 @@ import { AppState } from 'react-native';
 import { SosRealtimeProvider } from '@/components/system/sos-realtime-provider';
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
 import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
+import {
+  configureForegroundNotificationHandler,
+  flushPendingNotificationNavigation,
+  subscribePushNotificationEvents,
+} from '@/services/notifications/push-receiver';
+import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
+import { syncPushToken } from '@/services/notifications/push';
 import { appQueryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
@@ -29,6 +36,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
   const isHydrated = useAuthStore((state) => state.isHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [isStartupScreenVisible, setIsStartupScreenVisible] = useState(true);
   const hasHiddenNativeSplashRef = useRef(false);
   const minimumVisibleUntilRef = useRef(Date.now() + STARTUP_MINIMUM_MS);
@@ -76,6 +84,27 @@ export default function RootLayout() {
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    configureForegroundNotificationHandler();
+
+    const unsubscribePushEvents = subscribePushNotificationEvents(appQueryClient);
+    const unsubscribeTokenChanges = subscribeExpoPushTokenChanges();
+
+    return () => {
+      unsubscribePushEvents();
+      unsubscribeTokenChanges();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated || !isAuthenticated) {
+      return;
+    }
+
+    flushPendingNotificationNavigation();
+    void syncPushToken().catch(() => undefined);
+  }, [isAuthenticated, isHydrated]);
 
   useEffect(() => {
     if (isStartupScreenVisible || hasHiddenNativeSplashRef.current) {

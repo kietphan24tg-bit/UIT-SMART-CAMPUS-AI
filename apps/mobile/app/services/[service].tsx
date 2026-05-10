@@ -247,7 +247,12 @@ export default function ServiceDetailScreen() {
 
         <ContentStack narrow overlapHero={false}>
           <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
-            <Text style={styles.body}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.text, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus,
               phê duyệt đặt phòng, canteen và thư viện.
             </Text>

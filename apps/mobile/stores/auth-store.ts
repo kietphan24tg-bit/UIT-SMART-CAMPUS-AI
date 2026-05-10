@@ -6,6 +6,10 @@ import { registerAuthSessionHandlers } from '@/services/api/auth-session';
 import { tryRefreshAccessToken } from '@/services/api/client';
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
+import {
+  clearCachedExpoPushToken,
+  unregisterPushTokenFromBackend,
+} from '@/services/notifications/push';
 import { appQueryClient } from '@/services/query-client';
 
 type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> &
@@ -107,10 +111,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    await unregisterPushTokenFromBackend();
     set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
     await clearSessionQueries();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
+    await clearCachedExpoPushToken();
   },
 
   hydrate: async () => {
@@ -177,6 +183,7 @@ registerAuthSessionHandlers({
   },
   onSessionInvalidated: () => {
     void clearSessionQueries();
+    void clearCachedExpoPushToken();
     useAuthStore.setState({
       isHydrated: true,
       isAuthenticated: false,

@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
@@ -21,6 +22,7 @@ export default function SettingsScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const preference = useThemePreference();
   const setPreference = useSetThemePreference();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.4';
 
   const handleLogout = async () => {
     await logout();
@@ -88,7 +90,7 @@ export default function SettingsScreen() {
 
         <SectionCard title="Ứng dụng" subtitle="Phiên bản hiện tại" variant="outlined">
           <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
-            UIT Smart Campus 0.1.0
+            {`UIT Smart Campus ${appVersion}`}
           </Text>
         </SectionCard>
 

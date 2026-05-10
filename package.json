@@ -1,6 +1,6 @@
 {
   "name": "smart-campus",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "private": true,
   "description": "UIT Smart Campus - Super App for university students",
   "scripts": {
