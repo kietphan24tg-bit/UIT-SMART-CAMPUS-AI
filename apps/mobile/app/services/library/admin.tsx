@@ -4,11 +4,12 @@ import { Image } from 'expo-image';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -30,6 +31,7 @@ import {
   SkeletonBlock,
   StatusBadge,
 } from '@/components/ui';
+import { ScreenScrollContext } from '@/components/ui/screen';
 import {
   libraryApi,
   type AdminLibraryBookRecord,
@@ -1674,6 +1676,81 @@ function BottomSheet({
   children: ReactNode;
 }) {
   const theme = useAppTheme();
+  const scrollRef = useRef<ScrollViewWithResponder | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeTargetRef = useRef<number | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+
+  const scheduleKeyboardScroll = useCallback(
+    (target: number | null, delay = BOTTOM_SHEET_KEYBOARD_SCROLL_DELAY) => {
+      if (!target) {
+        return;
+      }
+
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      scrollTimeoutRef.current = setTimeout(() => {
+        const responder = scrollRef.current?.getScrollResponder?.();
+        responder?.scrollResponderScrollNativeHandleToKeyboard?.(
+          target,
+          BOTTOM_SHEET_KEYBOARD_SCROLL_OFFSET,
+          true,
+        );
+      }, delay);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible || Platform.OS === 'web') {
+      setKeyboardHeight(0);
+      setKeyboardInset(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+      setKeyboardInset(event.endCoordinates.height + BOTTOM_SHEET_KEYBOARD_EXTRA_SPACE);
+      scheduleKeyboardScroll(activeTargetRef.current, Platform.OS === 'ios' ? 24 : 72);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setKeyboardInset(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [scheduleKeyboardScroll, visible]);
+
+  const scrollContextValue = useMemo(
+    () => ({
+      enabled: visible && Platform.OS !== 'web',
+      scrollToField: (target: number | null) => {
+        if (Platform.OS === 'web' || !target) {
+          return;
+        }
+
+        activeTargetRef.current = target;
+        scheduleKeyboardScroll(target);
+      },
+    }),
+    [scheduleKeyboardScroll, visible],
+  );
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -1683,13 +1760,16 @@ function BottomSheet({
           onPress={onClose}
         />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
           style={styles.sheetKeyboardAvoider}
         >
           <View
             style={[
               styles.sheetPanel,
+              Platform.OS === 'android'
+                ? { marginBottom: keyboardHeight > 0 ? ANDROID_SHEET_KEYBOARD_LIFT : 0 }
+                : null,
               { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
             ]}
           >
@@ -1721,20 +1801,46 @@ function BottomSheet({
                 <Ionicons name="close" size={20} color={theme.colors.text} />
               </Pressable>
             </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              contentContainerStyle={styles.sheetScrollContent}
-            >
-              {children}
-            </ScrollView>
+            <ScreenScrollContext.Provider value={scrollContextValue}>
+              <ScrollView
+                ref={(instance) => {
+                  scrollRef.current = instance as ScrollViewWithResponder | null;
+                }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                contentContainerStyle={[
+                  styles.sheetScrollContent,
+                  { paddingBottom: SHEET_SCROLL_BASE_PADDING + keyboardInset },
+                ]}
+              >
+                {children}
+              </ScrollView>
+            </ScreenScrollContext.Provider>
           </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
   );
 }
+
+interface ScrollResponderLike {
+  scrollResponderScrollNativeHandleToKeyboard?: (
+    nodeHandle: number,
+    additionalOffset?: number,
+    preventNegativeScrollOffset?: boolean,
+  ) => void;
+}
+
+type ScrollViewWithResponder = ScrollView & {
+  getScrollResponder?: () => ScrollResponderLike | null;
+};
+
+const BOTTOM_SHEET_KEYBOARD_SCROLL_OFFSET = 56;
+const BOTTOM_SHEET_KEYBOARD_SCROLL_DELAY = Platform.OS === 'ios' ? 48 : 96;
+const BOTTOM_SHEET_KEYBOARD_EXTRA_SPACE = 96;
+const ANDROID_SHEET_KEYBOARD_LIFT = 32;
+const SHEET_SCROLL_BASE_PADDING = 20;
 
 const styles = StyleSheet.create({
   headerBlock: {
@@ -2110,7 +2216,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   sheetScrollContent: {
-    paddingBottom: 20,
+    paddingBottom: SHEET_SCROLL_BASE_PADDING,
   },
   sheetContent: {
     gap: 14,
