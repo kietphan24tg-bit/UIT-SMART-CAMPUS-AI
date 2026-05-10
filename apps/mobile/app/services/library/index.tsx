@@ -61,6 +61,60 @@ function getRequestStatusTone(status: LibraryLoanRequestRecord['status']) {
   }
 }
 
+function LibraryStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'success' | 'warning' | 'danger' | 'info';
+}) {
+  const theme = useAppTheme();
+
+  const palette = {
+    success: {
+      color: theme.colors.success,
+      backgroundColor: theme.colors.successSurface,
+      borderColor: theme.colors.success,
+    },
+    warning: {
+      color: theme.colors.warning,
+      backgroundColor: theme.colors.warningSurface,
+      borderColor: theme.colors.warning,
+    },
+    danger: {
+      color: theme.colors.danger,
+      backgroundColor: theme.colors.dangerSurface,
+      borderColor: theme.colors.danger,
+    },
+    info: {
+      color: theme.colors.info,
+      backgroundColor: theme.colors.infoSurface,
+      borderColor: theme.colors.info,
+    },
+  }[tone];
+
+  return (
+    <View
+      style={[
+        styles.libraryStatusBadge,
+        {
+          backgroundColor: palette.backgroundColor,
+          borderColor: palette.borderColor,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.libraryStatusBadgeText,
+          { color: palette.color, fontFamily: theme.fonts.semibold },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 export default function LibraryScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -444,7 +498,7 @@ export default function LibraryScreen() {
                         },
                       ]}
                     >
-                      <View style={styles.rowBetween}>
+                      <View testID="library-request-card-header" style={styles.cardHeader}>
                         <Text
                           style={[
                             styles.cardTitle,
@@ -453,11 +507,12 @@ export default function LibraryScreen() {
                         >
                           {request.book.title}
                         </Text>
-                        <StatusBadge
-                          label={getRequestStatusLabel(request.status)}
-                          tone={getRequestStatusTone(request.status)}
-                          size="sm"
-                        />
+                        <View style={styles.cardHeaderBadgeWrap}>
+                          <LibraryStatusBadge
+                            label={getRequestStatusLabel(request.status)}
+                            tone={getRequestStatusTone(request.status)}
+                          />
+                        </View>
                       </View>
                       <Text
                         style={[
@@ -550,7 +605,7 @@ export default function LibraryScreen() {
                           },
                         ]}
                       >
-                        <View style={styles.rowBetween}>
+                        <View testID="library-loan-card-header" style={styles.cardHeader}>
                           <Text
                             style={[
                               styles.cardTitle,
@@ -559,11 +614,12 @@ export default function LibraryScreen() {
                           >
                             {loan.book.title}
                           </Text>
-                          <StatusBadge
-                            label={loan.status === 'overdue' ? 'Quá hạn' : 'Đang mượn'}
-                            tone={loan.status === 'overdue' ? 'danger' : 'success'}
-                            size="sm"
-                          />
+                          <View style={styles.cardHeaderBadgeWrap}>
+                            <LibraryStatusBadge
+                              label={loan.status === 'overdue' ? 'Quá hạn' : 'Đang mượn'}
+                              tone={loan.status === 'overdue' ? 'danger' : 'success'}
+                            />
+                          </View>
                         </View>
                         <Text
                           style={[
@@ -978,6 +1034,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  cardHeader: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  cardHeaderBadgeWrap: {
+    width: '100%',
+    alignItems: 'flex-end',
+  },
   bookCardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1014,6 +1079,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
+    minWidth: 0,
     fontSize: 15,
     lineHeight: 20,
   },
@@ -1088,5 +1154,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     gap: 7,
+  },
+  libraryStatusBadge: {
+    alignSelf: 'flex-start',
+    minHeight: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  libraryStatusBadgeText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

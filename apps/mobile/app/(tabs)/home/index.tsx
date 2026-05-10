@@ -35,6 +35,7 @@ const QUICK_COPY: Record<string, string> = {
   alerts: 'Cảnh báo.',
   parking: 'Parking.',
   'campus-map': 'Bản đồ.',
+  'gps-sos': 'Khẩn cấp.',
   operations: 'Vận hành.',
   services: 'Dịch vụ.',
 };
@@ -413,7 +414,7 @@ export default function HomeScreen() {
                     icon={action.icon as never}
                     label={getQuickLabel(action.id, action.label)}
                     description={QUICK_COPY[action.id] ?? 'Mở nhanh.'}
-                    route={action.route}
+                    onPress={() => router.push(getQuickActionRoute(action.id, action.route) as never)}
                     tone={getQuickTone(action.id)}
                   />
                 ))}
@@ -431,24 +432,23 @@ function QuickActionTile({
   icon,
   label,
   description,
-  route,
+  onPress,
   tone,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
-  route: string;
+  onPress: () => void;
   tone: 'primary' | 'campus' | 'academic' | 'telemetry' | 'success' | 'warning' | 'danger' | 'info';
 }) {
   const theme = useAppTheme();
-  const router = useRouter();
   const accentColor = getToneColor(theme, tone);
   const accentSurface = getToneSurface(theme, tone);
 
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(route as never)}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.quickCard,
         {
@@ -480,6 +480,17 @@ function QuickActionTile({
       </Text>
     </Pressable>
   );
+}
+
+function getQuickActionRoute(actionId: string, route: string) {
+  if (actionId === 'gps-sos') {
+    return {
+      pathname: route,
+      params: { from: 'home' },
+    };
+  }
+
+  return route;
 }
 
 function ParkingHealthCallout({
@@ -607,6 +618,8 @@ function getQuickLabel(id: string, fallback: string) {
       return 'Parking';
     case 'campus-map':
       return 'Bản đồ';
+    case 'gps-sos':
+      return 'GPS/SOS';
     case 'operations':
       return 'Vận hành';
     case 'services':
@@ -628,6 +641,8 @@ function getQuickTone(actionId: string) {
       return 'telemetry';
     case 'campus-map':
       return 'success';
+    case 'gps-sos':
+      return 'danger';
     case 'operations':
       return 'primary';
     default:

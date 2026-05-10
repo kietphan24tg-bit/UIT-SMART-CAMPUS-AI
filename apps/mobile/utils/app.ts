@@ -282,7 +282,7 @@ export function getRoleQuickActions(role?: string | null) {
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
       { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
-      { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
+      { id: 'gps-sos', label: 'GPS/SOS', icon: 'locate-outline', route: '/services/gps-sos' },
       { id: 'services', label: 'Dịch vụ', icon: 'grid-outline', route: '/services' },
     ];
   }

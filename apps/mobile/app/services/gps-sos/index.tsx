@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { USER_ROLES } from '@smart-campus/shared';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -19,26 +19,19 @@ import {
 } from '@/components/ui';
 import { sosApi } from '@/services/api/sos';
 import { useAuthStore } from '@/stores/auth-store';
-import { useSosRealtimeStore } from '@/stores/sos-realtime-store';
 import { useAppTheme } from '@/theme';
-
-type ViewerLocation = {
-  lat: number;
-  lng: number;
-  accuracyMeters?: number;
-} | null;
+import { openGoogleMapsDirections } from '@/utils/google-maps';
 
 const SOS_FALLBACK_REFETCH_MS = 120_000;
 
 export default function GpsSosScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.user?.id);
   const role = useAuthStore((state) => state.user?.role);
-  const connectionState = useSosRealtimeStore((state) => state.connectionState);
   const [note, setNote] = useState('');
-  const [viewerLocation, setViewerLocation] = useState<ViewerLocation>(null);
 
   const activeQuery = useQuery({
     queryKey: ['sos', 'active'],
@@ -66,11 +59,6 @@ export default function GpsSosScreen() {
         accuracyMeters: position.coords.accuracy ?? undefined,
         note: note.trim() || undefined,
       };
-      setViewerLocation({
-        lat: payload.lat,
-        lng: payload.lng,
-        accuracyMeters: payload.accuracyMeters,
-      });
       return sosApi.create(payload);
     },
     onSuccess: async () => {
@@ -104,6 +92,7 @@ export default function GpsSosScreen() {
 
   const activeItems = activeQuery.data ?? [];
   const myLatestActive = mineQuery.data?.find((item) => item.status === 'active') ?? null;
+  const entrySource = from === 'home' ? 'home' : 'services';
   const metrics = [
     {
       label: 'SOS đang mở',
@@ -126,23 +115,23 @@ export default function GpsSosScreen() {
       tone: 'info' as const,
     },
     {
-      label: 'Realtime feed',
-      value: connectionState === 'live' ? 'Đang live' : 'Dự phòng',
-      helper: connectionState === 'live' ? 'Socket đang kết nối' : 'Socket tạm gián đoạn',
-      tone: connectionState === 'live' ? ('success' as const) : ('warning' as const),
+      label: 'Google Maps',
+      value: 'Hỗ trợ',
+      helper: 'Tìm chính xác',
+      tone: 'success' as const,
     },
   ];
 
-  const markers = useMemo(
-    () =>
-      activeItems.map((item) => ({
+  const markers = useMemo(() => {
+    const previewItems = myLatestActive ? [myLatestActive] : activeItems;
+
+    return previewItems.map((item) => ({
         id: item.id,
         lat: item.lat,
         lng: item.lng,
         title: item.requester?.fullName ?? 'SOS',
-      })),
-    [activeItems],
-  );
+      }));
+  }, [activeItems, myLatestActive]);
 
   const openFullscreenMap = (sosId?: string) => {
     if (sosId) {
@@ -156,12 +145,22 @@ export default function GpsSosScreen() {
     router.push('/services/gps-sos/map' as never);
   };
 
+  const backLabel = entrySource === 'home' ? 'Quay lại trang chủ' : 'Quay lại dịch vụ';
+  const handleBackPress = () => {
+    if (entrySource === 'home') {
+      router.replace('/home');
+      return;
+    }
+
+    router.replace('/services');
+  };
+
   return (
     <Screen>
       <TopHero
         eyebrow="Dịch vụ campus"
         title="GPS/SOS"
-        subtitle="Người tạo SOS gửi snapshot vị trí, còn người hỗ trợ có thể mở lộ trình realtime toàn màn hình."
+        subtitle="Người tạo SOS gửi snapshot vị trí một lần, còn người hỗ trợ dùng Google Maps để tìm chính xác."
         showBrand
         variant="accent"
       />
@@ -202,14 +201,18 @@ export default function GpsSosScreen() {
 
         <SectionCard
           title="Bản đồ SOS"
-          subtitle="Chạm vào bản đồ để mở toàn màn hình và xem vị trí hỗ trợ rõ hơn."
+          subtitle="Bản đồ trong app chỉ để đối chiếu vị trí snapshot đã lưu khi gửi SOS."
           variant="glass"
           tone="campus"
         >
-          <SosMap markers={markers} viewerLocation={viewerLocation} onPress={() => openFullscreenMap()} />
+          <SosMap markers={markers} onPress={() => openFullscreenMap(myLatestActive?.id)} />
         </SectionCard>
 
-        <SectionCard title="Bảng tin SOS đang mở" subtitle="Mọi người dùng đăng nhập đều có thể xem feed hỗ trợ." variant="outlined">
+        <SectionCard
+          title="Bảng tin SOS đang mở"
+          subtitle="Người hỗ trợ có thể mở Google Maps để đi tới đúng tọa độ snapshot đã lưu."
+          variant="outlined"
+        >
           {activeQuery.isLoading ? (
             <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
               Đang tải feed SOS...
@@ -250,7 +253,12 @@ export default function GpsSosScreen() {
                       </Text>
                     ) : null}
                     <View style={styles.row}>
-                      <PrimaryButton label="Mở lộ trình" onPress={() => openFullscreenMap(item.id)} />
+                      {!ownRequest ? (
+                        <PrimaryButton
+                          label="Mở Google Maps"
+                          onPress={() => void openGoogleMapsDirections(item.lat, item.lng)}
+                        />
+                      ) : null}
                       {ownRequest ? (
                         <PrimaryButton
                           label="Hủy SOS"
@@ -273,7 +281,7 @@ export default function GpsSosScreen() {
           )}
         </SectionCard>
 
-        <PrimaryButton label="Quay lại dịch vụ" onPress={() => router.replace('/services')} />
+        <PrimaryButton label={backLabel} onPress={handleBackPress} />
       </ContentStack>
     </Screen>
   );

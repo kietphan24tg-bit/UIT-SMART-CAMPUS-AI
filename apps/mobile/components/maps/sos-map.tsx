@@ -3,12 +3,6 @@ import { WebView } from 'react-native-webview';
 
 import { useAppTheme } from '@/theme';
 
-type ViewerLocation = {
-  lat: number;
-  lng: number;
-  accuracyMeters?: number;
-} | null;
-
 export interface SosMapMarker {
   id: string;
   lat: number;
@@ -18,18 +12,12 @@ export interface SosMapMarker {
 
 interface SosMapProps {
   markers: SosMapMarker[];
-  viewerLocation: ViewerLocation;
-  routePolyline?: string | null;
-  routeCoordinates?: Array<[number, number]> | null;
   height?: number | null;
   onPress?: () => void;
 }
 
 export function SosMap({
   markers,
-  viewerLocation,
-  routePolyline,
-  routeCoordinates,
   height = 280,
   onPress,
 }: SosMapProps) {
@@ -37,9 +25,6 @@ export function SosMap({
   const trackAsiaStyleUrl = process.env.EXPO_PUBLIC_TRACK_ASIA_STYLE_URL;
   const html = createMapHtml({
     markers,
-    viewerLocation,
-    routePolyline,
-    routeCoordinates,
     isDark: theme.isDark,
     trackAsiaStyleUrl,
   });
@@ -91,62 +76,19 @@ export function SosMap({
 
 function createMapHtml({
   markers,
-  viewerLocation,
-  routePolyline,
-  routeCoordinates,
   isDark,
   trackAsiaStyleUrl,
 }: {
   markers: SosMapMarker[];
-  viewerLocation: ViewerLocation;
-  routePolyline?: string | null;
-  routeCoordinates?: Array<[number, number]> | null;
   isDark: boolean;
   trackAsiaStyleUrl?: string;
 }) {
   const payload = JSON.stringify({
     markers,
-    viewerLocation,
-    routePolyline: routePolyline || null,
-    routeCoordinates: routeCoordinates || null,
   });
   const tileLayer = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const textColor = isDark ? '#E2E8F0' : '#0F172A';
   const bgColor = isDark ? '#0B1220' : '#F8FAFC';
-  const routeColor = '#2563EB';
-
-  const decoder = `
-    function decodePolyline(encoded) {
-      if (!encoded) return [];
-      let index = 0;
-      let lat = 0;
-      let lng = 0;
-      const coordinates = [];
-      while (index < encoded.length) {
-        let shift = 0;
-        let result = 0;
-        let byte = null;
-        do {
-          byte = encoded.charCodeAt(index++) - 63;
-          result |= (byte & 0x1f) << shift;
-          shift += 5;
-        } while (byte >= 0x20);
-        const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lat += deltaLat;
-        shift = 0;
-        result = 0;
-        do {
-          byte = encoded.charCodeAt(index++) - 63;
-          result |= (byte & 0x1f) << shift;
-          shift += 5;
-        } while (byte >= 0x20);
-        const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lng += deltaLng;
-        coordinates.push([lng / 1e5, lat / 1e5]);
-      }
-      return coordinates;
-    }
-  `;
 
   if (trackAsiaStyleUrl?.trim()) {
     return `
@@ -158,20 +100,18 @@ function createMapHtml({
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: ${bgColor}; color: ${textColor}; }
-    .marker-dot, .viewer-dot {
+    .marker-dot {
       width: 14px;
       height: 14px;
       border-radius: 999px;
       border: 2px solid #fff;
     }
     .marker-dot { background: #EF4444; }
-    .viewer-dot { background: #2563EB; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <script>
-    ${decoder}
     const payload = ${payload};
     const fallbackCenter = [106.8034, 10.8702];
     const first = payload.markers[0];
@@ -196,46 +136,7 @@ function createMapHtml({
       hasBounds = true;
     });
 
-    if (payload.viewerLocation) {
-      const viewer = document.createElement('div');
-      viewer.className = 'viewer-dot';
-      new maplibregl.Marker({ element: viewer })
-        .setLngLat([payload.viewerLocation.lng, payload.viewerLocation.lat])
-        .setPopup(new maplibregl.Popup({ offset: 20 }).setText('Vị trí của bạn'))
-        .addTo(map);
-      bounds.extend([payload.viewerLocation.lng, payload.viewerLocation.lat]);
-      hasBounds = true;
-    }
-
     map.on('load', () => {
-      const routeCoords = Array.isArray(payload.routeCoordinates) && payload.routeCoordinates.length
-        ? payload.routeCoordinates
-        : decodePolyline(payload.routePolyline);
-      if (routeCoords.length) {
-        map.addSource('route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: routeCoords,
-            },
-          },
-        });
-        map.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': '${routeColor}',
-            'line-width': 5,
-          },
-        });
-        routeCoords.forEach((coord) => bounds.extend(coord));
-        hasBounds = true;
-      }
-
       if (hasBounds) {
         map.fitBounds(bounds, { padding: 32, duration: 0, maxZoom: 16 });
       }
@@ -259,7 +160,6 @@ function createMapHtml({
 <body>
   <div id="map"></div>
   <script>
-    ${decoder}
     const payload = ${payload};
     const fallbackCenter = [10.8702, 106.8034];
     const first = payload.markers[0];
@@ -273,29 +173,6 @@ function createMapHtml({
       marker.bindPopup(item.title || 'SOS');
       points.push([item.lat, item.lng]);
     });
-
-    if (payload.viewerLocation) {
-      const viewer = L.circleMarker([payload.viewerLocation.lat, payload.viewerLocation.lng], {
-        radius: 7,
-        color: '#2563EB',
-        fillColor: '#2563EB',
-        fillOpacity: 0.85,
-      }).addTo(map);
-      viewer.bindPopup('Vị trí của bạn');
-      points.push([payload.viewerLocation.lat, payload.viewerLocation.lng]);
-    }
-
-    const routeCoords = Array.isArray(payload.routeCoordinates) && payload.routeCoordinates.length
-      ? payload.routeCoordinates.map((coord) => [coord[1], coord[0]])
-      : decodePolyline(payload.routePolyline).map((coord) => [coord[1], coord[0]]);
-    if (routeCoords.length) {
-      L.polyline(routeCoords, {
-        color: '${routeColor}',
-        weight: 5,
-        opacity: 0.95,
-      }).addTo(map);
-      routeCoords.forEach((coord) => points.push(coord));
-    }
 
     if (points.length > 1) {
       map.fitBounds(points, { padding: [20, 20] });

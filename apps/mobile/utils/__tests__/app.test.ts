@@ -60,10 +60,15 @@ describe('app utils', () => {
     const studentParkingService = getServiceEntries('student').find((item) => item.id === 'parking');
     const studentParkingQuickAction = getRoleQuickActions('student').find((item) => item.id === 'parking');
     const adminParkingQuickAction = getRoleQuickActions('admin').find((item) => item.id === 'parking');
+    const adminQuickActions = getRoleQuickActions('admin');
+    const adminCampusMapActions = adminQuickActions.filter((item) => item.id === 'campus-map');
+    const adminGpsSosAction = adminQuickActions.find((item) => item.id === 'gps-sos');
 
     expect(studentParkingService?.route).toBe('/services/parking');
     expect(studentParkingQuickAction?.route).toBe('/parking');
     expect(adminParkingQuickAction?.route).toBe('/parking');
+    expect(adminCampusMapActions).toHaveLength(1);
+    expect(adminGpsSosAction?.route).toBe('/services/gps-sos');
   });
 
   it('should route grades by role', () => {

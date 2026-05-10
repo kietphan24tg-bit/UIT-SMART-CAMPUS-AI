@@ -1,4 +1,4 @@
-﻿import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 
 import HomeScreen from '../index';
@@ -8,6 +8,16 @@ import { useAuthStore } from '@/stores/auth-store';
 
 jest.mock('@/hooks/use-dashboard-snapshot');
 jest.mock('@/stores/auth-store');
+
+const mockRouter = {
+  push: jest.fn(),
+  replace: jest.fn(),
+  back: jest.fn(),
+};
+
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
+}));
 
 const mockUseDashboardSnapshot = useDashboardSnapshot as unknown as jest.Mock;
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
@@ -19,7 +29,7 @@ const baseDashboard = {
     nextClass: {
       id: '1',
       course: { name: 'SE346', code: 'SE346' },
-      instructor: 'Cô Lan',
+      instructor: 'C\u00f4 Lan',
       room: 'E3.1',
       startTime: '09:00',
       endTime: '11:00',
@@ -61,13 +71,13 @@ describe('HomeScreen', () => {
   it('renders the student dashboard in a compact layout', () => {
     render(<HomeScreen />);
 
-    expect(screen.getByText('Xin chào, Nguyen An')).toBeTruthy();
-    expect(screen.getByText('Buổi tiếp theo')).toBeTruthy();
-    expect(screen.getByText('Kết quả')).toBeTruthy();
-    expect(screen.getByText('Lối tắt')).toBeTruthy();
+    expect(screen.getByText('Xin ch\u00e0o, Nguyen An')).toBeTruthy();
+    expect(screen.getByText('Bu\u1ed5i ti\u1ebfp theo')).toBeTruthy();
+    expect(screen.getByText('K\u1ebft qu\u1ea3')).toBeTruthy();
+    expect(screen.getByText('L\u1ed1i t\u1eaft')).toBeTruthy();
     expect(screen.getByText('09:00 - 11:00')).toBeTruthy();
     expect(screen.getAllByText('Parking').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Bản đồ').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('B\u1ea3n \u0111\u1ed3').length).toBeGreaterThan(0);
   });
 
   it('renders the operations dashboard for admin users', () => {
@@ -87,11 +97,37 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen />);
 
-    expect(screen.getByText('Tổng quan vận hành')).toBeTruthy();
-    expect(screen.getByText('Lối tắt')).toBeTruthy();
+    expect(screen.getByText('T\u1ed5ng quan v\u1eadn h\u00e0nh')).toBeTruthy();
+    expect(screen.getByText('L\u1ed1i t\u1eaft')).toBeTruthy();
     expect(screen.getAllByText('Parking').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Bản đồ').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Cảnh báo').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('B\u1ea3n \u0111\u1ed3')).toHaveLength(1);
+    expect(screen.getByText('GPS/SOS')).toBeTruthy();
+    expect(screen.getAllByText('C\u1ea3nh b\u00e1o').length).toBeGreaterThan(0);
+  });
+
+  it('opens GPS/SOS from the home shortcut with the home source param', () => {
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = { user: { firstName: 'An', lastName: 'Nguyen', role: 'admin' } };
+      return selector(state);
+    });
+    mockUseDashboardSnapshot.mockReturnValue({
+      ...baseDashboard,
+      data: {
+        ...baseDashboard.data,
+        role: 'admin',
+        nextClass: null,
+        gpa: null,
+      },
+    });
+
+    render(<HomeScreen />);
+
+    fireEvent.press(screen.getByText('GPS/SOS'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/services/gps-sos',
+      params: { from: 'home' },
+    });
   });
 
   it('hides the GPA section for lecturers', () => {
@@ -102,7 +138,7 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen />);
 
-    expect(screen.queryByText('Kết quả')).toBeNull();
+    expect(screen.queryByText('K\u1ebft qu\u1ea3')).toBeNull();
     expect(screen.queryByText('Xem GPA')).toBeNull();
   });
 
@@ -114,6 +150,6 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen />);
 
-    expect(screen.getByText('Xin chào, UITer')).toBeTruthy();
+    expect(screen.getByText('Xin ch\u00e0o, UITer')).toBeTruthy();
   });
 });

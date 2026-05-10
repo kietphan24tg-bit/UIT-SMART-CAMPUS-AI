@@ -29,6 +29,14 @@ export default function ServicesScreen() {
   const upcomingRows = buildGridRows(upcomingServices, 2);
   const handleServicePress = (service: (typeof services)[number]) => {
     if (service.isInteractive) {
+      if (service.id === 'gps-sos') {
+        router.push({
+          pathname: service.route,
+          params: { from: 'services' },
+        } as never);
+        return;
+      }
+
       router.push(service.route as never);
       return;
     }
