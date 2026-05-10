@@ -4,6 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 
 import { notifyAccessTokenUpdated, notifySessionInvalidated } from './auth-session';
 
+import { createLocalizedError } from '@/utils/error-message';
+
 export const AUTH_ACCESS_TOKEN_KEY = 'auth_access_token';
 const ACCESS_TOKEN_KEY = AUTH_ACCESS_TOKEN_KEY;
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -274,7 +276,9 @@ apiClient.interceptors.response.use(
       }
       await clearStoredTokens();
     }
-    return Promise.reject(error.response?.data ?? error);
+    return Promise.reject(
+      createLocalizedError(error.response?.data ?? error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'),
+    );
   },
 );
 
@@ -338,10 +342,16 @@ export async function postMultipart<T>(
       if (retryResponse.ok) {
         return (retryResponse.body?.data ?? retryResponse.body) as T;
       }
-      throw retryResponse.body ?? new Error(`Request failed with status ${retryResponse.status}`);
+      throw createLocalizedError(
+        retryResponse.body ?? new Error(`Request failed with status ${retryResponse.status}`),
+        'Không thể tải tệp lên lúc này.',
+      );
     }
     await clearStoredTokens();
   }
 
-  throw firstResponse.body ?? new Error(`Request failed with status ${firstResponse.status}`);
+  throw createLocalizedError(
+    firstResponse.body ?? new Error(`Request failed with status ${firstResponse.status}`),
+    'Không thể tải tệp lên lúc này.',
+  );
 }

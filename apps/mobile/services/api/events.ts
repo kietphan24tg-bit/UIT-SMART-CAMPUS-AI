@@ -42,7 +42,7 @@ export const eventsApi = {
     limit?: number;
   } = {}): Promise<ListEventsResponse> => {
     if (shouldUseMockEvents()) {
-      throw new Error('Mock events mode is disabled for this demo build');
+      throw new Error('Chế độ dữ liệu mẫu cho sự kiện không khả dụng trong bản dựng này.');
     }
 
     return (await apiClient.get('/events', {
@@ -55,7 +55,7 @@ export const eventsApi = {
 
   detail: async (slug: string): Promise<EventDetail> => {
     if (shouldUseMockEvents()) {
-      throw new Error('Mock events mode is disabled for this demo build');
+      throw new Error('Chế độ dữ liệu mẫu cho sự kiện không khả dụng trong bản dựng này.');
     }
 
     return (await apiClient.get(`/events/${encodeURIComponent(slug)}`)) as EventDetail;

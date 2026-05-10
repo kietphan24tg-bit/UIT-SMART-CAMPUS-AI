@@ -120,7 +120,7 @@ export async function syncPushToken() {
   }
 
   if (permissionStatus.status !== 'granted') {
-    throw new Error('Notification permission was not granted on this device.');
+    throw new Error('Thiết bị chưa cấp quyền nhận thông báo.');
   }
 
   try {

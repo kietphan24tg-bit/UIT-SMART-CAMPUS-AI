@@ -249,7 +249,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!session || (!this.canManageAllAttendance(actorRole) && session.lecturerId !== actorId)) {
-      throw new NotFoundException('Attendance session not found');
+      throw new NotFoundException('Không tìm thấy phiên điểm danh');
     }
 
     await this.revokeDisplayKeyForSession(sessionId);
@@ -359,7 +359,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (!rawTokenPayload) {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
-        message: 'Attendance token is invalid or expired',
+        message: 'Mã điểm danh không hợp lệ hoặc đã hết hạn',
       });
     }
 
@@ -369,7 +369,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     } catch {
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
-        message: 'Attendance token is invalid',
+        message: 'Mã điểm danh không hợp lệ',
       });
     }
 
@@ -390,7 +390,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (!activeEnrollment) {
       throw new ForbiddenException({
         code: 'NOT_ENROLLED',
-        message: 'Student is not enrolled in this class section',
+        message: 'Sinh viên chưa đăng ký lớp học phần này',
       });
     }
 
@@ -411,7 +411,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException({
           code: 'ALREADY_CHECKED_IN',
-          message: 'Student has already checked in for this session',
+          message: 'Sinh viên đã điểm danh cho buổi học này',
         });
       }
       throw error;
@@ -507,7 +507,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!session) {
-      throw new NotFoundException('Attendance session not found');
+      throw new NotFoundException('Không tìm thấy phiên điểm danh');
     }
 
     const roster = await this.prisma.classEnrollment.findMany({
@@ -908,7 +908,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!session) {
-      throw new NotFoundException('Attendance session not found');
+      throw new NotFoundException('Không tìm thấy phiên điểm danh');
     }
   }
 
@@ -1255,7 +1255,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       throw new HttpException(
         {
           code: 'RATE_LIMITED',
-          message: 'Too many check-in requests. Please try again shortly.',
+          message: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -1266,13 +1266,13 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     session: T,
   ): Promise<NonNullable<T>> {
     if (!session) {
-      throw new NotFoundException('Attendance session not found');
+      throw new NotFoundException('Không tìm thấy phiên điểm danh');
     }
 
     if (session.status === AttendanceSessionStatus.closed) {
       throw new BadRequestException({
         code: 'SESSION_CLOSED',
-        message: 'Attendance session is closed',
+        message: 'Phiên điểm danh đã đóng',
       });
     }
 
@@ -1281,7 +1281,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       await this.markSessionExpired(session.id);
       throw new BadRequestException({
         code: 'SESSION_CLOSED',
-        message: 'Attendance session has expired',
+        message: 'Phiên điểm danh đã hết hạn',
       });
     }
 
@@ -1303,14 +1303,14 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
   private assertDisplayKeyPresent(displayKey: string | undefined): asserts displayKey is string {
     if (!displayKey || !String(displayKey).trim()) {
-      throw new ForbiddenException('Invalid displayKey');
+      throw new ForbiddenException('Mã hiển thị không hợp lệ');
     }
   }
 
   private async validateDisplayKeyOrThrow(sessionId: string, displayKey: string) {
     const stored = await this.getStoreValue(this.buildDisplayKeyStoreKey(sessionId));
     if (!stored || stored !== displayKey) {
-      throw new ForbiddenException('Invalid displayKey');
+      throw new ForbiddenException('Mã hiển thị không hợp lệ');
     }
   }
 

@@ -1,3 +1,5 @@
+import { apiClient } from './client';
+
 import type {
   BuildingAvailability,
   RoomAvailabilitySummary,
@@ -5,8 +7,6 @@ import type {
   RoomScheduleDay,
   RoomSlotStatus,
 } from '@/types/room-booking';
-
-import { apiClient } from './client';
 
 type RoomBookingAvailabilityApiItem = {
   roomCode: string;
@@ -143,7 +143,7 @@ function shouldUseMockRoomBookings() {
 
 function assertLiveModeOnly() {
   if (shouldUseMockRoomBookings()) {
-    throw new Error('Mock room-bookings mode is disabled for this demo build');
+    throw new Error('Chế độ dữ liệu mẫu cho đặt phòng không khả dụng trong bản dựng này.');
   }
 }
 

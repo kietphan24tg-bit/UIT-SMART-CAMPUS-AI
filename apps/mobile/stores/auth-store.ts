@@ -2,10 +2,10 @@ import type { RegisterRequest, UserProfile } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
-import { registerAuthSessionHandlers } from '@/services/api/auth-session';
-import { tryRefreshAccessToken } from '@/services/api/client';
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
+import { registerAuthSessionHandlers } from '@/services/api/auth-session';
+import { tryRefreshAccessToken } from '@/services/api/client';
 import {
   clearCachedExpoPushToken,
   unregisterPushTokenFromBackend,
@@ -130,7 +130,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         } catch {
           const refreshedAccessToken = await tryRefreshAccessToken();
           if (!refreshedAccessToken) {
-            throw new Error('Unable to refresh access token during hydrate');
+            throw new Error('Không thể khôi phục phiên đăng nhập. Vui lòng đăng nhập lại.');
           }
 
           user = await authApi.getMe(refreshedAccessToken);

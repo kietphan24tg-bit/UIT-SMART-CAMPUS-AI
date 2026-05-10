@@ -47,12 +47,12 @@ export class AuthService {
       where: { email: dto.email },
     });
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email hoặc mật khẩu chưa đúng.');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email hoặc mật khẩu chưa đúng.');
     }
 
     return this.generateTokens(user.id, user.role);
@@ -65,7 +65,7 @@ export class AuthService {
     });
 
     if (!stored || stored.expiresAt < new Date() || !stored.user.isActive) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
     }
 
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
@@ -133,7 +133,7 @@ export class AuthService {
       };
     }
 
-    throw new InternalServerErrorException('Unable to send OTP at the moment');
+    throw new InternalServerErrorException('Không thể gửi OTP lúc này.');
   }
 
   async verifyPasswordResetOtp(email: string, otp: string) {
@@ -142,7 +142,7 @@ export class AuthService {
     const isValid = await bcrypt.compare(String(otp).trim(), passwordResetOtp.codeHash);
 
     if (!isValid) {
-      throw new UnauthorizedException('Invalid or expired OTP');
+      throw new UnauthorizedException('OTP không hợp lệ hoặc đã hết hạn.');
     }
 
     return { verified: true };
@@ -152,12 +152,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email hoặc mật khẩu chưa đúng.');
     }
 
     const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException('Mật khẩu hiện tại chưa đúng.');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -175,7 +175,7 @@ export class AuthService {
     const isValid = await bcrypt.compare(String(otp).trim(), passwordResetOtp.codeHash);
 
     if (!isValid) {
-      throw new UnauthorizedException('Invalid or expired OTP');
+      throw new UnauthorizedException('OTP không hợp lệ hoặc đã hết hạn.');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -192,7 +192,7 @@ export class AuthService {
       });
 
       if (consumed.count === 0) {
-        throw new UnauthorizedException('Invalid or expired OTP');
+        throw new UnauthorizedException('OTP không hợp lệ hoặc đã hết hạn.');
       }
 
       await tx.user.update({
@@ -254,7 +254,7 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid or expired OTP');
+      throw new UnauthorizedException('OTP không hợp lệ hoặc đã hết hạn.');
     }
 
     return user;
@@ -271,7 +271,7 @@ export class AuthService {
     });
 
     if (!passwordResetOtp) {
-      throw new UnauthorizedException('Invalid or expired OTP');
+      throw new UnauthorizedException('OTP không hợp lệ hoặc đã hết hạn.');
     }
 
     return passwordResetOtp;

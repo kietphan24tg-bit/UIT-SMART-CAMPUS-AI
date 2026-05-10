@@ -15,24 +15,10 @@ import type {
 
 import { apiClient } from './client';
 
+import { createLocalizedError } from '@/utils/error-message';
+
 function toAuthApiError(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error;
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    const errorRecord = error as { message?: unknown };
-
-    if (typeof errorRecord.message === 'string' && errorRecord.message.trim()) {
-      return new Error(errorRecord.message);
-    }
-
-    if (Array.isArray(errorRecord.message) && typeof errorRecord.message[0] === 'string') {
-      return new Error(errorRecord.message[0]);
-    }
-  }
-
-  return new Error(fallback);
+  return createLocalizedError(error, fallback);
 }
 
 export const authApi = {

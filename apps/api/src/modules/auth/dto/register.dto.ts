@@ -10,13 +10,13 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   @Matches(/^(?=.*[A-Z])(?=.*\d)/, {
-    message: 'Password must contain at least 1 uppercase letter and 1 number',
+    message: 'Mật khẩu phải có ít nhất 8 ký tự, gồm 1 chữ hoa và 1 chữ số',
   })
   password!: string;
 
   @ApiProperty({ example: '22520001' })
   @IsString()
-  @Matches(/^\d{8}$/, { message: 'Student ID must be 8 digits' })
+  @Matches(/^\d{8}$/, { message: 'Mã số sinh viên phải gồm đúng 8 chữ số' })
   studentId!: string;
 
   @ApiProperty({ example: 'Nguyen' })

@@ -7,6 +7,6 @@ export class PasswordResetVerifyDto {
   email!: string;
 
   @ApiProperty({ example: '123456' })
-  @Matches(/^\d{6}$/, { message: 'OTP must be 6 digits' })
+  @Matches(/^\d{6}$/, { message: 'OTP phải gồm đúng 6 chữ số' })
   otp!: string;
 }
