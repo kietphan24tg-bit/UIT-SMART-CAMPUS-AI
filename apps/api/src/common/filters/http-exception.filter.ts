@@ -10,7 +10,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message = 'Hệ thống đang bận. Vui lòng thử lại sau.';
 
     let code: string | undefined;
 

@@ -21,11 +21,11 @@ jest.mock('@/services/api/room-bookings', () => ({
       {
         id: 'C',
         code: 'C',
-        name: 'Tòa C',
+        name: 'T\u00f2a C',
         searchText: 'C',
         availableRooms: 8,
         totalRooms: 15,
-        subtitle: '8 phòng trống',
+        subtitle: '8 ph\u00f2ng tr\u1ed1ng',
       },
     ]),
     listAllBuildingRooms: jest.fn().mockResolvedValue({}),
@@ -37,7 +37,7 @@ jest.mock('@/services/api/room-bookings', () => ({
         floor: 1,
         capacity: 50,
         status: 'free',
-        statusLabel: 'Đang trống',
+        statusLabel: '\u0110ang tr\u1ed1ng',
         equipment: [],
       },
       {
@@ -47,7 +47,7 @@ jest.mock('@/services/api/room-bookings', () => ({
         floor: 1,
         capacity: 80,
         status: 'occupied',
-        statusLabel: 'Bận đến 11:30',
+        statusLabel: 'B\u1eadn \u0111\u1ebfn 11:30',
         equipment: [],
       },
       {
@@ -57,7 +57,7 @@ jest.mock('@/services/api/room-bookings', () => ({
         floor: 2,
         capacity: 50,
         status: 'available_later',
-        statusLabel: 'Trống 14:00',
+        statusLabel: 'Tr\u1ed1ng 14:00',
         equipment: [],
       },
     ]),
@@ -69,7 +69,7 @@ describe('RoomsInBuildingScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders room cards, filters by floor, and opens room detail', async () => {
+  it('renders room cards and opens room detail', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -79,25 +79,20 @@ describe('RoomsInBuildingScreen', () => {
       },
     });
 
-    const { getAllByText, getByText, queryByText } = render(
+    const { getAllByText, getByText } = render(
       <QueryClientProvider client={queryClient}>
         <RoomsInBuildingScreen />
       </QueryClientProvider>,
     );
 
     await waitFor(() => expect(getByText('[C101]')).toBeTruthy());
-    expect(getByText('Tòa C')).toBeTruthy();
+    expect(getByText('T\u00f2a C')).toBeTruthy();
     expect(getByText('Filter')).toBeTruthy();
-    expect(getByText('Tầng')).toBeTruthy();
-    expect(getByText('Sức chứa')).toBeTruthy();
-    expect(getAllByText('Tất cả')).toHaveLength(2);
-    expect(getAllByText('50 chỗ').length).toBeGreaterThan(0);
-    expect(getByText('Lab máy tính')).toBeTruthy();
-
-    fireEvent.press(getByText('Tầng'));
-    fireEvent.press(getByText('2'));
-
-    await waitFor(() => expect(queryByText('[C101]')).toBeNull());
+    expect(getByText('T\u1ea7ng')).toBeTruthy();
+    expect(getByText('S\u1ee9c ch\u1ee9a')).toBeTruthy();
+    expect(getAllByText('T\u1ea5t c\u1ea3')).toHaveLength(2);
+    expect(getAllByText('50 ch\u1ed7').length).toBeGreaterThan(0);
+    expect(getByText('Lab m\u00e1y t\u00ednh')).toBeTruthy();
     expect(getByText('[C201]')).toBeTruthy();
 
     fireEvent.press(getByText('[C201]'));

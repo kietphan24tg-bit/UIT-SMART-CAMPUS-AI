@@ -236,7 +236,7 @@ apiClient.interceptors.response.use(
 
     if (!isRecoverable401) {
       if (!isExpectedClientError(error)) {
-        console.error('[apiClient] request failed', {
+        console.warn('[apiClient] request failed', {
           ...buildAxiosDebugPayload(error),
           ...authDebugPayload,
           hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
@@ -268,7 +268,7 @@ apiClient.interceptors.response.use(
       }
 
       if (hasStoredSessionTokens(authDebugPayload)) {
-        console.error('[apiClient] session refresh failed after 401', {
+        console.warn('[apiClient] session refresh failed after 401', {
           ...buildAxiosDebugPayload(error),
           ...authDebugPayload,
           hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),

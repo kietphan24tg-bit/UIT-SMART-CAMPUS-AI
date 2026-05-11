@@ -23,7 +23,7 @@ describe('ChangePasswordScreen', () => {
   it('renders all password fields', () => {
     const screen = render(<ChangePasswordScreen />);
 
-    expect(screen.getByText('Đổi mật khẩu')).toBeTruthy();
+    expect(screen.getAllByText('Đổi mật khẩu')).toHaveLength(2);
     expect(screen.getByPlaceholderText('Nhập mật khẩu hiện tại')).toBeTruthy();
     expect(screen.getByPlaceholderText('Ít nhất 8 ký tự')).toBeTruthy();
     expect(screen.getByPlaceholderText('Nhập lại mật khẩu mới')).toBeTruthy();
@@ -104,7 +104,7 @@ describe('ChangePasswordScreen', () => {
     });
   });
 
-  it('shows API error message on failure', async () => {
+  it('localizes API error messages on failure', async () => {
     mockedAuthApi.changePassword.mockRejectedValue(new Error('Current password is incorrect'));
 
     const screen = render(<ChangePasswordScreen />);
@@ -115,7 +115,7 @@ describe('ChangePasswordScreen', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Current password is incorrect')).toBeTruthy();
+      expect(screen.getByText('Mật khẩu hiện tại chưa đúng.')).toBeTruthy();
     });
   });
 });

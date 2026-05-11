@@ -9,22 +9,17 @@ import { AuthShell } from './auth-shell';
 import { FormField, PrimaryButton } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 
 function getLoginErrorMessage(error: unknown) {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'statusCode' in error &&
-    (error as { statusCode?: number }).statusCode === 401
-  ) {
-    return 'Email hoặc mật khẩu chưa đúng.';
-  }
-
   if (error instanceof Error && error.message.includes('EXPO_PUBLIC_API_URL')) {
     return 'Bản APK này chưa được cấu hình địa chỉ máy chủ. Hãy build lại với EXPO_PUBLIC_API_URL đúng.';
   }
 
-  return 'Không thể kết nối máy chủ đăng nhập. Kiểm tra API URL, mạng, và server rồi thử lại.';
+  return getLocalizedErrorMessage(
+    error,
+    'Không thể kết nối máy chủ đăng nhập. Kiểm tra API URL, mạng, và server rồi thử lại.',
+  );
 }
 
 export function LoginScreen() {

@@ -25,6 +25,10 @@ jest.mock('expo-router', () => ({
 jest.mock('@/hooks/use-schedule-screen');
 jest.mock('@/stores/auth-store');
 jest.mock('@tanstack/react-query', () => ({
+  QueryClient: class QueryClient {
+    invalidateQueries = jest.fn();
+  },
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 

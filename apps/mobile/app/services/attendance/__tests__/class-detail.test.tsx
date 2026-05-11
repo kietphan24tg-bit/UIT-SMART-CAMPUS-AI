@@ -44,6 +44,10 @@ jest.mock('@/services/api/attendance', () => {
   };
 });
 jest.mock('@tanstack/react-query', () => ({
+  QueryClient: class QueryClient {
+    invalidateQueries = jest.fn();
+  },
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
   useQueryClient: () => ({

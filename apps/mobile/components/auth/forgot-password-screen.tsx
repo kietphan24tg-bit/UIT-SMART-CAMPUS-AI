@@ -10,28 +10,13 @@ import { FormField, InfoRow, PrimaryButton, SecondaryButton, StatusBadge } from 
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { authApi } from '@/services/api/auth';
 import { useAppTheme } from '@/theme';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 
 type ResetStep = 'request' | 'verify' | 'reset' | 'done';
 type FeedbackTone = 'success' | 'danger' | 'warning' | 'info';
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    const errorRecord = error as { message?: unknown };
-
-    if (typeof errorRecord.message === 'string' && errorRecord.message.trim()) {
-      return errorRecord.message;
-    }
-
-    if (Array.isArray(errorRecord.message) && typeof errorRecord.message[0] === 'string') {
-      return errorRecord.message[0];
-    }
-  }
-
-  return fallback;
+  return getLocalizedErrorMessage(error, fallback);
 }
 
 function isValidUitEmail(value: string) {

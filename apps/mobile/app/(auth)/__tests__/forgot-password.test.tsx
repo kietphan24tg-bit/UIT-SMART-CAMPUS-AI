@@ -40,7 +40,7 @@ describe('ForgotPasswordRoute', () => {
       screen.getByPlaceholderText('student@gm.uit.edu.vn'),
       'not-uit@example.com',
     );
-    fireEvent.press(screen.getByRole('button', { name: 'Gửi OTP' }));
+    fireEvent.press(screen.getByText('Gửi OTP'));
 
     await waitFor(() => {
       expect(screen.getByText('Vui lòng nhập email sinh viên hợp lệ.')).toBeTruthy();
@@ -61,7 +61,7 @@ describe('ForgotPasswordRoute', () => {
       screen.getByPlaceholderText('student@gm.uit.edu.vn'),
       'student@gm.uit.edu.vn',
     );
-    fireEvent.press(screen.getByRole('button', { name: 'Gửi OTP' }));
+    fireEvent.press(screen.getByText('Gửi OTP'));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Xác thực OTP' })).toBeTruthy();
@@ -80,14 +80,42 @@ describe('ForgotPasswordRoute', () => {
       screen.getByPlaceholderText('student@gm.uit.edu.vn'),
       '24521189@gm.uit.edu.vn',
     );
-    fireEvent.press(screen.getByRole('button', { name: 'Gá»­i OTP' }));
+    fireEvent.press(screen.getByText('Gửi OTP'));
 
     await waitFor(() => {
       expect(screen.getByText('Email chưa được đăng ký tài khoản.')).toBeTruthy();
     });
 
-    expect(screen.queryByRole('button', { name: 'XÃ¡c thá»±c OTP' })).toBeNull();
+    expect(screen.queryByText('Xác thực OTP')).toBeNull();
     expect(screen.queryByPlaceholderText('123456')).toBeNull();
+  });
+
+  it('shows a localized OTP error in the verify step', async () => {
+    mockedAuthApi.requestPasswordReset.mockResolvedValue({
+      maskedEmail: 'st***@gm.uit.edu.vn',
+      expiresInSeconds: 600,
+      previewCode: '123456',
+    });
+    mockedAuthApi.verifyPasswordResetOtp.mockRejectedValue(new Error('Invalid or expired OTP'));
+
+    const screen = render(<ForgotPasswordRoute />);
+
+    fireEvent.changeText(
+      screen.getByPlaceholderText('student@gm.uit.edu.vn'),
+      'student@gm.uit.edu.vn',
+    );
+    fireEvent.press(screen.getByText('Gửi OTP'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Xác thực OTP' })).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getByPlaceholderText('123456'), '000000');
+    fireEvent.press(screen.getByRole('button', { name: 'Xác thực OTP' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('OTP không hợp lệ hoặc đã hết hạn.')).toBeTruthy();
+    });
   });
 
   it('shows two password visibility toggles in the reset step', async () => {
@@ -104,7 +132,7 @@ describe('ForgotPasswordRoute', () => {
       screen.getByPlaceholderText('student@gm.uit.edu.vn'),
       'student@gm.uit.edu.vn',
     );
-    fireEvent.press(screen.getByRole('button', { name: 'Gửi OTP' }));
+    fireEvent.press(screen.getByText('Gửi OTP'));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Xác thực OTP' })).toBeTruthy();

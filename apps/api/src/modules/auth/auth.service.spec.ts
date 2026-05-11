@@ -146,6 +146,9 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'noone@test.com', password: 'pass' }),
       ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        authService.login({ email: 'noone@test.com', password: 'pass' }),
+      ).rejects.toThrow('Email hoặc mật khẩu chưa đúng.');
     });
 
     it('should throw UnauthorizedException for wrong password', async () => {
@@ -155,6 +158,9 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'test@uit.edu.vn', password: 'wrong' }),
       ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        authService.login({ email: 'test@uit.edu.vn', password: 'wrong' }),
+      ).rejects.toThrow('Email hoặc mật khẩu chưa đúng.');
     });
 
     it('should throw UnauthorizedException for inactive user', async () => {
@@ -263,6 +269,9 @@ describe('AuthService', () => {
       await expect(
         authService.changePassword('user-1', 'WrongPassword', 'NewPassword456'),
       ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        authService.changePassword('user-1', 'WrongPassword', 'NewPassword456'),
+      ).rejects.toThrow('Mật khẩu hiện tại chưa đúng.');
     });
 
     it('should throw UnauthorizedException for inactive user', async () => {

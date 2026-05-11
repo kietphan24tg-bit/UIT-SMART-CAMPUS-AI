@@ -10,6 +10,7 @@ import { FormField, PrimaryButton } from '@/components/ui';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 
 interface RegisterFormState {
   email: string;
@@ -84,8 +85,8 @@ export function RegisterScreen() {
     try {
       await register(payload);
       router.replace('/home');
-    } catch {
-      setError('Đăng ký chưa thành công. Vui lòng thử lại.');
+    } catch (error) {
+      setError(getLocalizedErrorMessage(error, 'Đăng ký chưa thành công. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }

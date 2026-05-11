@@ -83,4 +83,18 @@ describe('LoginRoute', () => {
       expect(screen.getByText('Email hoặc mật khẩu chưa đúng.')).toBeTruthy();
     });
   });
+
+  it('localizes short-password validation errors from the API', async () => {
+    mockLogin.mockRejectedValue(new Error('password must be longer than or equal to 8 characters'));
+
+    const screen = render(<LoginRoute />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('student@gm.uit.edu.vn'), 'test@uit.edu.vn');
+    fireEvent.changeText(screen.getByPlaceholderText('Nhập mật khẩu'), 'short');
+    fireEvent.press(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Mật khẩu phải có ít nhất 8 ký tự.')).toBeTruthy();
+    });
+  });
 });

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { authApi } from '@/services/api/auth';
 import { useAppTheme } from '@/theme';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 
 type FeedbackTone = 'success' | 'danger';
 
@@ -61,7 +62,7 @@ export default function ChangePasswordScreen() {
       setDone(true);
       setFeedback({ tone: 'success', label: 'Mật khẩu đã được đổi thành công.' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể đổi mật khẩu lúc này.';
+      const message = getLocalizedErrorMessage(error, 'Không thể đổi mật khẩu lúc này.');
       setFeedback({ tone: 'danger', label: message });
     } finally {
       setLoading(false);

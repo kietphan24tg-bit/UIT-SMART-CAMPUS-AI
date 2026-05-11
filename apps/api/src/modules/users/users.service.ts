@@ -13,6 +13,10 @@ interface CreateUserData {
   lastName: string;
 }
 
+const EMAIL_ALREADY_REGISTERED_MESSAGE = 'Email đã được đăng ký.';
+const STUDENT_ID_ALREADY_REGISTERED_MESSAGE = 'MSSV đã được đăng ký.';
+const USER_ALREADY_EXISTS_MESSAGE = 'Tài khoản đã tồn tại.';
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -44,21 +48,39 @@ export class UsersService {
       where: { email: data.email },
     });
     if (existing) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException(EMAIL_ALREADY_REGISTERED_MESSAGE);
     }
 
-    return this.prisma.user.create({
-      data,
-      select: {
-        id: true,
-        email: true,
-        studentId: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    try {
+      return await this.prisma.user.create({
+        data,
+        select: {
+          id: true,
+          email: true,
+          studentId: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        const targets = this.getUniqueConstraintTargets(error);
+
+        if (targets.includes('email')) {
+          throw new ConflictException(EMAIL_ALREADY_REGISTERED_MESSAGE);
+        }
+
+        if (targets.includes('studentid') || targets.includes('student_id')) {
+          throw new ConflictException(STUDENT_ID_ALREADY_REGISTERED_MESSAGE);
+        }
+
+        throw new ConflictException(USER_ALREADY_EXISTS_MESSAGE);
+      }
+
+      throw error;
+    }
   }
 
   async findAll() {
@@ -163,5 +185,32 @@ export class UsersService {
     if (!ALLOWED_AVATAR_MIME_TYPES.has(file.mimetype)) {
       throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed');
     }
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002'
+    );
+  }
+
+  private getUniqueConstraintTargets(error: unknown) {
+    if (
+      typeof error !== 'object' ||
+      error === null ||
+      !('meta' in error) ||
+      typeof error.meta !== 'object' ||
+      error.meta === null ||
+      !('target' in error.meta) ||
+      !Array.isArray(error.meta.target)
+    ) {
+      return [] as string[];
+    }
+
+    return error.meta.target
+      .filter((target): target is string => typeof target === 'string')
+      .map((target) => target.toLowerCase());
   }
 }

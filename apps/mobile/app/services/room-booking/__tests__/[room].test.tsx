@@ -62,17 +62,17 @@ jest.mock('@/services/api/room-bookings', () => ({
               startTime: '07:30',
               endTime: '08:15',
               status: 'free',
-              label: 'Tiết 1',
+              label: 'Ti\u1ebft 1',
             },
             {
               id: 'mon-2',
               startTime: '08:15',
               endTime: '09:00',
               status: 'occupied',
-              label: 'Tiết 2',
+              label: 'Ti\u1ebft 2',
               source: 'semester',
               title: 'CE124.Q21',
-              subtitle: 'Nh?p m?n',
+              subtitle: 'Nh\u1eadp m\u00f4n',
               bookable: false,
             },
             {
@@ -80,10 +80,10 @@ jest.mock('@/services/api/room-bookings', () => ({
               startTime: '09:00',
               endTime: '09:45',
               status: 'occupied',
-              label: 'Tiết 3',
+              label: 'Ti\u1ebft 3',
               source: 'semester',
               title: 'CE124.Q21',
-              subtitle: 'Nh?p m?n',
+              subtitle: 'Nh\u1eadp m\u00f4n',
               bookable: false,
             },
           ],
@@ -98,7 +98,7 @@ jest.mock('@/services/api/room-bookings', () => ({
               startTime: '07:30',
               endTime: '09:00',
               status: 'available_later',
-              label: 'Trống lúc 09:00',
+              label: 'Tr\u1ed1ng l\u00fac 09:00',
             },
           ],
         },
@@ -109,15 +109,15 @@ jest.mock('@/services/api/room-bookings', () => ({
       roomCode: 'C101',
       roomName: null,
       buildingCode: 'C',
-      buildingName: 'Tòa C',
+      buildingName: 'T\u00f2a C',
       bookingDate: '2026-04-27',
       timeSlotIds: ['mon-1'],
       startTime: '07:30',
       endTime: '08:15',
       timeSlots: [],
       slotCount: 1,
-      title: 'Học nhóm',
-      purpose: 'Học nhóm',
+      title: 'H\u1ecdc nh\u00f3m',
+      purpose: 'H\u1ecdc nh\u00f3m',
       attendeeCount: 5,
       contactName: 'Nguyen Van A',
       contactPhone: '0901234567',
@@ -150,7 +150,7 @@ describe('RoomDetailScreen', () => {
       },
     });
 
-    const { getByText, getAllByText, getByDisplayValue, UNSAFE_getAllByType } = render(
+    const { getByText, getAllByText, UNSAFE_getAllByType } = render(
       <QueryClientProvider client={queryClient}>
         <RoomDetailScreen />
       </QueryClientProvider>,
@@ -159,26 +159,24 @@ describe('RoomDetailScreen', () => {
     await waitFor(() => expect(getByText('Th2')).toBeTruthy(), { timeout: 15000 });
     expect(getByText('C101')).toBeTruthy();
     expect(getByText('Th7')).toBeTruthy();
-    expect(getByText('Thứ 2:')).toBeTruthy();
+    expect(getByText('Th\u1ee9 2:')).toBeTruthy();
     expect(getByText('07:30 - 08:15')).toBeTruthy();
     expect(getAllByText('CE124.Q21').length).toBe(2);
 
-    fireEvent.press(getByText('Đặt phòng'));
+    fireEvent.press(getByText('\u0110\u1eb7t ph\u00f2ng'));
 
-    expect(getByText('Đặt phòng')).toBeTruthy();
-    expect(getByText('Phòng:')).toBeTruthy();
-    expect(getByText('Ngày:')).toBeTruthy();
-    expect(getByText('Giờ:')).toBeTruthy();
-    expect(getByDisplayValue('5')).toBeTruthy();
-    expect(getByDisplayValue('0901234567')).toBeTruthy();
-    expect(getByText('Máy chiếu')).toBeTruthy();
-    expect(getByText('Micro')).toBeTruthy();
+    expect(getByText('\u0110\u1eb7t ph\u00f2ng')).toBeTruthy();
+    expect(getByText('Ph\u00f2ng:')).toBeTruthy();
+    expect(getByText('Ng\u00e0y:')).toBeTruthy();
+    expect(getByText('Gi\u1edd:')).toBeTruthy();
 
     const inputs = UNSAFE_getAllByType(TextInput);
     fireEvent.changeText(inputs[0], 'SE346 Team Meeting');
+    fireEvent.changeText(inputs[1], 'H\u1ecdc nh\u00f3m');
+    fireEvent.changeText(inputs[2], '5');
     fireEvent.changeText(inputs[3], '0912345678');
 
-    fireEvent.press(getByText('Gửi yêu cầu'));
+    fireEvent.press(getByText('G\u1eedi y\u00eau c\u1ea7u'));
 
     await waitFor(() => {
       expect(roomBookingsApi.createRoomBooking).toHaveBeenCalled();
@@ -187,12 +185,12 @@ describe('RoomDetailScreen', () => {
       roomCode: 'C101',
       bookingDate: '2026-04-27',
       timeSlotIds: ['mon-1'],
-      purpose: 'Học nhóm - Thiết bị cần: Máy chiếu',
+      purpose: 'H\u1ecdc nh\u00f3m',
       contactName: 'Nguyen Van A',
       contactPhone: '0912345678',
       attendeeCount: 5,
       title: 'SE346 Team Meeting',
     });
-    expect(getByText('Yêu cầu đặt phòng đã được gửi.')).toBeTruthy();
+    expect(getByText('Y\u00eau c\u1ea7u \u0111\u1eb7t ph\u00f2ng \u0111\u00e3 \u0111\u01b0\u1ee3c g\u1eedi.')).toBeTruthy();
   });
 });

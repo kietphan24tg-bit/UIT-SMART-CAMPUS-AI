@@ -4,6 +4,13 @@ const EXACT_ERROR_MESSAGE_MAP: Record<string, string> = {
   'Unable to send OTP at the moment': 'Không thể gửi OTP lúc này.',
   'Invalid or expired OTP': 'OTP không hợp lệ hoặc đã hết hạn.',
   'Current password is incorrect': 'Mật khẩu hiện tại chưa đúng.',
+  'Email already exists': 'Email đã được đăng ký.',
+  'Student ID already exists': 'MSSV đã được đăng ký.',
+  'Internal server error': 'Hệ thống đang bận. Vui lòng thử lại sau.',
+  'email must be an email': 'Email không đúng định dạng.',
+  'password must be longer than or equal to 8 characters': 'Mật khẩu phải có ít nhất 8 ký tự.',
+  'newPassword must be longer than or equal to 8 characters':
+    'Mật khẩu phải có ít nhất 8 ký tự.',
   'Password must contain at least 1 uppercase letter and 1 number':
     'Mật khẩu phải có ít nhất 8 ký tự, gồm 1 chữ hoa và 1 chữ số.',
   'Student ID must be 8 digits': 'Mã số sinh viên phải gồm đúng 8 chữ số.',
@@ -32,6 +39,10 @@ const EXACT_ERROR_MESSAGE_MAP: Record<string, string> = {
 
 const PARTIAL_ERROR_MESSAGE_MAP: Array<[string, string]> = [
   ['undefined is not a function', 'Thiết bị không hỗ trợ thao tác này. Vui lòng thử lại hoặc chọn ảnh khác.'],
+  ['must be an email', 'Email không đúng định dạng.'],
+  ['must be longer than or equal to 8 characters', 'Mật khẩu phải có ít nhất 8 ký tự.'],
+  ['must match /^\\d{6}$/', 'OTP phải gồm đúng 6 chữ số.'],
+  ['must match /^\\d{8}$/', 'Mã số sinh viên phải gồm đúng 8 chữ số.'],
   ['network error', 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.'],
   ['request failed with status 400', 'Yêu cầu không hợp lệ. Vui lòng kiểm tra lại thông tin.'],
   ['request failed with status 401', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.'],
@@ -42,6 +53,9 @@ const PARTIAL_ERROR_MESSAGE_MAP: Array<[string, string]> = [
   ['request failed with status 422', 'Dữ liệu nhập vào chưa hợp lệ. Vui lòng kiểm tra lại.'],
   ['request failed with status 429', 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.'],
   ['request failed with status 500', 'Hệ thống đang bận. Vui lòng thử lại sau.'],
+  ['email already exists', 'Email đã được đăng ký.'],
+  ['student id already exists', 'MSSV đã được đăng ký.'],
+  ['internal server error', 'Hệ thống đang bận. Vui lòng thử lại sau.'],
   ['only jpeg', 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.'],
   ['only jpg', 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.'],
   ['5 mb or smaller', 'Ảnh tải lên phải nhỏ hơn 5 MB.'],

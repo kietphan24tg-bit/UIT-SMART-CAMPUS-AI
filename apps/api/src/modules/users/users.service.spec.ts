@@ -97,6 +97,41 @@ describe('UsersService', () => {
           lastName: 'B',
         }),
       ).rejects.toThrow(ConflictException);
+      await expect(
+        service.create({
+          email: 'test@uit.edu.vn',
+          passwordHash: 'hashed',
+          firstName: 'A',
+          lastName: 'B',
+        }),
+      ).rejects.toThrow('Email đã được đăng ký.');
+    });
+
+    it('should translate duplicated student id into a localized conflict message', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.user.create as jest.Mock).mockRejectedValue({
+        code: 'P2002',
+        meta: { target: ['student_id'] },
+      });
+
+      await expect(
+        service.create({
+          email: 'new@uit.edu.vn',
+          passwordHash: 'hashed',
+          studentId: '22520001',
+          firstName: 'A',
+          lastName: 'B',
+        }),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        service.create({
+          email: 'new@uit.edu.vn',
+          passwordHash: 'hashed',
+          studentId: '22520001',
+          firstName: 'A',
+          lastName: 'B',
+        }),
+      ).rejects.toThrow('MSSV đã được đăng ký.');
     });
   });
 
