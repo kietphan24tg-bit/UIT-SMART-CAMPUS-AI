@@ -5,6 +5,7 @@ import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 
 import { MetricGrid } from '@/components/tasks';
 import {
+  AnniversaryCountdownBanner,
   ContentStack,
   EmptyState,
   PrimaryButton,
@@ -122,6 +123,7 @@ export default function HomeScreen() {
       />
 
       <ContentStack gap={16} overlapHero={false}>
+        <AnniversaryCountdownBanner onPlayPress={() => router.push('/services/uit-memory')} />
         <View style={styles.bentoGrid}>
           <View style={styles.primaryColumn}>
             {isOperationsRole ? (

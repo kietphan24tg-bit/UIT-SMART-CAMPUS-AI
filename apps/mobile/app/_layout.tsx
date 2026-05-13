@@ -11,16 +11,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { SosRealtimeProvider } from '@/components/system/sos-realtime-provider';
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
+import { SosRealtimeProvider } from '@/components/system/sos-realtime-provider';
 import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
+import { syncPushToken } from '@/services/notifications/push';
 import {
   configureForegroundNotificationHandler,
   flushPendingNotificationNavigation,
   subscribePushNotificationEvents,
 } from '@/services/notifications/push-receiver';
 import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
-import { syncPushToken } from '@/services/notifications/push';
 import { appQueryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
@@ -184,6 +184,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/chatbot/index" />
         <Stack.Screen name="services/events/index" />
         <Stack.Screen name="services/events/[slug]" />
+        <Stack.Screen name="services/uit-memory/index" />
         <Stack.Screen name="services/parking/index" />
         <Stack.Screen name="alerts/[id]" />
         <Stack.Screen name="settings/index" />

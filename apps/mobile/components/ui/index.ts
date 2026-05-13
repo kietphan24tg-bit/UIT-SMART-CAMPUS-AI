@@ -1,4 +1,5 @@
 export { PrimaryButton, SecondaryButton } from './buttons';
+export { AnniversaryCountdownBanner } from './anniversary-countdown-banner';
 export { BrandLockup } from './brand-lockup';
 export { ContentStack } from './content-stack';
 export { EmptyState } from './empty-state';
