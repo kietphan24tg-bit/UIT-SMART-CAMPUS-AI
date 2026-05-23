@@ -12,6 +12,10 @@ jest.mock('@expo-google-fonts/inter', () => ({
   useFonts: jest.fn(),
 }));
 
+jest.mock('@tanstack/react-query-persist-client', () => ({
+  PersistQueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 jest.mock('@/components/system/parking-realtime-provider', () => ({
   ParkingRealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -49,9 +53,11 @@ describe('RootLayout startup loading screen', () => {
     mockUseAuthStore.mockImplementation((selector: (state: typeof storeState) => unknown) =>
       selector(storeState),
     );
-    (mockUseAuthStore as typeof mockUseAuthStore & {
-      getState: () => typeof storeState;
-    }).getState = () => storeState;
+    (
+      mockUseAuthStore as typeof mockUseAuthStore & {
+        getState: () => typeof storeState;
+      }
+    ).getState = () => storeState;
     storeState.isAuthenticated = false;
     storeState.isHydrated = false;
   });

@@ -34,7 +34,7 @@ export default function DeleteAccountScreen() {
       <ContentStack narrow overlapHero={false}>
         <SectionCard title="Trước khi gửi yêu cầu" subtitle="Những dữ liệu có thể bị ảnh hưởng.">
           <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-            Yêu cầu xóa tài khoản có thể ảnh hưởng hồ sơ đăng nhập, thông tin xe đã đăng ký và cấu hình gắn với tài khoản.
+            Yêu cầu xóa tài khoản có thể ảnh hưởng hồ sơ đăng nhập và cấu hình gắn với tài khoản.
           </Text>
         </SectionCard>
 

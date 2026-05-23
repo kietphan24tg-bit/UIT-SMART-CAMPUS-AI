@@ -14,6 +14,22 @@ type RetryableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
 };
 
+export type ApiClientErrorCode = 'NETWORK_UNAVAILABLE' | 'SESSION_INVALIDATED';
+
+export type RefreshAccessTokenResult =
+  | {
+      status: 'success';
+      accessToken: string;
+    }
+  | {
+      status: 'invalid' | 'missing' | 'unavailable';
+      accessToken: null;
+    };
+
+type ApiClientError = Error & {
+  appCode?: ApiClientErrorCode;
+};
+
 function getMetroHost() {
   type ConstantsLike = {
     expoConfig?: { hostUri?: string };
@@ -42,14 +58,12 @@ function getMetroHost() {
   return host;
 }
 
-const configuredBaseUrl =
-  Constants.expoConfig?.extra?.apiUrl ?? process.env.EXPO_PUBLIC_API_URL;
+const configuredBaseUrl = Constants.expoConfig?.extra?.apiUrl ?? process.env.EXPO_PUBLIC_API_URL;
 const metroHost = getMetroHost();
 const fallbackDevBaseUrl = metroHost
   ? `http://${metroHost}:3000/api/v1`
   : 'http://127.0.0.1:3000/api/v1';
-export const API_BASE_URL =
-  configuredBaseUrl ?? (__DEV__ ? fallbackDevBaseUrl : null);
+export const API_BASE_URL = configuredBaseUrl ?? (__DEV__ ? fallbackDevBaseUrl : null);
 export const API_ORIGIN = API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? null;
 
 export const apiClient = axios.create({
@@ -69,6 +83,25 @@ function createApiConfigurationError() {
   return new Error(
     'EXPO_PUBLIC_API_URL chưa được cấu hình cho bản build này. APK release đang không biết phải gọi backend nào.',
   );
+}
+
+function withApiClientErrorCode(error: Error, appCode: ApiClientErrorCode) {
+  const taggedError = error as ApiClientError;
+  taggedError.appCode = appCode;
+  return taggedError;
+}
+
+export function hasApiClientErrorCode(error: unknown, appCode: ApiClientErrorCode) {
+  return (
+    typeof error === 'object' &&
+    error != null &&
+    'appCode' in error &&
+    (error as ApiClientError).appCode === appCode
+  );
+}
+
+export function isSessionInvalidatedError(error: unknown) {
+  return hasApiClientErrorCode(error, 'SESSION_INVALIDATED');
 }
 
 function assertApiBaseUrlConfigured() {
@@ -100,6 +133,34 @@ function buildAxiosDebugPayload(error: AxiosError) {
 function isExpectedClientError(error: AxiosError) {
   const status = error.response?.status;
   return status != null && status >= 400 && status < 500;
+}
+
+function isUnavailableError(error: AxiosError) {
+  const errorCode = String(error.code ?? '');
+  return (
+    error.response == null ||
+    errorCode === 'ERR_NETWORK' ||
+    errorCode === 'ECONNABORTED' ||
+    errorCode === 'ETIMEDOUT'
+  );
+}
+
+function isRejectedRefreshError(error: AxiosError) {
+  return error.response?.status === 401;
+}
+
+function createUnavailableClientError(error: unknown, fallback: string) {
+  return withApiClientErrorCode(createLocalizedError(error, fallback), 'NETWORK_UNAVAILABLE');
+}
+
+function createSessionInvalidatedClientError(error?: unknown) {
+  return withApiClientErrorCode(
+    createLocalizedError(
+      error ?? { message: 'Invalid refresh token' },
+      'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.',
+    ),
+    'SESSION_INVALIDATED',
+  );
 }
 
 async function buildStoredAuthDebugPayload() {
@@ -138,7 +199,7 @@ function isRefreshableUnauthorizedError(
   );
 }
 
-let refreshTokenRequest: Promise<string | null> | null = null;
+let refreshTokenRequest: Promise<RefreshAccessTokenResult> | null = null;
 
 async function clearStoredTokens() {
   await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
@@ -146,7 +207,7 @@ async function clearStoredTokens() {
   notifySessionInvalidated();
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken(): Promise<RefreshAccessTokenResult> {
   if (refreshTokenRequest) {
     return refreshTokenRequest;
   }
@@ -155,7 +216,7 @@ async function refreshAccessToken() {
     assertApiBaseUrlConfigured();
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
-      return null;
+      return { status: 'missing', accessToken: null };
     }
 
     try {
@@ -172,16 +233,22 @@ async function refreshAccessToken() {
       const nextRefreshToken = tokens?.refreshToken;
 
       if (!accessToken || !nextRefreshToken) {
-        return null;
+        await clearStoredTokens();
+        return { status: 'invalid', accessToken: null };
       }
 
       await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
       await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, nextRefreshToken);
       notifyAccessTokenUpdated(accessToken);
-      return accessToken as string;
-    } catch {
-      await clearStoredTokens();
-      return null;
+      return { status: 'success', accessToken: accessToken as string };
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      if (isRejectedRefreshError(axiosError)) {
+        await clearStoredTokens();
+        return { status: 'invalid', accessToken: null };
+      }
+
+      return { status: 'unavailable', accessToken: null };
     }
   })();
 
@@ -198,9 +265,11 @@ export async function tryRefreshAccessToken() {
 
 function shouldAttemptRefresh(config: RetryableRequestConfig) {
   const requestUrl = String(config.url ?? '');
-  return !requestUrl.includes('/auth/login') &&
+  return (
+    !requestUrl.includes('/auth/login') &&
     !requestUrl.includes('/auth/register') &&
-    !requestUrl.includes('/auth/refresh');
+    !requestUrl.includes('/auth/refresh')
+  );
 }
 
 apiClient.interceptors.request.use(async (config) => {
@@ -257,12 +326,12 @@ apiClient.interceptors.response.use(
 
     if (isRecoverable401 && originalRequest) {
       originalRequest._retry = true;
-      const accessToken = await refreshAccessToken();
+      const refreshResult = await refreshAccessToken();
 
-      if (accessToken) {
+      if (refreshResult.status === 'success') {
         originalRequest.headers = {
           ...(originalRequest.headers ?? {}),
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${refreshResult.accessToken}`,
         };
         return apiClient.request(originalRequest);
       }
@@ -274,10 +343,39 @@ apiClient.interceptors.response.use(
           hasAuthorizationHeader: Boolean(error.config?.headers?.Authorization),
         });
       }
-      await clearStoredTokens();
+
+      if (refreshResult.status === 'missing') {
+        await clearStoredTokens();
+      }
+
+      if (refreshResult.status === 'invalid' || refreshResult.status === 'missing') {
+        return Promise.reject(createSessionInvalidatedClientError(error.response?.data ?? error));
+      }
+
+      if (refreshResult.status === 'unavailable') {
+        return Promise.reject(
+          createUnavailableClientError(
+            { message: 'Network Error' },
+            'Không thể kết nối tới máy chủ. Vui lòng thử lại.',
+          ),
+        );
+      }
     }
+
+    if (isUnavailableError(error)) {
+      return Promise.reject(
+        createUnavailableClientError(
+          error.response?.data ?? error,
+          'Không thể kết nối tới máy chủ. Vui lòng thử lại.',
+        ),
+      );
+    }
+
     return Promise.reject(
-      createLocalizedError(error.response?.data ?? error, 'Không thể kết nối tới máy chủ. Vui lòng thử lại.'),
+      createLocalizedError(
+        error.response?.data ?? error,
+        'Không thể kết nối tới máy chủ. Vui lòng thử lại.',
+      ),
     );
   },
 );
@@ -336,9 +434,9 @@ export async function postMultipart<T>(
   }
 
   if (firstResponse.status === 401 && shouldAttemptRefresh({ url: path })) {
-    const nextAccessToken = await refreshAccessToken();
-    if (nextAccessToken) {
-      const retryResponse = await send(nextAccessToken);
+    const refreshResult = await refreshAccessToken();
+    if (refreshResult.status === 'success') {
+      const retryResponse = await send(refreshResult.accessToken);
       if (retryResponse.ok) {
         return (retryResponse.body?.data ?? retryResponse.body) as T;
       }
@@ -347,7 +445,21 @@ export async function postMultipart<T>(
         'Không thể tải tệp lên lúc này.',
       );
     }
-    await clearStoredTokens();
+
+    if (refreshResult.status === 'missing') {
+      await clearStoredTokens();
+    }
+
+    if (refreshResult.status === 'invalid' || refreshResult.status === 'missing') {
+      throw createSessionInvalidatedClientError(firstResponse.body);
+    }
+
+    if (refreshResult.status === 'unavailable') {
+      throw createUnavailableClientError(
+        { message: 'Network Error' },
+        'Không thể tải tệp lên lúc này.',
+      );
+    }
   }
 
   throw createLocalizedError(

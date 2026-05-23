@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { USER_ROLES } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 
@@ -5,7 +6,12 @@ import { useAuthStore } from '../auth-store';
 
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
-import { tryRefreshAccessToken } from '@/services/api/client';
+import { notifySessionInvalidated } from '@/services/api/auth-session';
+import {
+  AUTH_USER_SNAPSHOT_STORAGE_KEY,
+  QUERY_CACHE_STORAGE_KEY,
+} from '@/services/storage/local-storage';
+
 
 jest.mock('@/services/api/auth', () => ({
   authApi: {
@@ -13,10 +19,6 @@ jest.mock('@/services/api/auth', () => ({
     register: jest.fn(),
     getMe: jest.fn(),
   },
-}));
-
-jest.mock('@/services/api/client', () => ({
-  tryRefreshAccessToken: jest.fn(),
 }));
 
 jest.mock('@/services/api', () => ({
@@ -47,10 +49,26 @@ const mockedAuthApi = authApi as unknown as {
 const mockedUsersApi = usersApi as unknown as {
   getProfile: jest.Mock;
 };
-const mockedTryRefreshAccessToken = tryRefreshAccessToken as jest.Mock;
+
+function createTaggedError(
+  message: string,
+  appCode?: 'SESSION_INVALIDATED' | 'NETWORK_UNAVAILABLE',
+) {
+  const error = new Error(message) as Error & {
+    appCode?: 'SESSION_INVALIDATED' | 'NETWORK_UNAVAILABLE';
+  };
+  if (appCode) {
+    error.appCode = appCode;
+  }
+
+  return error;
+}
 
 describe('useAuthStore', () => {
-  beforeEach(() => {
+  let consoleWarnSpy: jest.SpyInstance;
+
+  beforeEach(async () => {
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     useAuthStore.setState({
       isHydrated: false,
       isAuthenticated: false,
@@ -58,19 +76,24 @@ describe('useAuthStore', () => {
       accessToken: null,
     });
     jest.clearAllMocks();
+    await AsyncStorage.clear();
   });
 
-    it('should have correct initial state', () => {
-      const state = useAuthStore.getState();
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+  });
 
-      expect(state.isHydrated).toBe(false);
-      expect(state.isAuthenticated).toBe(false);
-      expect(state.user).toBeNull();
-      expect(state.accessToken).toBeNull();
+  it('should have correct initial state', () => {
+    const state = useAuthStore.getState();
+
+    expect(state.isHydrated).toBe(false);
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.user).toBeNull();
+    expect(state.accessToken).toBeNull();
   });
 
   describe('login', () => {
-    it('should authenticate user and store tokens', async () => {
+    it('should authenticate user and store tokens plus cached profile snapshot', async () => {
       mockedAuthApi.login.mockResolvedValue(mockTokens);
       mockedAuthApi.getMe.mockResolvedValue(mockUser);
 
@@ -89,11 +112,14 @@ describe('useAuthStore', () => {
         'auth_refresh_token',
         'mock-refresh-token',
       );
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBe(
+        JSON.stringify(mockUser),
+      );
     });
   });
 
   describe('register', () => {
-    it('should register, authenticate, and store tokens', async () => {
+    it('should register, authenticate, and store cached profile snapshot', async () => {
       mockedAuthApi.register.mockResolvedValue(mockTokens);
       mockedAuthApi.getMe.mockResolvedValue(mockUser);
 
@@ -108,11 +134,16 @@ describe('useAuthStore', () => {
       const state = useAuthStore.getState();
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).toEqual(mockUser);
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBe(
+        JSON.stringify(mockUser),
+      );
     });
   });
 
   describe('logout', () => {
-    it('should clear auth state and delete tokens', async () => {
+    it('should clear auth state, tokens, cached user, and persisted query cache', async () => {
+      await AsyncStorage.setItem(QUERY_CACHE_STORAGE_KEY, '{"clientState":{}}');
+      await AsyncStorage.setItem(AUTH_USER_SNAPSHOT_STORAGE_KEY, JSON.stringify(mockUser));
       useAuthStore.setState({
         isHydrated: true,
         isAuthenticated: true,
@@ -130,11 +161,13 @@ describe('useAuthStore', () => {
 
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBeNull();
+      await expect(AsyncStorage.getItem(QUERY_CACHE_STORAGE_KEY)).resolves.toBeNull();
     });
   });
 
   describe('hydrate', () => {
-    it('should restore auth state from stored token', async () => {
+    it('should restore auth state from stored token and refresh profile snapshot', async () => {
       (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
       mockedUsersApi.getProfile.mockResolvedValue(mockUser);
 
@@ -145,6 +178,9 @@ describe('useAuthStore', () => {
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).toEqual(mockUser);
       expect(state.accessToken).toBe('stored-token');
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBe(
+        JSON.stringify(mockUser),
+      );
     });
 
     it('should remain unauthenticated when no stored token', async () => {
@@ -156,35 +192,59 @@ describe('useAuthStore', () => {
       expect(useAuthStore.getState().isAuthenticated).toBe(false);
     });
 
-    it('should clear tokens on hydration error', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('bad-token');
-      mockedUsersApi.getProfile.mockRejectedValue(new Error('Unauthorized'));
-      mockedTryRefreshAccessToken.mockResolvedValue(null);
-
-      await useAuthStore.getState().hydrate();
-
-      expect(useAuthStore.getState().isHydrated).toBe(true);
-      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
-      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
-    });
-
-    it('should refresh session and retry profile on hydration 401', async () => {
-      (SecureStore.getItemAsync as jest.Mock)
-        .mockResolvedValueOnce('expired-token')
-        .mockResolvedValueOnce('refreshed-token');
-      mockedUsersApi.getProfile.mockRejectedValue(new Error('Unauthorized'));
-      mockedTryRefreshAccessToken.mockResolvedValue('refreshed-token');
-      mockedAuthApi.getMe.mockResolvedValue(mockUser);
+    it('should keep cached user logged in when hydrate fails offline', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+      await AsyncStorage.setItem(AUTH_USER_SNAPSHOT_STORAGE_KEY, JSON.stringify(mockUser));
+      mockedUsersApi.getProfile.mockRejectedValue(
+        createTaggedError('Network Error', 'NETWORK_UNAVAILABLE'),
+      );
 
       await useAuthStore.getState().hydrate();
 
       const state = useAuthStore.getState();
-      expect(mockedTryRefreshAccessToken).toHaveBeenCalledTimes(1);
-      expect(mockedAuthApi.getMe).toHaveBeenCalledWith('refreshed-token');
       expect(state.isHydrated).toBe(true);
       expect(state.isAuthenticated).toBe(true);
       expect(state.user).toEqual(mockUser);
-      expect(state.accessToken).toBe('refreshed-token');
+      expect(state.accessToken).toBe('stored-token');
+      expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
+    });
+
+    it('should clear tokens and cached data on invalidated session', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('expired-token');
+      await AsyncStorage.setItem(AUTH_USER_SNAPSHOT_STORAGE_KEY, JSON.stringify(mockUser));
+      mockedUsersApi.getProfile.mockRejectedValue(
+        createTaggedError('Invalid refresh token', 'SESSION_INVALIDATED'),
+      );
+
+      await useAuthStore.getState().hydrate();
+
+      expect(useAuthStore.getState().isHydrated).toBe(true);
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBeNull();
+    });
+  });
+
+  describe('session invalidation handler', () => {
+    it('should reset store state and clear persisted data when session is invalidated', async () => {
+      await AsyncStorage.setItem(AUTH_USER_SNAPSHOT_STORAGE_KEY, JSON.stringify(mockUser));
+      await AsyncStorage.setItem(QUERY_CACHE_STORAGE_KEY, '{"clientState":{}}');
+      useAuthStore.setState({
+        isHydrated: true,
+        isAuthenticated: true,
+        user: mockUser,
+        accessToken: 'token',
+      });
+
+      notifySessionInvalidated();
+      await Promise.resolve();
+
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(useAuthStore.getState().accessToken).toBeNull();
+      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBeNull();
+      await expect(AsyncStorage.getItem(QUERY_CACHE_STORAGE_KEY)).resolves.toBeNull();
     });
   });
 });
