@@ -1,30 +1,24 @@
-import type { RegisterRequest, UserProfile } from '@smart-campus/shared';
+import type { RegisterRequest } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
 import { registerAuthSessionHandlers } from '@/services/api/auth-session';
-import { tryRefreshAccessToken } from '@/services/api/client';
+import { isSessionInvalidatedError } from '@/services/api/client';
 import {
   clearCachedExpoPushToken,
   unregisterPushTokenFromBackend,
 } from '@/services/notifications/push';
-import { appQueryClient } from '@/services/query-client';
+import { clearAppQueryState } from '@/services/query-client';
+import {
+  clearStoredAuthUser,
+  readStoredAuthUser,
+  type StoredAuthUser,
+  writeStoredAuthUser,
+} from '@/services/storage/local-storage';
 
-type UserInfo = Pick<UserProfile, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> &
-  Partial<
-    Pick<
-      UserProfile,
-      | 'studentId'
-      | 'avatarUrl'
-      | 'phone'
-      | 'address'
-      | 'faculty'
-      | 'major'
-      | 'yearOfAdmission'
-    >
-  >;
+type UserInfo = StoredAuthUser;
 
 interface AuthState {
   isHydrated: boolean;
@@ -59,9 +53,43 @@ async function logStoredTokens(context: 'login' | 'register') {
   });
 }
 
-async function clearSessionQueries() {
-  await appQueryClient.cancelQueries();
-  appQueryClient.clear();
+async function clearStoredSessionState() {
+  await Promise.all([
+    SecureStore.deleteItemAsync(TOKEN_KEY),
+    SecureStore.deleteItemAsync(REFRESH_KEY),
+    clearStoredAuthUser(),
+    clearAppQueryState(),
+    clearCachedExpoPushToken(),
+  ]);
+}
+
+function setAuthenticatedState(
+  set: (nextState: Partial<AuthState>) => void,
+  user: UserInfo,
+  accessToken: string,
+) {
+  set({
+    isHydrated: true,
+    isAuthenticated: true,
+    user,
+    accessToken,
+  });
+}
+
+function setUnauthenticatedState(
+  set: (nextState: Partial<AuthState>) => void,
+  accessToken: string | null = null,
+) {
+  set({
+    isHydrated: true,
+    isAuthenticated: false,
+    user: null,
+    accessToken,
+  });
+}
+
+async function persistUserSnapshot(user: UserInfo) {
+  await writeStoredAuthUser(user);
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -71,6 +99,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
 
   setUser: (user) => {
+    if (user) {
+      void persistUserSnapshot(user);
+    } else {
+      void clearStoredAuthUser();
+    }
+
     set((state) => ({
       ...state,
       user,
@@ -91,7 +125,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     await logStoredTokens('login');
 
     const user = await authApi.getMe(tokens.accessToken);
-    set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
+    await persistUserSnapshot(user);
+    setAuthenticatedState(set, user, tokens.accessToken);
   },
 
   register: async (data) => {
@@ -107,69 +142,82 @@ export const useAuthStore = create<AuthState>((set) => ({
     await logStoredTokens('register');
 
     const user = await authApi.getMe(tokens.accessToken);
-    set({ isHydrated: true, isAuthenticated: true, user, accessToken: tokens.accessToken });
+    await persistUserSnapshot(user);
+    setAuthenticatedState(set, user, tokens.accessToken);
   },
 
   logout: async () => {
     await unregisterPushTokenFromBackend();
-    set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
-    await clearSessionQueries();
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    await SecureStore.deleteItemAsync(REFRESH_KEY);
-    await clearCachedExpoPushToken();
+    setUnauthenticatedState(set);
+    await clearStoredSessionState();
   },
 
   hydrate: async () => {
     try {
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
-      if (token) {
-        let user: UserInfo;
+      const [token, cachedUser] = await Promise.all([
+        SecureStore.getItemAsync(TOKEN_KEY),
+        readStoredAuthUser(),
+      ]);
 
-        try {
-          user = await usersApi.getProfile();
-        } catch {
-          const refreshedAccessToken = await tryRefreshAccessToken();
-          if (!refreshedAccessToken) {
-            throw new Error('Không thể khôi phục phiên đăng nhập. Vui lòng đăng nhập lại.');
-          }
-
-          user = await authApi.getMe(refreshedAccessToken);
-        }
-
-        const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
-        set({
-          isHydrated: true,
-          isAuthenticated: true,
-          user,
-          accessToken: latestToken ?? token,
-        });
+      if (!token) {
+        await Promise.all([clearStoredAuthUser(), clearAppQueryState()]);
+        setUnauthenticatedState(set);
         return;
       }
 
-      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
+      if (cachedUser) {
+        setAuthenticatedState(set, cachedUser, token);
+      }
+
+      try {
+        const user = await usersApi.getProfile();
+        await persistUserSnapshot(user);
+        const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
+        setAuthenticatedState(set, user, latestToken ?? token);
+        return;
+      } catch (error) {
+        if (isSessionInvalidatedError(error)) {
+          await clearStoredSessionState();
+          setUnauthenticatedState(set);
+          return;
+        }
+
+        if (cachedUser) {
+          const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
+          setAuthenticatedState(set, cachedUser, latestToken ?? token);
+          return;
+        }
+
+        setUnauthenticatedState(set, token);
+      }
     } catch {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
-      await SecureStore.deleteItemAsync(REFRESH_KEY);
-      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
+      await clearStoredSessionState();
+      setUnauthenticatedState(set);
     }
   },
 
   refreshProfile: async () => {
     const token = await SecureStore.getItemAsync(TOKEN_KEY);
     if (!token) {
-      set({ isHydrated: true, isAuthenticated: false, user: null, accessToken: null });
+      setUnauthenticatedState(set);
       return null;
     }
 
-    const user = await usersApi.getProfile();
-    const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
-    set({
-      isHydrated: true,
-      isAuthenticated: true,
-      user,
-      accessToken: latestToken ?? token,
-    });
-    return user;
+    try {
+      const user = await usersApi.getProfile();
+      await persistUserSnapshot(user);
+      const latestToken = await SecureStore.getItemAsync(TOKEN_KEY);
+      setAuthenticatedState(set, user, latestToken ?? token);
+      return user;
+    } catch (error) {
+      if (isSessionInvalidatedError(error)) {
+        await clearStoredSessionState();
+        setUnauthenticatedState(set);
+        return null;
+      }
+
+      throw error;
+    }
   },
 }));
 
@@ -182,7 +230,10 @@ registerAuthSessionHandlers({
     }));
   },
   onSessionInvalidated: () => {
-    void clearSessionQueries();
+    void SecureStore.deleteItemAsync(TOKEN_KEY);
+    void SecureStore.deleteItemAsync(REFRESH_KEY);
+    void clearStoredAuthUser();
+    void clearAppQueryState();
     void clearCachedExpoPushToken();
     useAuthStore.setState({
       isHydrated: true,

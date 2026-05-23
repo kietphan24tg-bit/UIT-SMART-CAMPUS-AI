@@ -4,7 +4,7 @@ import {
   Inter_600SemiBold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -21,7 +21,7 @@ import {
   subscribePushNotificationEvents,
 } from '@/services/notifications/push-receiver';
 import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
-import { appQueryClient } from '@/services/query-client';
+import { appQueryClient, appQueryPersistOptions } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
 
@@ -125,7 +125,7 @@ export default function RootLayout() {
   };
 
   return (
-    <QueryClientProvider client={appQueryClient}>
+    <PersistQueryClientProvider client={appQueryClient} persistOptions={appQueryPersistOptions}>
       <ThemePreferenceProvider>
         <ParkingRealtimeProvider>
           <SosRealtimeProvider>
@@ -138,7 +138,7 @@ export default function RootLayout() {
           </SosRealtimeProvider>
         </ParkingRealtimeProvider>
       </ThemePreferenceProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 

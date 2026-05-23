@@ -7,6 +7,7 @@ jest.mock('axios', () => {
       request: { use: jest.Mock };
       response: { use: jest.Mock };
     };
+    request: jest.Mock;
     get: jest.Mock;
     post: jest.Mock;
     patch: jest.Mock;
@@ -18,6 +19,7 @@ jest.mock('axios', () => {
       request: { use: jest.fn() },
       response: { use: jest.fn() },
     },
+    request: jest.fn(),
     get: jest.fn(),
     post: jest.fn(),
     patch: jest.fn(),
@@ -29,6 +31,32 @@ jest.mock('axios', () => {
   return {
     __esModule: true,
     default: mockAxios,
+  };
+});
+
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const storage = new Map<string, string>();
+
+  return {
+    __esModule: true,
+    default: {
+      getItem: jest.fn(async (key: string) =>
+        storage.has(key) ? (storage.get(key) ?? null) : null,
+      ),
+      setItem: jest.fn(async (key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: jest.fn(async (key: string) => {
+        storage.delete(key);
+      }),
+      clear: jest.fn(async () => {
+        storage.clear();
+      }),
+      getAllKeys: jest.fn(async () => Array.from(storage.keys())),
+      multiRemove: jest.fn(async (keys: string[]) => {
+        keys.forEach((key) => storage.delete(key));
+      }),
+    },
   };
 });
 
@@ -81,7 +109,11 @@ jest.mock('react-native-render-html', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
 
-  const stripTags = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const stripTags = (html: string) =>
+    html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   return {
     __esModule: true,
