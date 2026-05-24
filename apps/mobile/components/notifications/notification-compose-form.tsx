@@ -1,5 +1,10 @@
-import type { NotificationAudience, NotificationType, UserRole } from '@smart-campus/shared';
-import { USER_ROLES } from '@smart-campus/shared';
+import type {
+  ActiveUserRole,
+  NotificationAudience,
+  NotificationType,
+  UserRole,
+} from '@smart-campus/shared';
+import { ACTIVE_USER_ROLES, USER_ROLES } from '@smart-campus/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -42,12 +47,10 @@ const NOTIFICATION_TYPES: Array<{ value: NotificationType; label: string }> = [
   { value: 'emergency', label: 'Khẩn cấp' },
 ];
 
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
+const ROLE_OPTIONS: Array<{ value: ActiveUserRole; label: string }> = [
   { value: USER_ROLES.STUDENT, label: 'Sinh viên' },
   { value: USER_ROLES.LECTURER, label: 'Giảng viên' },
-  { value: USER_ROLES.CANTEEN_ADMIN, label: 'Canteen' },
   { value: USER_ROLES.ADMIN, label: 'Admin' },
-  { value: USER_ROLES.SUPER_ADMIN, label: 'Super admin' },
 ];
 
 export function NotificationComposeForm({
@@ -66,7 +69,7 @@ export function NotificationComposeForm({
     mode === 'class' ? 'class_announcement' : 'general',
   );
   const [audienceMode, setAudienceMode] = useState<AudienceMode>('all');
-  const [selectedRoles, setSelectedRoles] = useState<UserRole[]>([USER_ROLES.STUDENT]);
+  const [selectedRoles, setSelectedRoles] = useState<ActiveUserRole[]>([ACTIVE_USER_ROLES[0]]);
   const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
 
   useEffect(() => {
@@ -92,10 +95,10 @@ export function NotificationComposeForm({
       return false;
     }
 
-    return selectedRoles.includes(currentUserRole);
+    return selectedRoles.includes(currentUserRole as ActiveUserRole);
   }, [audienceMode, currentUserRole, mode, selectedRoles]);
 
-  const toggleRole = (role: UserRole) => {
+  const toggleRole = (role: ActiveUserRole) => {
     setSelectedRoles((current) =>
       current.includes(role) ? current.filter((item) => item !== role) : [...current, role],
     );
@@ -337,12 +340,7 @@ function formatResult(result: unknown) {
 }
 
 function formatBroadcastResult(result: unknown, senderIncludedInAudience: boolean) {
-  const baseMessage = formatResult(result)
-    .replace('ThÃ´ng bÃ¡o Ä‘Ã£ Ä‘Æ°á»£c táº¡o.', 'Thông báo đã được tạo.')
-    .replace(/ÄÃ£ táº¡o/g, 'Đã tạo')
-    .replace(/thÃ´ng bÃ¡o/g, 'thông báo')
-    .replace(/thÃ nh cÃ´ng/g, 'thành công')
-    .replace(/lá»—i/g, 'lỗi');
+  const baseMessage = formatResult(result);
 
   if (senderIncludedInAudience) {
     return baseMessage;

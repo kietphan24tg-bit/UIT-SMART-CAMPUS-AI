@@ -308,7 +308,7 @@ export default function ScheduleScreen() {
       >
         <TopHero
           eyebrow="Vận hành"
-          title={role === 'super_admin' ? 'Trung tâm vận hành' : 'Điều phối campus'}
+          title="Điều phối campus"
           subtitle="Parking, telemetry và cảnh báo cháy."
           badge={{ label: getRoleLabel(role), tone: 'info' }}
           showBrand
@@ -348,21 +348,19 @@ export default function ScheduleScreen() {
               <NavigationRow
                 icon="notifications-outline"
                 label="Broadcast"
-                description="Chuẩn bị gửi thông báo."
-                badgeLabel="Sắp triển khai"
-                badgeTone="info"
+                description="Gửi thông báo toàn trường hoặc theo vai trò."
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
                 onPress={() => router.push('/operations/notifications')}
               />
-              {role === 'super_admin' ? (
-                <NavigationRow
-                  icon="settings-outline"
-                  label="Hệ thống"
-                  description="Cấu hình nội bộ."
-                  badgeLabel="Sắp triển khai"
-                  badgeTone="info"
-                  onPress={() => router.push('/settings/system-controls')}
-                />
-              ) : null}
+              <NavigationRow
+                icon="people-outline"
+                label="Tài khoản"
+                description="Quản lý người dùng và trạng thái đăng nhập."
+                badgeLabel="Đang hỗ trợ"
+                badgeTone="success"
+                onPress={() => router.push('/operations/users')}
+              />
             </View>
           </SectionCard>
           <SectionCard

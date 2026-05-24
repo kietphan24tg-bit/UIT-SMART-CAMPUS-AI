@@ -1,4 +1,5 @@
-import type { UserRole } from '../constants/roles';
+import type { ActiveUserRole, UserRole } from '../constants/roles';
+import type { PaginatedMeta } from './api-response';
 
 export interface AdminUserListQuery {
   page?: number;
@@ -22,6 +23,11 @@ export interface AdminUserListItem {
   updatedAt: string;
 }
 
+export interface AdminUserListPayload {
+  items: AdminUserListItem[];
+  meta: PaginatedMeta;
+}
+
 export interface AdminUserDetail extends AdminUserListItem {
   phone: string | null;
   dateOfBirth: string | null;
@@ -30,7 +36,7 @@ export interface AdminUserDetail extends AdminUserListItem {
 }
 
 export interface UpdateUserRoleRequest {
-  role: UserRole;
+  role: ActiveUserRole;
 }
 
 export interface UpdateUserActiveRequest {

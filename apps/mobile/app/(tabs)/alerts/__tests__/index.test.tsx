@@ -4,15 +4,12 @@ import React from 'react';
 import AlertsScreen from '../index';
 
 import { useAlertFeed } from '@/hooks/use-alert-feed';
-import { usePushNotificationStatus } from '@/hooks/use-push-notification-status';
 import { useAuthStore } from '@/stores/auth-store';
 
 jest.mock('@/hooks/use-alert-feed');
-jest.mock('@/hooks/use-push-notification-status');
 jest.mock('@/stores/auth-store');
 
 const mockUseAlertFeed = useAlertFeed as unknown as jest.Mock;
-const mockUsePushNotificationStatus = usePushNotificationStatus as unknown as jest.Mock;
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
 
 describe('AlertsScreen', () => {
@@ -20,18 +17,6 @@ describe('AlertsScreen', () => {
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'admin' } };
       return selector(state);
-    });
-    mockUsePushNotificationStatus.mockReturnValue({
-      data: {
-        status: 'enabled_synced',
-        lastSuccessfulPushSyncAt: '2026-04-07T06:10:00.000Z',
-        errorMessage: null,
-      },
-      isLoading: false,
-      isRefetching: false,
-      isRetrying: false,
-      retrySync: jest.fn(),
-      refetch: jest.fn(),
     });
     mockUseAlertFeed.mockReturnValue({
       data: [
@@ -79,8 +64,6 @@ describe('AlertsScreen', () => {
     expect(getByText('Canh bao chay bai xe')).toBeTruthy();
     expect(getByText('Lich hoc thay doi')).toBeTruthy();
     expect(getByText('Đọc tất cả')).toBeTruthy();
-    expect(getByText('Thông báo trên thiết bị')).toBeTruthy();
-    expect(getByText('Đang hoạt động')).toBeTruthy();
     expect(getByText('Fire alert vận hành')).toBeTruthy();
     expect(getByTestId('alert-row-fire-1')).toHaveStyle({ width: '100%' });
     expect(getByTestId('alert-delete-notification-1')).toBeTruthy();

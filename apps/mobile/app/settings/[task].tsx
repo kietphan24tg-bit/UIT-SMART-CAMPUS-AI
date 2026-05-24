@@ -5,7 +5,8 @@ import { TaskScreen } from '@/components/tasks';
 import { ContentStack, EmptyState, Screen } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import type { SettingsTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
-import { getPermissionDeniedCopy, getSettingsTaskConfig, isSuperAdminRole } from '@/utils/role-ui';
+import { isAdminRole } from '@/utils/app';
+import { getPermissionDeniedCopy, getSettingsTaskConfig } from '@/utils/role-ui';
 
 export default function SettingsTaskScreen() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function SettingsTaskScreen() {
     );
   }
 
-  if (!isSuperAdminRole(role)) {
+  if (!isAdminRole(role)) {
     const copy = getPermissionDeniedCopy(role);
 
     return (

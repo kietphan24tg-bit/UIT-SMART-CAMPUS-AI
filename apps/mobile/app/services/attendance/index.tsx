@@ -92,11 +92,7 @@ export default function AttendanceHubScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description={
-              role === USER_ROLES.ADMIN
-                ? 'Tài khoản quản trị viên không có quyền mở điểm danh QR. Chỉ sinh viên, giảng viên và quản trị hệ thống mới được truy cập.'
-                : 'Điểm danh QR chỉ dành cho sinh viên, giảng viên và quản trị hệ thống.'
-            }
+            description="Chỉ có giảng viên mới thực hiện điểm danh"
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />

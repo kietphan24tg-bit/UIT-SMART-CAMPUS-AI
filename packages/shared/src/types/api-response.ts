@@ -8,11 +8,13 @@ export interface ApiResponse<T = unknown> {
   code?: string;
 }
 
+export interface PaginatedMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface PaginatedResponse<T = unknown> extends ApiResponse<T[]> {
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
+  meta: PaginatedMeta;
 }

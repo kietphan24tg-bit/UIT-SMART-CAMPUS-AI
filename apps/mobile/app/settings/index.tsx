@@ -13,7 +13,7 @@ import {
 } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme, useSetThemePreference, useThemePreference } from '@/theme';
-import { getRoleLabel, isAdminRole, isSuperAdminRole } from '@/utils/app';
+import { getRoleLabel, isAdminRole } from '@/utils/app';
 
 export default function SettingsScreen() {
   const theme = useAppTheme();
@@ -58,19 +58,12 @@ export default function SettingsScreen() {
 
         {isAdminRole(role) ? (
           <SectionCard
-            title={isSuperAdminRole(role) ? 'Hệ thống' : 'Vận hành'}
+            title="Vận hành"
             subtitle="Theo quyền hiện tại"
             variant="outlined"
           >
             <View style={styles.column}>
-              {isSuperAdminRole(role) ? (
-                <SecondaryButton
-                  label="Thiết lập hệ thống"
-                  onPress={() => router.push('/settings/system-controls')}
-                />
-              ) : (
-                <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
-              )}
+              <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
             </View>
           </SectionCard>
         ) : null}

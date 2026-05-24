@@ -97,7 +97,7 @@ describe('ServicesScreen', () => {
 
     expect(Alert.alert).toHaveBeenCalledWith(
       'Không khả dụng',
-      'Tài khoản quản trị viên không có quyền nhập điểm. Chỉ giảng viên và quản trị hệ thống mới được truy cập.',
+      'Chỉ có giảng viên mới có quyền nhập điểm',
     );
     expect(mockRouter.push).not.toHaveBeenCalledWith('/services/grades');
   });

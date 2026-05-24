@@ -94,7 +94,7 @@ export class GradesController {
 
   @Get('lecturer/class-sections')
   @UseGuards(RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiOperation({ summary: 'Get grade-entry class sections manageable by current role' })
   getLecturerClassSections(
     @CurrentUser('id') actorId: string,
@@ -105,7 +105,7 @@ export class GradesController {
 
   @Get('class-sections/:id/sheet')
   @UseGuards(RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Get grade sheet for a class section' })
   getClassSectionGradeSheet(
@@ -118,7 +118,7 @@ export class GradesController {
 
   @Put('class-sections/:id/weights')
   @UseGuards(RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Update grade weights for a class section' })
   updateClassSectionGradeWeights(
@@ -137,7 +137,7 @@ export class GradesController {
 
   @Put('class-sections/:id/sheet')
   @UseGuards(RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Bulk upsert grade sheet for a class section' })
   upsertClassSectionGradeSheet(

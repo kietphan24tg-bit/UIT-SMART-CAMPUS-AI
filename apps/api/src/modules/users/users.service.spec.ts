@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -45,9 +45,14 @@ describe('UsersService', () => {
           provide: PrismaService,
           useValue: {
             user: {
+              findMany: jest.fn(),
+              count: jest.fn(),
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+            },
+            refreshToken: {
+              deleteMany: jest.fn(),
             },
           },
         },
@@ -135,6 +140,25 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('should return the administrator user list with pagination metadata', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([mockUser]);
+      (prisma.user.count as jest.Mock).mockResolvedValue(1);
+
+      const result = await service.findAll();
+
+      expect(prisma.user.findMany).toHaveBeenCalled();
+      expect(prisma.user.count).toHaveBeenCalled();
+      expect(result.items).toHaveLength(1);
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 25,
+        totalPages: 1,
+      });
+    });
+  });
+
   describe('findById', () => {
     it('should return user when found', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
@@ -150,9 +174,7 @@ describe('UsersService', () => {
     it('should throw NotFoundException when user not found', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.findById('nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findById('nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -180,9 +202,65 @@ describe('UsersService', () => {
     it('should throw NotFoundException when user does not exist', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(
-        service.updateProfile('nonexistent', { firstName: 'X' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateProfile('nonexistent', { firstName: 'X' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('updateRole', () => {
+    it('should update role and revoke refresh tokens', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        role: 'admin',
+      });
+      (prisma.refreshToken.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      const result = await service.updateRole('user-2', 'admin', 'admin-1');
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-2' },
+          data: { role: 'admin' },
+        }),
+      );
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-2' } });
+      expect(result.role).toBe('admin');
+    });
+
+    it('should block self role updates', async () => {
+      await expect(service.updateRole('admin-1', 'admin', 'admin-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('updateActive', () => {
+    it('should update active state and revoke refresh tokens', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        isActive: false,
+      });
+      (prisma.refreshToken.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      const result = await service.updateActive('user-2', false, 'admin-1');
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-2' },
+          data: { isActive: false },
+        }),
+      );
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-2' } });
+      expect(result.isActive).toBe(false);
+    });
+
+    it('should block self deactivation', async () => {
+      await expect(service.updateActive('admin-1', false, 'admin-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

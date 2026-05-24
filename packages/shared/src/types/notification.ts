@@ -1,4 +1,4 @@
-import type { UserRole } from '../constants/roles';
+import type { ActiveUserRole } from '../constants/roles';
 
 export type NotificationType =
   | 'general'
@@ -21,7 +21,7 @@ export type NotificationAudience =
     }
   | {
       scope: 'roles';
-      roles: UserRole[];
+      roles: ActiveUserRole[];
     }
   | {
       scope: 'class_section';

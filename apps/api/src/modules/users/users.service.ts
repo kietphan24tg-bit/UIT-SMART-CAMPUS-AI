@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { UserRole } from '@smart-campus/shared';
+import { PAGINATION_DEFAULTS, type ActiveUserRole } from '@smart-campus/shared';
+import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AvatarStorageService, type AvatarUploadFile } from '../storage/avatar-storage.service';
@@ -13,9 +14,17 @@ interface CreateUserData {
   lastName: string;
 }
 
+interface FindAllUsersQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
 const EMAIL_ALREADY_REGISTERED_MESSAGE = 'Email đã được đăng ký.';
 const STUDENT_ID_ALREADY_REGISTERED_MESSAGE = 'MSSV đã được đăng ký.';
 const USER_ALREADY_EXISTS_MESSAGE = 'Tài khoản đã tồn tại.';
+const CANNOT_UPDATE_OWN_ROLE_MESSAGE = 'Không thể tự thay đổi vai trò của chính mình.';
+const CANNOT_UPDATE_OWN_ACTIVE_STATE_MESSAGE = 'Không thể tự vô hiệu hóa chính mình.';
 
 @Injectable()
 export class UsersService {
@@ -83,11 +92,37 @@ export class UsersService {
     }
   }
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: this.userSelect,
-    });
+  async findAll(query: FindAllUsersQuery = {}) {
+    const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
+    const limit = Math.min(
+      Math.max(query.limit ?? 25, 1),
+      PAGINATION_DEFAULTS.MAX_LIMIT,
+    );
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const tokens = search?.split(/\s+/).filter(Boolean) ?? [];
+    const where = this.buildFindAllWhere(tokens);
+
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: this.userSelect,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   async findById(id: string) {
@@ -149,7 +184,11 @@ export class UsersService {
     });
   }
 
-  async updateRole(id: string, role: UserRole) {
+  async updateRole(id: string, role: ActiveUserRole, actorId?: string) {
+    if (actorId && actorId === id) {
+      throw new BadRequestException(CANNOT_UPDATE_OWN_ROLE_MESSAGE);
+    }
+
     await this.findById(id);
     const user = await this.prisma.user.update({
       where: { id },
@@ -161,7 +200,11 @@ export class UsersService {
     return user;
   }
 
-  async updateActive(id: string, isActive: boolean) {
+  async updateActive(id: string, isActive: boolean, actorId?: string) {
+    if (actorId && actorId === id) {
+      throw new BadRequestException(CANNOT_UPDATE_OWN_ACTIVE_STATE_MESSAGE);
+    }
+
     await this.findById(id);
     const user = await this.prisma.user.update({
       where: { id },
@@ -212,5 +255,22 @@ export class UsersService {
     return error.meta.target
       .filter((target): target is string => typeof target === 'string')
       .map((target) => target.toLowerCase());
+  }
+
+  private buildFindAllWhere(tokens: string[]): Prisma.UserWhereInput | undefined {
+    if (tokens.length === 0) {
+      return undefined;
+    }
+
+    return {
+      AND: tokens.map((token) => ({
+        OR: [
+          { firstName: { contains: token, mode: 'insensitive' } },
+          { lastName: { contains: token, mode: 'insensitive' } },
+          { email: { contains: token, mode: 'insensitive' } },
+          { studentId: { contains: token, mode: 'insensitive' } },
+        ],
+      })),
+    };
   }
 }

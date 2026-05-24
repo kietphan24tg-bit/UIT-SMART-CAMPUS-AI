@@ -28,7 +28,7 @@ export class AttendanceController {
 
   @Post('session/start')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Start an attendance session' })
   startSession(
@@ -41,7 +41,7 @@ export class AttendanceController {
 
   @Post('session/:id/stop')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Attendance session id' })
   @ApiOperation({ summary: 'Stop an attendance session early' })
@@ -72,7 +72,7 @@ export class AttendanceController {
 
   @Get('session/:id/records')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Attendance session id' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -89,7 +89,7 @@ export class AttendanceController {
 
   @Get('session/:id/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Attendance session id' })
   @ApiOperation({ summary: 'Export attendance session roster to Excel' })
@@ -114,7 +114,7 @@ export class AttendanceController {
 
   @Get('class-sections/:id/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Export attendance summary by class section to Excel' })
@@ -139,7 +139,7 @@ export class AttendanceController {
 
   @Get('history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiQuery({ name: 'classSectionId', required: true, type: String })
   @ApiQuery({ name: 'date', required: false, type: String })
@@ -156,7 +156,7 @@ export class AttendanceController {
 
   @Get('lecturer/class-sections')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get class sections manageable by current role' })
   getLecturerClassSections(
@@ -168,7 +168,7 @@ export class AttendanceController {
 
   @Get('class-sections/:id/students')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Get enrolled students for a class section' })
@@ -182,7 +182,7 @@ export class AttendanceController {
 
   @Get('class-sections/:id/session-summary')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.LECTURER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Class section id' })
   @ApiOperation({ summary: 'Get attendance session summary for a class section' })

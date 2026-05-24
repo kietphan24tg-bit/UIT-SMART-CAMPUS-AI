@@ -29,7 +29,6 @@ import {
   getRoleLabel,
   isAdminRole,
   isLecturerRole,
-  isSuperAdminRole,
 } from '@/utils/app';
 
 function resolveMimeType(mimeType?: string | null) {
@@ -297,14 +296,6 @@ export default function ProfileScreen() {
                 label="Vận hành campus"
                 meta="Giám sát"
                 onPress={() => router.push('/schedule')}
-              />
-            ) : null}
-            {isSuperAdminRole(user?.role) ? (
-              <ProfileLink
-                icon="settings-outline"
-                label="Hệ thống"
-                meta="Quản trị"
-                onPress={() => router.push('/settings/system-controls')}
               />
             ) : null}
             <ProfileLink

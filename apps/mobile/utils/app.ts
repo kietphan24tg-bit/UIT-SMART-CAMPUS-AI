@@ -66,11 +66,11 @@ export function isCanteenAdminRole(role?: string | null) {
 }
 
 export function canManageAttendanceRole(role?: string | null) {
-  return isLecturerRole(role) || isSuperAdminRole(role);
+  return isLecturerRole(role);
 }
 
 export function canManageGradesRole(role?: string | null) {
-  return isLecturerRole(role) || isSuperAdminRole(role);
+  return isLecturerRole(role);
 }
 
 export function canManageCanteenRole(role?: string | null) {
@@ -316,12 +316,8 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
   const canteenManager = canManageCanteenRole(role);
   const canOpenAttendance = isStudentRole || attendanceManager;
   const canOpenGrades = isStudentRole || gradesManager;
-  const gradesBlockedReason = isOperatorAdminRole
-    ? 'Tài khoản quản trị viên không có quyền nhập điểm. Chỉ giảng viên và quản trị hệ thống mới được truy cập.'
-    : 'Vai trò này chưa được hỗ trợ luồng nhập điểm trong ứng dụng.';
-  const attendanceBlockedReason = isOperatorAdminRole
-    ? 'Tài khoản quản trị viên không có quyền mở điểm danh QR. Chỉ sinh viên, giảng viên và quản trị hệ thống mới được truy cập.'
-    : 'Chỉ sinh viên, giảng viên và quản trị hệ thống mới có thể dùng điểm danh QR.';
+  const gradesBlockedReason = 'Chỉ có giảng viên mới có quyền nhập điểm';
+  const attendanceBlockedReason = 'Chỉ có giảng viên mới thực hiện điểm danh';
 
   const entries: ServiceEntry[] = [
     {
@@ -332,8 +328,8 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
         : gradesManager
           ? 'Nhập điểm theo lớp, cấu hình trọng số và tự tính trung bình.'
           : isOperatorAdminRole
-            ? 'Vai trò quản trị viên không thể mở bảng nhập điểm trong ứng dụng.'
-            : 'Luồng nhập điểm cho vai trò này hiện chưa khả dụng.',
+            ? 'Admin chỉ dùng cho vận hành, không nhập điểm trong ứng dụng.'
+            : 'Chỉ có giảng viên mới có quyền nhập điểm.',
       category: gradesManager ? teachingCategory : 'Học vụ',
       icon: 'bar-chart-outline',
       supportState: canOpenGrades ? 'live' : 'unsupported',
@@ -353,10 +349,10 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       description: isStudentRole
         ? 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.'
         : gradesManager
-          ? 'Giảng viên và quản trị hệ thống có thể nhập điểm theo lớp học phần.'
+        ? 'Giảng viên có thể nhập điểm theo lớp học phần.'
           : isOperatorAdminRole
-            ? 'Role quản trị viên không có quyền nhập hoặc chỉnh sửa điểm trong ứng dụng.'
-            : 'Chức năng nhập điểm cho vai trò này hiện chưa khả dụng trong ứng dụng.',
+            ? 'Chỉ có giảng viên mới có quyền nhập điểm.'
+            : 'Chỉ có giảng viên mới có quyền nhập điểm.',
     },
     {
       id: 'parking',
@@ -406,8 +402,8 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
         : isStudentRole
           ? 'Quét mã QR trên màn hình lớp để điểm danh.'
           : isOperatorAdminRole
-            ? 'Vai trò quản trị viên không thể mở khu vực điểm danh QR.'
-            : 'Vai trò hiện tại không thể dùng điểm danh QR.',
+            ? 'Admin chỉ dùng cho vận hành, không thực hiện điểm danh QR.'
+            : 'Chỉ có giảng viên mới thực hiện điểm danh.',
       category: attendanceManager ? teachingCategory : 'Học vụ',
       icon: 'qr-code-outline',
       supportState: canOpenAttendance ? 'live' : 'unsupported',
@@ -421,12 +417,12 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
           : 'Xem lý do',
       route: '/services/attendance',
       description: attendanceManager
-        ? 'Giảng viên và quản trị hệ thống có thể mở/đóng phiên QR và theo dõi điểm danh.'
+        ? 'Giảng viên có thể mở hoặc đóng phiên QR và theo dõi điểm danh.'
         : isStudentRole
           ? 'Quét mã QR động trên màn hình lớp để ghi nhận có mặt.'
           : isOperatorAdminRole
-            ? 'Role quản trị viên không có quyền quản lý hoặc quét điểm danh QR trong ứng dụng.'
-            : 'Điểm danh QR chỉ dành cho sinh viên, giảng viên và quản trị hệ thống.',
+            ? 'Chỉ có giảng viên mới thực hiện điểm danh.'
+            : 'Chỉ có giảng viên mới thực hiện điểm danh.',
     },
     {
       id: 'room-booking',
@@ -455,7 +451,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       primaryAction: canteenManager ? 'Mở quản trị canteen' : 'Mở menu canteen',
       route: canteenManager ? '/services/canteen/admin' : '/services/canteen',
       description: canteenManager
-        ? 'Canteen admin, admin và super admin có thể cập nhật menu, xem đơn và hoàn thành đơn.'
+        ? 'Admin và tài khoản legacy canteen có thể cập nhật menu, xem đơn và hoàn thành đơn.'
         : 'Sinh viên và giảng viên có thể đặt món, thanh toán và xem lịch sử hóa đơn.',
     },
     {

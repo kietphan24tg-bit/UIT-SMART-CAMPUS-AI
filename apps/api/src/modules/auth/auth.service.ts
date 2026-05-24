@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { isLegacyUserRole } from '@smart-campus/shared';
 import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -48,6 +49,10 @@ export class AuthService {
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Email hoặc mật khẩu chưa đúng.');
+    }
+
+    if (isLegacyUserRole(user.role)) {
+      throw new UnauthorizedException('Tài khoản không tồn tại.');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);

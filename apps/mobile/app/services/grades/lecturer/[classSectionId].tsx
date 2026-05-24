@@ -287,7 +287,7 @@ export default function LecturerGradeSheetScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description="Màn hình nhập điểm chỉ dành cho giảng viên hoặc quản trị hệ thống."
+            description="Chỉ có giảng viên mới có quyền nhập điểm"
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />

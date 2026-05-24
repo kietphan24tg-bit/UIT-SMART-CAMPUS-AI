@@ -324,13 +324,34 @@ export function getOperationsTaskConfig(
         },
       };
     case 'notifications':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Vận hành',
         title: 'Thông báo diện rộng',
-        subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Tính năng gửi thông báo theo phạm vi đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
-        route: '/alerts',
-      });
+        subtitle: 'Gửi thông báo toàn trường hoặc theo vai trò active.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'notifications',
+        sections: [
+          {
+            title: 'Đang hỗ trợ',
+            infoRows: [
+              { label: 'Toàn trường', value: 'scope=all' },
+              { label: 'Theo vai trò', value: 'student · lecturer · admin' },
+              { label: 'Nguồn dữ liệu', value: 'POST /notifications' },
+            ],
+          },
+        ],
+        primaryAction: {
+          label: 'Mở broadcast',
+          route: '/operations/notifications',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'notifications',
+        },
+      };
     case 'approvals':
       return {
         eyebrow: 'Vận hành',
@@ -360,13 +381,34 @@ export function getOperationsTaskConfig(
         },
       };
     case 'users':
-      return buildUnavailableConfig({
+      return {
         eyebrow: 'Vận hành',
-        title: 'Tổng quan tài khoản',
-        subtitle: 'Hiện mới hỗ trợ xem và cập nhật hồ sơ của tài khoản đang đăng nhập.',
-        reason: 'Tính năng quản trị tài khoản sẽ được mở trong các bản cập nhật sau. Theo dõi cập nhật trong ứng dụng.',
-        route: '/profile',
-      });
+        title: 'Tài khoản người dùng',
+        subtitle: 'Quản lý người dùng, vai trò và trạng thái đăng nhập.',
+        badge: {
+          label: getSupportStateLabel('live'),
+          tone: getSupportStateTone('live'),
+        },
+        supportState: 'live',
+        lastVerifiedSource: 'users',
+        sections: [
+          {
+            title: 'Đang hỗ trợ',
+            infoRows: [
+              { label: 'Danh sách user', value: 'GET /users' },
+              { label: 'Đổi role', value: 'PATCH /users/:id/role' },
+              { label: 'Khóa/mở login', value: 'PATCH /users/:id/active' },
+            ],
+          },
+        ],
+        primaryAction: {
+          label: 'Mở quản lý user',
+          route: '/operations/users',
+          kind: 'primary',
+          supportState: 'live',
+          lastVerifiedSource: 'users',
+        },
+      };
     case 'catalog':
       return {
         eyebrow: 'Vận hành',
@@ -424,8 +466,8 @@ export function getSettingsTaskConfig(
       {
         title: 'Trạng thái hiện tại',
         body:
-          role === USER_ROLES.SUPER_ADMIN
-            ? 'Tài khoản của bạn có đúng vai trò. Khu vực cấu hình hệ thống sẽ được mở trong các bản cập nhật sau.'
+          role === USER_ROLES.ADMIN || role === USER_ROLES.SUPER_ADMIN
+            ? 'Tài khoản của bạn có quyền quản trị. Khu vực cấu hình hệ thống sẽ được mở trong các bản cập nhật sau.'
             : `${getRoleLabel(role)} không có quyền mở khu vực này.`,
       },
       {

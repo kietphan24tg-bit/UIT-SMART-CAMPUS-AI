@@ -604,7 +604,7 @@ export default function CanteenAdminScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description="Chỉ canteen admin, quản trị viên hoặc quản trị hệ thống mới mở được màn này."
+            description="Chỉ admin hoặc tài khoản legacy canteen mới mở được màn này."
             actionLabel="Về danh sách dịch vụ"
             onActionPress={() => router.replace('/services')}
           />

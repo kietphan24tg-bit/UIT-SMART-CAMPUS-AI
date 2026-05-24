@@ -434,5 +434,6 @@ describe('ScheduleScreen', () => {
     expect(getByText('Vận hành')).toBeTruthy();
     expect(getByText('Điều phối campus')).toBeTruthy();
     expect(getByText('Broadcast')).toBeTruthy();
+    expect(getByText('Tài khoản')).toBeTruthy();
   });
 });

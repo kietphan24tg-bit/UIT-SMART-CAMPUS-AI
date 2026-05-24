@@ -103,9 +103,7 @@ export default function RootLayout() {
     }
 
     flushPendingNotificationNavigation();
-    void syncPushToken().finally(() => {
-      appQueryClient.invalidateQueries({ queryKey: ['push-notification-status'] }).catch(() => undefined);
-    });
+    void syncPushToken();
   }, [isAuthenticated, isHydrated]);
 
   useEffect(() => {

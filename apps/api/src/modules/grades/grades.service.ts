@@ -390,11 +390,11 @@ export class GradesService {
   }
 
   private canManageAllGrades(role: Role) {
-    return role === Role.admin || role === Role.super_admin;
+    return false;
   }
 
   private assertCanManageGrades(role: Role) {
-    if (role !== Role.lecturer && !this.canManageAllGrades(role)) {
+    if (role !== Role.lecturer) {
       throw new ForbiddenException('You are not allowed to manage grades');
     }
   }

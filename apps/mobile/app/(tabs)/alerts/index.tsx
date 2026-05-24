@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   Alert,
-  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -22,7 +21,6 @@ import {
   TopHero,
 } from '@/components/ui';
 import { useAlertFeed } from '@/hooks/use-alert-feed';
-import { usePushNotificationStatus } from '@/hooks/use-push-notification-status';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
@@ -76,7 +74,6 @@ export default function AlertsScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const router = useRouter();
   const alerts = useAlertFeed(role);
-  const pushStatus = usePushNotificationStatus();
   const feedItems = alerts.data ?? EMPTY_FEED_ITEMS;
   const [filter, setFilter] = useState<FilterKey>('all');
   const [feedWidth, setFeedWidth] = useState(0);
@@ -209,10 +206,9 @@ export default function AlertsScreen() {
     <Screen
       refreshControl={
         <RefreshControl
-          refreshing={alerts.isRefetching || pushStatus.isRefetching}
+          refreshing={alerts.isRefetching}
           onRefresh={() => {
             void alerts.refetch();
-            void pushStatus.refetch();
           }}
           tintColor={theme.colors.primary}
         />
@@ -232,13 +228,6 @@ export default function AlertsScreen() {
       />
 
       <ContentStack>
-        <PushNotificationStatusCard
-          status={pushStatus.data}
-          isLoading={pushStatus.isLoading}
-          isRetrying={pushStatus.isRetrying}
-          onRetry={() => void pushStatus.retrySync()}
-        />
-
         <SectionCard
           title="Bộ lọc"
           subtitle={`${feedItems.length} mục · ${unreadNotificationCount} chưa đọc`}
@@ -382,98 +371,6 @@ export default function AlertsScreen() {
         ) : null}
       </ContentStack>
     </Screen>
-  );
-}
-
-function PushNotificationStatusCard({
-  status,
-  isLoading,
-  isRetrying,
-  onRetry,
-}: {
-  status?: {
-    status: 'enabled_synced' | 'enabled_sync_failed' | 'permission_denied' | 'unsupported_build';
-    lastSuccessfulPushSyncAt: string | null;
-    errorMessage: string | null;
-  } | null;
-  isLoading: boolean;
-  isRetrying: boolean;
-  onRetry: () => void;
-}) {
-  const theme = useAppTheme();
-
-  if (isLoading && !status) {
-    return (
-      <SectionCard title="Thông báo trên thiết bị" subtitle="Đang kiểm tra trạng thái" variant="outlined">
-        <Text style={[styles.pushCopy, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-          Ứng dụng đang kiểm tra quyền thông báo và trạng thái đăng ký thiết bị.
-        </Text>
-      </SectionCard>
-    );
-  }
-
-  const statusTone =
-    status?.status === 'enabled_synced'
-      ? 'success'
-      : status?.status === 'unsupported_build'
-        ? 'warning'
-        : 'danger';
-  const statusLabel =
-    status?.status === 'enabled_synced'
-      ? 'Đang hoạt động'
-      : status?.status === 'enabled_sync_failed'
-        ? 'Cần sync lại'
-        : status?.status === 'unsupported_build'
-          ? 'Build chưa hỗ trợ'
-          : 'Chưa cấp quyền';
-  const statusDescription =
-    status?.status === 'enabled_synced'
-      ? 'Thiết bị đã được cấp quyền và đã đăng ký nhận push thành công với hệ thống.'
-      : status?.status === 'enabled_sync_failed'
-        ? 'Bạn đã cho phép thông báo, nhưng thiết bị chưa đăng ký thành công với backend.'
-        : status?.status === 'unsupported_build'
-          ? 'Bản build hiện tại chưa đủ cấu hình để nhận push trên thiết bị này.'
-          : 'Thiết bị chưa cấp quyền nhận thông báo cho ứng dụng.';
-
-  return (
-    <SectionCard
-      title="Thông báo trên thiết bị"
-      subtitle="Quyền hệ thống và trạng thái đăng ký push"
-      variant="outlined"
-      headerAccessory={<StatusBadge label={statusLabel} tone={statusTone} size="sm" />}
-    >
-      <View style={styles.pushStatusContent}>
-        <Text style={[styles.pushCopy, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
-          {statusDescription}
-        </Text>
-
-        {status?.lastSuccessfulPushSyncAt ? (
-          <Text style={[styles.pushMeta, { color: theme.colors.textSoft, fontFamily: theme.fonts.medium }]}>
-            Sync thành công lần cuối: {formatDateTime(status.lastSuccessfulPushSyncAt)}
-          </Text>
-        ) : null}
-
-        {status?.errorMessage && status.status !== 'permission_denied' ? (
-          <Text style={[styles.pushMeta, { color: theme.colors.danger, fontFamily: theme.fonts.medium }]}>
-            {status.errorMessage}
-          </Text>
-        ) : null}
-
-        <View style={styles.pushActionRow}>
-          {status?.status === 'enabled_sync_failed' ? (
-            <SecondaryButton label={isRetrying ? 'Đang thử lại...' : 'Thử lại'} onPress={onRetry} disabled={isRetrying} />
-          ) : null}
-          {status?.status === 'permission_denied' || status?.status === 'unsupported_build' ? (
-            <SecondaryButton
-              label="Mở cài đặt"
-              onPress={() => {
-                void Linking.openSettings();
-              }}
-            />
-          ) : null}
-        </View>
-      </View>
-    </SectionCard>
   );
 }
 
@@ -668,21 +565,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pushStatusContent: {
-    gap: 10,
-  },
-  pushCopy: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  pushMeta: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  pushActionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
   },
 });

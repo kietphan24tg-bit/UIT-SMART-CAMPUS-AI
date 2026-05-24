@@ -216,34 +216,21 @@ describe('LecturerAttendanceScreen', () => {
     expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
   });
 
-  it('blocks admin role from attendance management', () => {
+  it('shows access denied for admin role', () => {
     mockRole(USER_ROLES.ADMIN);
 
     const { getByText } = render(<LecturerAttendanceScreen />);
 
     expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
+    expect(getByText('Chỉ có giảng viên mới thực hiện điểm danh')).toBeTruthy();
   });
 
-  it('shows the empty state for super admin when no class is available', () => {
+  it('shows access denied for super admin role', () => {
     mockRole(USER_ROLES.SUPER_ADMIN);
-    mockUseScheduleScreenData.mockReturnValue({
-      semesters: [],
-      resolvedSemesterId: 'sem-current',
-      isLoading: false,
-      isError: false,
-      error: null,
-      refetch: jest.fn(),
-      schedule: [],
-    });
-    mockUseQuery.mockReturnValue({
-      data: [],
-      isLoading: false,
-      isError: false,
-      refetch: jest.fn(),
-    });
 
     const { getByText } = render(<LecturerAttendanceScreen />);
 
-    expect(getByText('Chưa có lớp học phần')).toBeTruthy();
+    expect(getByText('Bạn không có quyền truy cập')).toBeTruthy();
+    expect(getByText('Chỉ có giảng viên mới thực hiện điểm danh')).toBeTruthy();
   });
 });

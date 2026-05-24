@@ -89,8 +89,8 @@ describe('app utils', () => {
     expect(adminGrades?.isInteractive).toBe(false);
     expect(adminGrades?.route).toBe('/services/grades');
 
-    expect(superAdminGrades?.supportState).toBe('live');
-    expect(superAdminGrades?.isInteractive).toBe(true);
-    expect(superAdminGrades?.route).toBe('/services/grades/lecturer');
+    expect(superAdminGrades?.supportState).toBe('unsupported');
+    expect(superAdminGrades?.isInteractive).toBe(false);
+    expect(superAdminGrades?.route).toBe('/services/grades');
   });
 });

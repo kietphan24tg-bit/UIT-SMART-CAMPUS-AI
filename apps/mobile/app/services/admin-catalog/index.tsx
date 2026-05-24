@@ -115,7 +115,7 @@ export default function AdminCatalogScreen() {
           <EmptyState
             icon="lock-closed-outline"
             title="Bạn không có quyền truy cập"
-            description="Màn hình này chỉ dành cho admin và super admin."
+            description="Màn hình này chỉ dành cho admin."
             actionLabel="Quay lại"
             onActionPress={() => router.back()}
           />

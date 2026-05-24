@@ -1223,11 +1223,11 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private canManageAllAttendance(role: Role) {
-    return role === Role.admin || role === Role.super_admin;
+    return false;
   }
 
   private assertCanManageAttendance(role: Role) {
-    if (role !== Role.lecturer && role !== Role.admin && role !== Role.super_admin) {
+    if (role !== Role.lecturer) {
       throw new ForbiddenException('You are not allowed to manage attendance');
     }
   }

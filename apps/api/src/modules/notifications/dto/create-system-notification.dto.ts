@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { USER_ROLES } from '@smart-campus/shared';
+import { ACTIVE_USER_ROLES, type ActiveUserRole } from '@smart-campus/shared';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -19,11 +19,11 @@ export class NotificationAudienceDto {
   @IsIn(NOTIFICATION_AUDIENCE_SCOPES)
   scope!: (typeof NOTIFICATION_AUDIENCE_SCOPES)[number];
 
-  @ApiPropertyOptional({ isArray: true, enum: Object.values(USER_ROLES) })
+  @ApiPropertyOptional({ isArray: true, enum: ACTIVE_USER_ROLES })
   @IsArray()
   @IsOptional()
-  @IsIn(Object.values(USER_ROLES), { each: true })
-  roles?: (typeof USER_ROLES)[keyof typeof USER_ROLES][];
+  @IsIn(ACTIVE_USER_ROLES, { each: true })
+  roles?: ActiveUserRole[];
 
   @ApiPropertyOptional({ example: 'class-section-id' })
   @IsString()
@@ -54,16 +54,16 @@ export class CreateSystemNotificationDto {
 
   @ApiPropertyOptional({
     type: NotificationAudienceDto,
-    example: { scope: 'roles', roles: [USER_ROLES.STUDENT] },
+    example: { scope: 'roles', roles: [ACTIVE_USER_ROLES[0]] },
   })
   @ValidateNested()
   @Type(() => NotificationAudienceDto)
   @IsOptional()
   audience?: NotificationAudienceDto;
 
-  @ApiPropertyOptional({ isArray: true, enum: Object.values(USER_ROLES) })
+  @ApiPropertyOptional({ isArray: true, enum: ACTIVE_USER_ROLES })
   @IsArray()
   @IsOptional()
-  @IsIn(Object.values(USER_ROLES), { each: true })
-  roles?: (typeof USER_ROLES)[keyof typeof USER_ROLES][];
+  @IsIn(ACTIVE_USER_ROLES, { each: true })
+  roles?: ActiveUserRole[];
 }

@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from 'react-native';
 
+import { AdminUserManagementScreen } from './admin-user-management-screen';
+
 import { NotificationComposeForm } from '@/components/notifications/notification-compose-form';
 import { TaskScreen } from '@/components/tasks';
 import { ContentStack, EmptyState, Screen, TopHero } from '@/components/ui';
@@ -56,6 +58,10 @@ export default function OperationsTaskScreen() {
 
   if (task === 'notifications') {
     return <AdminNotificationBroadcastScreen role={role} />;
+  }
+
+  if (task === 'users') {
+    return <AdminUserManagementScreen />;
   }
 
   const config = getOperationsTaskConfig(task, role, operationsState.data);

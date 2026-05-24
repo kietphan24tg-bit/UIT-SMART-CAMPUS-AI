@@ -7,6 +7,7 @@ import {
   ParseFilePipeBuilder,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -22,6 +23,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AvatarUploadFile } from '../storage/avatar-storage.service';
 import { MAX_AVATAR_UPLOAD_SIZE_BYTES } from '../storage/avatar-upload.constants';
 
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserActiveDto } from './dto/update-user-active.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -84,8 +86,8 @@ export class UsersController {
   @Get()
   @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiOperation({ summary: 'List users for administrators' })
-  getUsers() {
-    return this.usersService.findAll();
+  getUsers(@Query() query: GetUsersQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @Get(':id')
@@ -96,16 +98,24 @@ export class UsersController {
   }
 
   @Patch(':id/role')
-  @Roles(USER_ROLES.SUPER_ADMIN)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update a user role' })
-  updateRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
-    return this.usersService.updateRole(id, dto.role);
+  updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @CurrentUser('id') actorId: string,
+  ) {
+    return this.usersService.updateRole(id, dto.role, actorId);
   }
 
   @Patch(':id/active')
   @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiOperation({ summary: 'Enable or disable a user' })
-  updateActive(@Param('id') id: string, @Body() dto: UpdateUserActiveDto) {
-    return this.usersService.updateActive(id, dto.isActive);
+  updateActive(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserActiveDto,
+    @CurrentUser('id') actorId: string,
+  ) {
+    return this.usersService.updateActive(id, dto.isActive, actorId);
   }
 }

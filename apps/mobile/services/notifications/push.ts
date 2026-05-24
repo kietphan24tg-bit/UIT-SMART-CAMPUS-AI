@@ -50,7 +50,7 @@ function getErrorMessage(error: unknown) {
     return error.trim();
   }
 
-  return 'Unable to register this device for push notifications.';
+  return 'Không thể đăng ký thiết bị để nhận thông báo đẩy.';
 }
 
 function isMobilePushPlatform() {
@@ -71,7 +71,7 @@ function markPushNotificationsUnsupported(error: unknown) {
   }
 
   pushNotificationsUnsupportedReason =
-    'Push notifications are unavailable on this Android build because Firebase is not configured yet.';
+    'Bản build hiện tại chưa đủ cấu hình để nhận push trên thiết bị này.';
   return true;
 }
 
@@ -187,7 +187,7 @@ async function getExpoPushTokenFromDevice(): Promise<string> {
     return tokenResponse.data;
   } catch (error) {
     if (markPushNotificationsUnsupported(error)) {
-      throw new Error(pushNotificationsUnsupportedReason ?? 'Push notifications are unavailable.');
+      throw new Error(pushNotificationsUnsupportedReason ?? 'Thiết bị hiện chưa nhận được push.');
     }
     throw error;
   }
@@ -198,7 +198,7 @@ export async function fetchExpoPushTokenAndCache(): Promise<string> {
   if (!canUseRemotePushNotifications()) {
     throw new Error(
       pushNotificationsUnsupportedReason ??
-        'Remote push notifications are disabled in Expo Go on Android.',
+        'Bản build hiện tại chưa hỗ trợ nhận push trên thiết bị này.',
     );
   }
 
@@ -271,7 +271,7 @@ export async function syncPushToken(): Promise<PushNotificationState> {
     return persistPushNotificationState(
       'unsupported_build',
       pushNotificationsUnsupportedReason ??
-        'Remote push notifications are disabled in Expo Go on Android.',
+        'Bản build hiện tại chưa hỗ trợ nhận push trên thiết bị này.',
     );
   }
 
