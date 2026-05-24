@@ -46,8 +46,8 @@ describe('AttendanceController', () => {
     service = module.get(AttendanceService);
   });
 
-  it('opens attendance management endpoints for lecturer/admin/super_admin', () => {
-    const managerRoles = [USER_ROLES.LECTURER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN];
+  it('opens attendance management endpoints for lecturer only', () => {
+    const managerRoles = [USER_ROLES.LECTURER];
 
     expect(getMethodRoles('startSession')).toEqual(managerRoles);
     expect(getMethodRoles('stopSession')).toEqual(managerRoles);
