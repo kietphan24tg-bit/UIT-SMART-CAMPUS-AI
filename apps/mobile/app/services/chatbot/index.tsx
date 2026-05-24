@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -12,7 +13,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Screen, TopHero } from '@/components/ui';
 import { chatbotApi } from '@/services/api/chatbot';
@@ -27,7 +27,7 @@ interface DisplayMessage {
   content: string;
   intent?: string | null;
   confidence?: number | null;
-  deepLinks?: unknown;
+  deepLinks?: string[];
   suggestedQuestions?: string[];
   createdAt: string;
 }
@@ -44,6 +44,17 @@ const INITIAL_SUGGESTIONS = [
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+function normalizeDeepLinks(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const links = value.filter(
+    (item): item is string => typeof item === 'string' && item.length > 0,
+  );
+  return links.length > 0 ? links : undefined;
+}
+
 export default function ChatbotScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -75,7 +86,7 @@ export default function ChatbotScreen() {
         content: response.answer,
         intent: response.intent,
         confidence: response.confidence,
-        deepLinks: response.deepLinks,
+        deepLinks: normalizeDeepLinks(response.deepLinks),
         suggestedQuestions: response.suggestedQuestions,
         createdAt: now,
       };
@@ -144,12 +155,9 @@ export default function ChatbotScreen() {
               {item.content}
             </Text>
 
-            {!isUser &&
-              item.deepLinks &&
-              Array.isArray(item.deepLinks) &&
-              (item.deepLinks as string[]).length > 0 && (
+            {!isUser && item.deepLinks && item.deepLinks.length > 0 && (
                 <View style={styles.linkRow}>
-                  {(item.deepLinks as string[]).map((link) => (
+                  {item.deepLinks.map((link) => (
                     <Pressable
                       key={link}
                       onPress={() => router.push(link as never)}

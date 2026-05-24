@@ -1,6 +1,7 @@
+import { getNotificationAlertCategory } from '@smart-campus/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { notificationsApi } from '@/services/api/notifications';
+import { notificationsApi, type DeleteNotificationsQuery } from '@/services/api/notifications';
 import { safetyApi } from '@/services/api/safety';
 import { useAuthStore } from '@/stores/auth-store';
 import type {
@@ -24,36 +25,7 @@ function repairMojibakeText(value?: string | null) {
 }
 
 export function getAlertCategoryFromType(type?: string | null): AlertCategory {
-  const normalized = repairMojibakeText(type).toLowerCase();
-
-  if (normalized.includes('fire')) {
-    return 'emergency';
-  }
-
-  if (
-    normalized.includes('pay') ||
-    normalized.includes('bill') ||
-    normalized.includes('invoice') ||
-    normalized.includes('transaction')
-  ) {
-    return 'payment';
-  }
-
-  if (
-    normalized.includes('academic') ||
-    normalized.includes('grade') ||
-    normalized.includes('schedule') ||
-    normalized.includes('class') ||
-    normalized.includes('course') ||
-    normalized.includes('attendance') ||
-    normalized.includes('registration') ||
-    normalized.includes('deadline') ||
-    normalized.includes('exam')
-  ) {
-    return 'academic';
-  }
-
-  return 'general';
+  return getNotificationAlertCategory(repairMojibakeText(type));
 }
 
 export function toNotificationFeed(item: NotificationRecord): AlertFeedItem {
@@ -166,10 +138,34 @@ export function useAlertFeed(role?: string | null) {
     },
   });
 
+  const deleteNotification = useMutation({
+    mutationFn: (id: string) => notificationsApi.deleteNotification(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    },
+  });
+
+  const deleteNotifications = useMutation({
+    mutationFn: (deleteQuery: DeleteNotificationsQuery) =>
+      notificationsApi.deleteNotifications(deleteQuery),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    },
+  });
+
   return {
     ...query,
     markAsRead: (id: string) => markAsRead.mutateAsync(id),
     markAllAsRead: () => markAllAsRead.mutateAsync(),
-    isMutating: markAsRead.isPending || markAllAsRead.isPending,
+    deleteNotification: (id: string) => deleteNotification.mutateAsync(id),
+    deleteNotifications: (deleteQuery: DeleteNotificationsQuery) =>
+      deleteNotifications.mutateAsync(deleteQuery),
+    isMutating:
+      markAsRead.isPending ||
+      markAllAsRead.isPending ||
+      deleteNotification.isPending ||
+      deleteNotifications.isPending,
   };
 }

@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { Test } from '@nestjs/testing';
+import { Role } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -36,8 +36,10 @@ describe('NotificationsService', () => {
               count: jest.fn(),
               update: jest.fn(),
               updateMany: jest.fn(),
+              delete: jest.fn(),
               createMany: jest.fn(),
               create: jest.fn(),
+              deleteMany: jest.fn(),
             },
             user: {
               findMany: jest.fn(),
@@ -176,6 +178,88 @@ describe('NotificationsService', () => {
       expect(prisma.notification.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', isRead: false },
         data: { isRead: true },
+      });
+    });
+  });
+
+  describe('deleteNotification', () => {
+    it('should delete a notification owned by the current user', async () => {
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue({ id: 'notif-1' });
+      (prisma.notification.delete as jest.Mock).mockResolvedValue({ id: 'notif-1' });
+
+      const result = await service.deleteNotification('notif-1', 'user-1');
+
+      expect(prisma.notification.delete).toHaveBeenCalledWith({
+        where: { id: 'notif-1' },
+      });
+      expect(result).toEqual({ deleted: true });
+    });
+
+    it('should throw NotFoundException when deleting another user notification', async () => {
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.deleteNotification('notif-1', 'user-2')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.notification.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteNotifications', () => {
+    it('should delete all notifications when no filter is provided', async () => {
+      (prisma.notification.deleteMany as jest.Mock).mockResolvedValue({ count: 4 });
+
+      const result = await service.deleteNotifications('user-1', {});
+
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(result).toEqual({ count: 4 });
+    });
+
+    it('should delete only notifications matching a category filter', async () => {
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        { id: 'notif-1', type: 'academic' },
+        { id: 'notif-2', type: 'general' },
+        { id: 'notif-3', type: 'schedule_update' },
+      ]);
+      (prisma.notification.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      const result = await service.deleteNotifications('user-1', { category: 'academic' });
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        select: { id: true, type: true },
+      });
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          id: { in: ['notif-1', 'notif-3'] },
+        },
+      });
+      expect(result).toEqual({ count: 2 });
+    });
+
+    it('should respect unreadOnly when deleting by filter', async () => {
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        { id: 'notif-1', type: 'payment' },
+      ]);
+      (prisma.notification.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await service.deleteNotifications('user-1', {
+        category: 'payment',
+        unreadOnly: true,
+      });
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isRead: false },
+        select: { id: true, type: true },
+      });
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          id: { in: ['notif-1'] },
+        },
       });
     });
   });

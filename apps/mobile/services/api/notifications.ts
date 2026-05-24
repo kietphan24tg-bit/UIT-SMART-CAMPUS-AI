@@ -1,10 +1,12 @@
-import { apiClient } from './client';
-
 import type {
   NotificationAudience,
+  NotificationAlertCategory,
   NotificationBroadcastResult,
   NotificationType,
 } from '@smart-campus/shared';
+
+import { apiClient } from './client';
+
 import type { NotificationRecord, NotificationsPayload } from '@/types/app-data';
 
 export interface RegisterPushTokenRequest {
@@ -23,6 +25,11 @@ export interface BroadcastNotificationRequest {
   type?: NotificationType;
   data?: Record<string, unknown>;
   audience: NotificationAudience;
+}
+
+export interface DeleteNotificationsQuery {
+  category?: NotificationAlertCategory;
+  unreadOnly?: boolean;
 }
 
 export const notificationsApi = {
@@ -46,6 +53,16 @@ export const notificationsApi = {
 
   markAllAsRead: async (): Promise<{ count: number }> => {
     return apiClient.patch('/notifications/read-all') as Promise<{ count: number }>;
+  },
+
+  deleteNotification: async (id: string): Promise<{ deleted: true }> => {
+    return apiClient.delete(`/notifications/${encodeURIComponent(id)}`) as Promise<{ deleted: true }>;
+  },
+
+  deleteNotifications: async (query: DeleteNotificationsQuery = {}): Promise<{ count: number }> => {
+    return apiClient.delete('/notifications', {
+      params: query,
+    }) as Promise<{ count: number }>;
   },
 
   broadcast: async (payload: BroadcastNotificationRequest): Promise<NotificationBroadcastResult> => {

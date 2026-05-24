@@ -1,14 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { USER_ROLES } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { ParkingService } from '../parking/parking.service';
 import {
   getActiveParkingSlotNumbers,
   getDefaultParkingSlotBitmap,
   normalizeParkingSlotNumber,
 } from '../parking/parking-slot-layout';
+import { ParkingService } from '../parking/parking.service';
 
 import type {
   FireAlertDto,
@@ -19,6 +18,8 @@ import type { TelemetryDto } from './dto/telemetry.dto';
 import { ParkingRealtimeGateway } from './parking-realtime.gateway';
 
 const DEFAULT_FIRE_ALERT_MESSAGE = 'Cảm biến lửa đã kích hoạt tại bãi xe UIT Campus.';
+const DEFAULT_RAIN_ALERT_TITLE = 'Cảnh báo thời tiết tại bãi xe';
+const DEFAULT_RAIN_ALERT_MESSAGE = 'Hệ thống vừa phát hiện mưa tại khu vực bãi xe UIT Campus.';
 
 function normalizePlate(value: string) {
   return String(value || '')
@@ -152,6 +153,18 @@ export class IotService {
   }
 
   async recordTelemetry(dto: TelemetryDto) {
+    const previousSnapshot = await this.prisma.telemetrySnapshot.findFirst({
+      where: { gateId: dto.gateId },
+      orderBy: { reportedAt: 'desc' },
+    });
+    const snapshot = await this.persistTelemetrySnapshot(dto);
+
+    await this.processTelemetryAlertTransitions(previousSnapshot, snapshot);
+
+    return snapshot;
+  }
+
+  private async persistTelemetrySnapshot(dto: TelemetryDto) {
     const activeSlotNumbers = getActiveParkingSlotNumbers(dto.gateId);
     const slotStates = this.normalizeSlots(dto.gateId, dto.slotBitmap, dto.slots);
     const reportedAt = dto.reportedAt ? new Date(dto.reportedAt) : new Date();
@@ -214,21 +227,7 @@ export class IotService {
   }
 
   async recordTelemetryFromMqtt(dto: TelemetryDto) {
-    const previousSnapshot = await this.prisma.telemetrySnapshot.findFirst({
-      where: { gateId: dto.gateId },
-      orderBy: { reportedAt: 'desc' },
-    });
-
-    const snapshot = await this.recordTelemetry(dto);
-
-    if (snapshot.fireDetected && !previousSnapshot?.fireDetected) {
-      await this.createFireAlert({
-        gateId: snapshot.gateId,
-        reportedAt: snapshot.reportedAt.toISOString(),
-      });
-    }
-
-    return snapshot;
+    return this.recordTelemetry(dto);
   }
 
   async getLatestTelemetry(gateId?: string) {
@@ -263,7 +262,7 @@ export class IotService {
         dto.reportedAt,
         dto.telemetrySnapshot,
       );
-      telemetrySnapshot = await this.recordTelemetry(snapshotInput);
+      telemetrySnapshot = await this.persistTelemetrySnapshot(snapshotInput);
     }
 
     const fireAlert = await this.prisma.fireAlert.create({
@@ -284,7 +283,7 @@ export class IotService {
         fireAlertId: fireAlert.id,
         telemetrySnapshotId: telemetrySnapshot?.id ?? null,
       },
-      [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
+      { scope: 'all' },
     );
 
     return fireAlert;
@@ -312,6 +311,40 @@ export class IotService {
         totalPages: Math.max(1, Math.ceil(total / safeLimit)),
       },
     };
+  }
+
+  private async processTelemetryAlertTransitions(
+    previousSnapshot: {
+      fireDetected: boolean;
+      rainDetected: boolean;
+    } | null,
+    snapshot: {
+      gateId: string;
+      id: string;
+      fireDetected: boolean;
+      rainDetected: boolean;
+      reportedAt: Date;
+    },
+  ) {
+    if (previousSnapshot?.fireDetected === false && snapshot.fireDetected) {
+      await this.createFireAlert({
+        gateId: snapshot.gateId,
+        reportedAt: snapshot.reportedAt.toISOString(),
+      });
+    }
+
+    if (previousSnapshot?.rainDetected === false && snapshot.rainDetected) {
+      await this.notificationsService.createSystemNotifications(
+        DEFAULT_RAIN_ALERT_TITLE,
+        DEFAULT_RAIN_ALERT_MESSAGE,
+        'rain_alert',
+        {
+          gateId: snapshot.gateId,
+          telemetrySnapshotId: snapshot.id,
+        },
+        { scope: 'all' },
+      );
+    }
   }
 
   private async countAvailableSlots(gateId: string) {

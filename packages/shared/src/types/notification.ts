@@ -10,7 +10,10 @@ export type NotificationType =
   | 'system'
   | 'deadline'
   | 'emergency'
-  | 'fire_alert';
+  | 'fire_alert'
+  | 'rain_alert';
+
+export type NotificationAlertCategory = 'general' | 'academic' | 'payment' | 'emergency';
 
 export type NotificationAudience =
   | {

@@ -12,46 +12,12 @@ import {
   StatusBadge,
   TopHero,
 } from '@/components/ui';
-import { useAlertFeed } from '@/hooks/use-alert-feed';
+import { toNotificationFeed, useAlertFeed } from '@/hooks/use-alert-feed';
 import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import type { AlertFeedItem, NotificationRecord } from '@/types/app-data';
+import type { AlertFeedItem } from '@/types/app-data';
 import { formatDateTime, getSeverityLabel } from '@/utils/app';
-
-function toNotificationDetail(item: NotificationRecord): AlertFeedItem {
-  const data = item.data ?? {};
-  const classCode = typeof data.classCode === 'string' ? data.classCode : null;
-  const courseCode = typeof data.courseCode === 'string' ? data.courseCode : null;
-  const courseName = typeof data.courseName === 'string' ? data.courseName : null;
-  const room = typeof data.room === 'string' ? data.room : null;
-  const date = typeof data.date === 'string' ? data.date : null;
-  const contextParts = [classCode, courseCode, room ? `Phòng ${room}` : null, date].filter(Boolean);
-
-  return {
-    id: item.id,
-    kind: 'notification',
-    title: item.title,
-    body: item.body,
-    timestamp: item.createdAt,
-    severity: item.type === 'emergency' || item.type === 'fire_alert' ? 'critical' : 'normal',
-    category:
-      item.type === 'academic' ||
-      item.type === 'deadline' ||
-      item.type === 'class_announcement' ||
-      item.type === 'schedule_update' ||
-      item.type === 'grade_published'
-        ? 'academic'
-        : 'general',
-    isRead: item.isRead,
-    classCode,
-    courseCode,
-    courseName,
-    room,
-    notificationContext:
-      contextParts.length > 0 ? contextParts.join(' · ') : courseName ?? undefined,
-  };
-}
 
 export default function AlertDetailScreen() {
   const theme = useAppTheme();
@@ -66,7 +32,8 @@ export default function AlertDetailScreen() {
     queryFn: () => notificationsApi.getNotification(params.id!),
     enabled: Boolean(params.id && params.kind === 'notification' && !feedItem),
   });
-  const item = feedItem ?? (fallbackNotification.data ? toNotificationDetail(fallbackNotification.data) : null);
+  const item: AlertFeedItem | null =
+    feedItem ?? (fallbackNotification.data ? toNotificationFeed(fallbackNotification.data) : null);
 
   if (!item && fallbackNotification.isFetching) {
     return (

@@ -6,10 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EnrollmentStatus, Role, type Prisma } from '@prisma/client';
-import type { UserRole } from '@smart-campus/shared';
+import {
+  getNotificationAlertCategory,
+  type NotificationAlertCategory,
+  type UserRole,
+} from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 
+import { DeleteNotificationsQueryDto } from './dto/delete-notifications-query.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { ExpoPushService, PushDeliveryStats } from './expo-push.service';
 
@@ -125,6 +130,61 @@ export class NotificationsService {
       where: { userId, isRead: false },
       data: { isRead: true },
     });
+  }
+
+  async deleteNotification(id: string, userId: string) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    await this.prisma.notification.delete({
+      where: { id: notification.id },
+    });
+
+    return { deleted: true };
+  }
+
+  async deleteNotifications(userId: string, query: DeleteNotificationsQueryDto = {}) {
+    const where: Prisma.NotificationWhereInput = {
+      userId,
+      ...(query.unreadOnly === true ? { isRead: false } : {}),
+    };
+
+    if (!query.category) {
+      const result = await this.prisma.notification.deleteMany({ where });
+      return { count: result.count };
+    }
+
+    const notifications = await this.prisma.notification.findMany({
+      where,
+      select: {
+        id: true,
+        type: true,
+      },
+    });
+    const matchingIds = notifications
+      .filter((notification) =>
+        this.matchesAlertCategory(notification.type, query.category as NotificationAlertCategory),
+      )
+      .map((notification) => notification.id);
+
+    if (matchingIds.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.notification.deleteMany({
+      where: {
+        userId,
+        id: { in: matchingIds },
+      },
+    });
+
+    return { count: result.count };
   }
 
   async registerPushToken(userId: string, dto: RegisterPushTokenDto) {
@@ -273,6 +333,10 @@ export class NotificationsService {
 
   private getErrorMessage(error: unknown) {
     return error instanceof Error ? error.message : 'Unknown error';
+  }
+
+  private matchesAlertCategory(type: string, category: NotificationAlertCategory) {
+    return getNotificationAlertCategory(type) === category;
   }
 
   private normalizeAudience(input?: NotificationAudienceInput): NotificationAudience {

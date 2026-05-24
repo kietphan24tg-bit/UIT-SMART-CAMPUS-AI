@@ -3,11 +3,11 @@ import path from 'node:path';
 
 import type { ExpoConfig } from 'expo/config';
 
-const config: ExpoConfig = {
+const config = {
   name: 'UIT Smart Campus',
   slug: 'smart-campus',
   owner: 'uit-smart-campus',
-  version: '2.0.5',
+  version: '2.0.6',
   orientation: 'portrait',
   icon: './assets/brand/icon.png',
   scheme: 'smartcampus',
@@ -21,7 +21,7 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'vn.edu.uit.smartcampus',
-    buildNumber: '205',
+    buildNumber: '206',
   },
   android: {
     adaptiveIcon: {
@@ -29,7 +29,7 @@ const config: ExpoConfig = {
       backgroundColor: '#FFFFFF',
     },
     package: 'vn.edu.uit.smartcampus.app',
-    versionCode: 205,
+    versionCode: 206,
     softwareKeyboardLayoutMode: 'resize',
     usesCleartextTraffic: true,
   },
@@ -38,6 +38,14 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-secure-store',
     'expo-font',
+    [
+      'expo-notifications',
+      {
+        icon: './assets/brand/notification-icon.png',
+        color: '#0E76FD',
+        defaultChannel: 'default',
+      },
+    ],
     [
       'expo-location',
       {
@@ -58,7 +66,7 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
   },
-};
+} as ExpoConfig;
 
 function loadEnvFile(filePath: string) {
   if (!existsSync(filePath)) {

@@ -196,4 +196,87 @@ describe('IotService', () => {
     );
     expect(notificationsService.createSystemNotifications).toHaveBeenCalled();
   });
+
+  it('creates a rain notification only when telemetry transitions from dry to rain', async () => {
+    const reportedAt = new Date('2026-04-14T11:00:00.000Z');
+    (prisma.telemetrySnapshot.findFirst as jest.Mock).mockResolvedValue({
+      id: 'snapshot-prev',
+      gateId: 'uit-gate-a',
+      fireDetected: false,
+      rainDetected: false,
+      reportedAt: new Date('2026-04-14T10:59:00.000Z'),
+    });
+    (prisma.telemetrySnapshot.create as jest.Mock).mockResolvedValue({
+      id: 'snapshot-next',
+      gateId: 'uit-gate-a',
+      fireDetected: false,
+      rainDetected: true,
+      reportedAt,
+    });
+    (prisma.parkingSlot.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.parkingSlot.upsert as jest.Mock).mockResolvedValue({});
+
+    await service.recordTelemetry({
+      gateId: 'uit-gate-a',
+      deviceIp: '192.168.1.10',
+      slotBitmap: '01',
+      slots: [
+        { slotNumber: 'A1', occupied: false },
+        { slotNumber: 'A2', occupied: true },
+      ],
+      temperature: 30,
+      humidity: 70,
+      rainDetected: true,
+      fireDetected: false,
+      reportedAt: reportedAt.toISOString(),
+    });
+
+    expect(notificationsService.createSystemNotifications).toHaveBeenCalledWith(
+      'Cảnh báo thời tiết tại bãi xe',
+      'Hệ thống vừa phát hiện mưa tại khu vực bãi xe UIT Campus.',
+      'rain_alert',
+      {
+        gateId: 'uit-gate-a',
+        telemetrySnapshotId: 'snapshot-next',
+      },
+      { scope: 'all' },
+    );
+  });
+
+  it('does not create duplicate rain notifications while rain state stays true', async () => {
+    const reportedAt = new Date('2026-04-14T11:05:00.000Z');
+    (prisma.telemetrySnapshot.findFirst as jest.Mock).mockResolvedValue({
+      id: 'snapshot-prev',
+      gateId: 'uit-gate-a',
+      fireDetected: false,
+      rainDetected: true,
+      reportedAt: new Date('2026-04-14T11:04:00.000Z'),
+    });
+    (prisma.telemetrySnapshot.create as jest.Mock).mockResolvedValue({
+      id: 'snapshot-next',
+      gateId: 'uit-gate-a',
+      fireDetected: false,
+      rainDetected: true,
+      reportedAt,
+    });
+    (prisma.parkingSlot.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.parkingSlot.upsert as jest.Mock).mockResolvedValue({});
+
+    await service.recordTelemetry({
+      gateId: 'uit-gate-a',
+      deviceIp: '192.168.1.10',
+      slotBitmap: '01',
+      slots: [
+        { slotNumber: 'A1', occupied: false },
+        { slotNumber: 'A2', occupied: true },
+      ],
+      temperature: 30,
+      humidity: 70,
+      rainDetected: true,
+      fireDetected: false,
+      reportedAt: reportedAt.toISOString(),
+    });
+
+    expect(notificationsService.createSystemNotifications).not.toHaveBeenCalled();
+  });
 });

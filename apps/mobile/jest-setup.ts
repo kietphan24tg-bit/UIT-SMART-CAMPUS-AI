@@ -76,8 +76,14 @@ jest.mock('expo-image', () => {
   const { Image } = jest.requireActual('react-native');
 
   return {
-    Image: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
-      React.createElement(Image, { ...props, ref }),
+    __esModule: true,
+    Image: Object.assign(
+      React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+        React.createElement(Image, { ...props, ref }),
+      ),
+      {
+        prefetch: jest.fn().mockResolvedValue(true),
+      },
     ),
   };
 });

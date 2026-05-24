@@ -192,7 +192,13 @@ export default function ProfileScreen() {
                   ]}
                 >
                   {user.avatarUrl ? (
-                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                    <Image
+                      source={{ uri: user.avatarUrl }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={0}
+                    />
                   ) : (
                     <Text
                       style={[

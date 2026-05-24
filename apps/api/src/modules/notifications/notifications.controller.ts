@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
 import { CreateSystemNotificationDto } from './dto/create-system-notification.dto';
+import { DeleteNotificationsQueryDto } from './dto/delete-notifications-query.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { RemovePushTokenDto } from './dto/remove-push-token.dto';
 import { NotificationsService } from './notifications.service';
@@ -94,5 +95,20 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Remove Expo push token for current user (e.g. on logout)' })
   removePushToken(@CurrentUser('id') userId: string, @Body() dto: RemovePushTokenDto) {
     return this.notificationsService.removePushToken(userId, dto.expoPushToken);
+  }
+
+  @Delete()
+  @ApiOperation({ summary: 'Delete notifications for current user' })
+  deleteNotifications(
+    @CurrentUser('id') userId: string,
+    @Query() query: DeleteNotificationsQueryDto,
+  ) {
+    return this.notificationsService.deleteNotifications(userId, query);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a notification for current user' })
+  deleteNotification(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.notificationsService.deleteNotification(id, userId);
   }
 }

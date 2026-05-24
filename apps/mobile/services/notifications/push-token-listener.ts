@@ -1,9 +1,7 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
 
-import { canUseRemotePushNotifications, fetchExpoPushTokenAndCache } from './push';
+import { canUseRemotePushNotifications, syncPushToken } from './push';
 
-import { notificationsApi } from '@/services/api/notifications';
 import { useAuthStore } from '@/stores/auth-store';
 
 /**
@@ -15,21 +13,11 @@ export function subscribeExpoPushTokenChanges() {
   }
 
   const subscription = Notifications.addPushTokenListener(async () => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    if (!useAuthStore.getState().isAuthenticated) {
       return;
     }
-    try {
-      const expoPushToken = await fetchExpoPushTokenAndCache();
-      if (!useAuthStore.getState().isAuthenticated) {
-        return;
-      }
-      await notificationsApi.registerPushToken({
-        expoPushToken,
-        platform: Platform.OS,
-      });
-    } catch {
-      // ignore
-    }
+
+    await syncPushToken();
   });
 
   return () => subscription.remove();

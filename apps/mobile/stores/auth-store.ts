@@ -6,6 +6,7 @@ import { usersApi } from '@/services/api';
 import { authApi } from '@/services/api/auth';
 import { registerAuthSessionHandlers } from '@/services/api/auth-session';
 import { isSessionInvalidatedError } from '@/services/api/client';
+import { prefetchAvatarUrl } from '@/services/avatar-cache';
 import {
   clearCachedExpoPushToken,
   unregisterPushTokenFromBackend,
@@ -90,6 +91,7 @@ function setUnauthenticatedState(
 
 async function persistUserSnapshot(user: UserInfo) {
   await writeStoredAuthUser(user);
+  void prefetchAvatarUrl(user.avatarUrl);
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -166,6 +168,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       if (cachedUser) {
+        void prefetchAvatarUrl(cachedUser.avatarUrl);
         setAuthenticatedState(set, cachedUser, token);
       }
 

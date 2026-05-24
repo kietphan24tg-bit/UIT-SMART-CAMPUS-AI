@@ -1,4 +1,9 @@
-import type { ParkingStatus, RegisteredVehicle, UserRole } from '@smart-campus/shared';
+import type {
+  NotificationAlertCategory,
+  ParkingStatus,
+  RegisteredVehicle,
+  UserRole,
+} from '@smart-campus/shared';
 
 export type { ParkingStatus, RegisteredVehicle, UserRole } from '@smart-campus/shared';
 
@@ -151,7 +156,7 @@ export interface DashboardSnapshot {
 
 export type AlertFeedKind = 'notification' | 'fire_alert';
 export type AlertSeverity = 'normal' | 'warning' | 'critical';
-export type AlertCategory = 'general' | 'academic' | 'payment' | 'emergency';
+export type AlertCategory = NotificationAlertCategory;
 
 export interface AlertFeedItem {
   id: string;
