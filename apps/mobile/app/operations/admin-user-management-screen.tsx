@@ -456,10 +456,11 @@ function AdminUserCard({
           <Text
             style={[
               styles.helperText,
+              styles.deleteHelperText,
               { color: theme.colors.danger, fontFamily: theme.fonts.regular },
             ]}
           >
-            Hành động này sẽ xóa vĩnh viễn tài khoản và dữ liệu liên kết.
+            Hành động này sẽ xóa vĩnh viễn tài khoản và dữ liệu
           </Text>
         </View>
       </View>
@@ -569,5 +570,9 @@ const styles = StyleSheet.create({
   helperText: {
     fontSize: 12,
     lineHeight: 18,
+  },
+  deleteHelperText: {
+    paddingHorizontal: 12,
+    textAlign: 'center',
   },
 });
