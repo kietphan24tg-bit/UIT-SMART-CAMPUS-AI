@@ -137,7 +137,8 @@ export function getScheduleTaskConfig(task: ScheduleTaskKey): TaskScreenConfig |
         eyebrow: 'Công cụ giảng dạy',
         title: 'Tạo hoặc sửa buổi học',
         subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Tính năng tạo và chỉnh buổi học đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
+        reason:
+          'Tính năng tạo và chỉnh buổi học đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
         route: '/schedule',
       });
     case 'attendance-session':
@@ -198,7 +199,8 @@ export function getScheduleTaskConfig(task: ScheduleTaskKey): TaskScreenConfig |
         eyebrow: 'Điểm số',
         title: 'Bảng nhập điểm',
         subtitle: 'Phiên bản hiện tại mới hỗ trợ xem điểm và GPA của tài khoản đăng nhập.',
-        reason: 'Tính năng nhập và công bố điểm đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
+        reason:
+          'Tính năng nhập và công bố điểm đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
         route: '/services/grades',
       });
     case 'class-notification':
@@ -206,7 +208,8 @@ export function getScheduleTaskConfig(task: ScheduleTaskKey): TaskScreenConfig |
         eyebrow: 'Thông báo lớp',
         title: 'Soạn thông báo lớp',
         subtitle: 'Tạm thời chưa khả dụng trong phiên bản hiện tại.',
-        reason: 'Tính năng thông báo theo lớp đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
+        reason:
+          'Tính năng thông báo theo lớp đang được hoàn thiện. Theo dõi cập nhật trong ứng dụng.',
         route: '/alerts',
       });
     default:
@@ -251,17 +254,19 @@ export function getOperationsTaskConfig(
           items.length > 0
             ? {
                 title: 'Mục gần đây',
-                records: items.slice(0, 5).map((item) =>
-                  createTaskRecord(
-                    item.id,
-                    item.message,
-                    `Cổng ${item.gateId}`,
-                    formatDateTime(item.reportedAt),
-                    item.isResolved ? 'Đã xử lý' : 'Đang mở',
-                    item.isResolved ? 'info' : 'danger',
-                    '/alerts',
+                records: items
+                  .slice(0, 5)
+                  .map((item) =>
+                    createTaskRecord(
+                      item.id,
+                      item.message,
+                      `Cổng ${item.gateId}`,
+                      formatDateTime(item.reportedAt),
+                      item.isResolved ? 'Đã xử lý' : 'Đang mở',
+                      item.isResolved ? 'info' : 'danger',
+                      '/alerts',
+                    ),
                   ),
-                ),
               }
             : {
                 title: 'Mục gần đây',
@@ -384,7 +389,7 @@ export function getOperationsTaskConfig(
       return {
         eyebrow: 'Vận hành',
         title: 'Tài khoản người dùng',
-        subtitle: 'Quản lý người dùng, vai trò và trạng thái đăng nhập.',
+        subtitle: 'Quản lý người dùng, vai trò, trạng thái đăng nhập và xóa tài khoản.',
         badge: {
           label: getSupportStateLabel('live'),
           tone: getSupportStateTone('live'),
@@ -398,6 +403,7 @@ export function getOperationsTaskConfig(
               { label: 'Danh sách user', value: 'GET /users' },
               { label: 'Đổi role', value: 'PATCH /users/:id/role' },
               { label: 'Khóa/mở login', value: 'PATCH /users/:id/active' },
+              { label: 'Xóa tài khoản', value: 'DELETE /users/:id' },
             ],
           },
         ],
@@ -482,7 +488,10 @@ export function getSettingsTaskConfig(
         title: 'Sắp triển khai',
         infoRows: [
           { label: 'RBAC', value: 'Chưa hỗ trợ quản lý vai trò và phân quyền chi tiết' },
-          { label: 'Cấu hình gateway', value: 'Chưa hỗ trợ thao tác cấu hình trực tiếp trên ứng dụng' },
+          {
+            label: 'Cấu hình gateway',
+            value: 'Chưa hỗ trợ thao tác cấu hình trực tiếp trên ứng dụng',
+          },
           { label: 'Chính sách lưu trữ', value: 'Chưa hỗ trợ thiết lập trong phiên bản hiện tại' },
         ],
       },

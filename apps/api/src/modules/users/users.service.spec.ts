@@ -50,6 +50,7 @@ describe('UsersService', () => {
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+              delete: jest.fn(),
             },
             refreshToken: {
               deleteMany: jest.fn(),
@@ -317,6 +318,24 @@ describe('UsersService', () => {
       ).rejects.toThrow('Avatar image must be 5 MB or smaller');
 
       expect(avatarStorageService.uploadAvatar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('should delete the user record and rely on cascading relations', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.delete as jest.Mock).mockResolvedValue(mockUser);
+
+      const result = await service.deleteUser('user-2', 'admin-1');
+
+      expect(prisma.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-2' },
+      });
+      expect(result).toEqual({ id: 'user-2', deleted: true });
+    });
+
+    it('should block self deletion', async () => {
+      await expect(service.deleteUser('admin-1', 'admin-1')).rejects.toThrow(BadRequestException);
     });
   });
 });

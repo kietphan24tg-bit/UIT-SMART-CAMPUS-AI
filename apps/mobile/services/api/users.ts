@@ -87,6 +87,13 @@ export const usersApi = {
     } satisfies UpdateUserActiveRequest) as Promise<AdminUserListItem>;
   },
 
+  deleteUser: async (userId: string) => {
+    return apiClient.delete(`/users/${encodeURIComponent(userId)}`) as Promise<{
+      id: string;
+      deleted: true;
+    }>;
+  },
+
   uploadAvatar: async (uri: string, fileName = 'avatar.jpg', mimeType = 'image/jpeg') => {
     return postMultipart<UserProfile>('/users/me/avatar', {
       fieldName: 'avatar',
