@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ACTIVE_USER_ROLES,
   formatFullName,
@@ -7,6 +7,7 @@ import {
   type ActiveUserRole,
   type AdminUserListItem,
 } from '@smart-campus/shared';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -23,6 +24,7 @@ import {
   EmptyState,
   PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionCard,
   SkeletonBlock,
   StatusBadge,
@@ -94,6 +96,14 @@ export function AdminUserManagementScreen() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: ({ userId }: { userId: string }) => usersApi.deleteUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentRole] });
+    },
+  });
+
   const users = useMemo(
     () => usersQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [usersQuery.data],
@@ -150,6 +160,29 @@ export function AdminUserManagementScreen() {
     );
   };
 
+  const handleDeleteUser = (user: AdminUserListItem) => {
+    if (user.id === currentUserId || deleteMutation.isPending) {
+      return;
+    }
+
+    Alert.alert(
+      'Xóa tài khoản',
+      `Xóa vĩnh viễn tài khoản của ${formatUserName(user)}? Dữ liệu gắn với tài khoản này sẽ bị gỡ khỏi hệ thống.`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: () => {
+            void deleteMutation.mutateAsync({ userId: user.id }).catch((error) => {
+              Alert.alert('Không xóa được tài khoản', getErrorMessage(error));
+            });
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Screen scroll={false}>
       <FlatList
@@ -171,7 +204,7 @@ export function AdminUserManagementScreen() {
             <TopHero
               eyebrow="Vận hành"
               title="Tài khoản người dùng"
-              subtitle="Quản lý vai trò và trạng thái đăng nhập của người dùng."
+              subtitle="Quản lý vai trò, trạng thái đăng nhập và xóa tài khoản người dùng."
               badge={{ label: 'Admin', tone: 'info' }}
               variant="accent"
             />
@@ -179,7 +212,9 @@ export function AdminUserManagementScreen() {
             <SectionCard
               title="Tìm kiếm tài khoản"
               subtitle={
-                totalUsers > 0 ? `${totalUsers} tài khoản trong hệ thống` : 'Nhập tên, email hoặc MSSV'
+                totalUsers > 0
+                  ? `${totalUsers} tài khoản trong hệ thống`
+                  : 'Nhập tên, email hoặc MSSV'
               }
               variant="highlight"
               tone="academic"
@@ -207,6 +242,8 @@ export function AdminUserManagementScreen() {
           const roleUpdating = roleMutation.isPending && roleMutation.variables?.userId === item.id;
           const activeUpdating =
             activeMutation.isPending && activeMutation.variables?.userId === item.id;
+          const deleteUpdating =
+            deleteMutation.isPending && deleteMutation.variables?.userId === item.id;
 
           return (
             <AdminUserCard
@@ -214,8 +251,10 @@ export function AdminUserManagementScreen() {
               isCurrentUser={isCurrentUser}
               isRoleUpdating={roleUpdating}
               isActiveUpdating={activeUpdating}
+              isDeleteUpdating={deleteUpdating}
               onRoleChange={handleRoleChange}
               onActiveChange={handleActiveChange}
+              onDeleteUser={handleDeleteUser}
             />
           );
         }}
@@ -271,17 +310,23 @@ function AdminUserCard({
   isCurrentUser,
   isRoleUpdating,
   isActiveUpdating,
+  isDeleteUpdating,
   onRoleChange,
   onActiveChange,
+  onDeleteUser,
 }: {
   user: AdminUserListItem;
   isCurrentUser: boolean;
   isRoleUpdating: boolean;
   isActiveUpdating: boolean;
+  isDeleteUpdating: boolean;
   onRoleChange: (user: AdminUserListItem, nextRole: ActiveUserRole) => void;
   onActiveChange: (user: AdminUserListItem, nextIsActive: boolean) => void;
+  onDeleteUser: (user: AdminUserListItem) => void;
 }) {
   const theme = useAppTheme();
+  const isActionLocked = isRoleUpdating || isActiveUpdating || isDeleteUpdating;
+  const deleteDisabled = isCurrentUser || isRoleUpdating || isActiveUpdating;
 
   return (
     <SectionCard
@@ -296,7 +341,9 @@ function AdminUserCard({
             size="sm"
           />
           <StatusBadge label={getRoleLabel(user.role)} tone="info" size="sm" />
-          {isLegacyUserRole(user.role) ? <StatusBadge label="legacy" tone="warning" size="sm" /> : null}
+          {isLegacyUserRole(user.role) ? (
+            <StatusBadge label="legacy" tone="warning" size="sm" />
+          ) : null}
           {isCurrentUser ? <StatusBadge label="Bạn" tone="primary" size="sm" /> : null}
         </View>
       }
@@ -320,7 +367,7 @@ function AdminUserCard({
           <View style={styles.chipRow}>
             {ACTIVE_USER_ROLES.map((role) => {
               const active = user.role === role;
-              const disabled = isCurrentUser || isRoleUpdating;
+              const disabled = isCurrentUser || isActionLocked;
 
               return (
                 <Pressable
@@ -367,7 +414,7 @@ function AdminUserCard({
           </Text>
           <PrimaryButton
             label={user.isActive ? 'Tạm khóa tài khoản' : 'Kích hoạt tài khoản'}
-            disabled={isCurrentUser}
+            disabled={isCurrentUser || isDeleteUpdating || isRoleUpdating}
             loading={isActiveUpdating}
             onPress={() => onActiveChange(user, !user.isActive)}
           />
@@ -378,9 +425,42 @@ function AdminUserCard({
                 { color: theme.colors.textSoft, fontFamily: theme.fonts.regular },
               ]}
             >
-              Tài khoản đang đăng nhập không thể tự đổi vai trò hoặc tự khóa.
+              Tài khoản đang đăng nhập không thể tự đổi vai trò, tự khóa hoặc tự xóa.
             </Text>
           ) : null}
+        </View>
+
+        <View style={styles.controlBlock}>
+          <Text
+            style={[
+              styles.sectionLabel,
+              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+            ]}
+          >
+            Xóa tài khoản
+          </Text>
+          <SecondaryButton
+            label="Xóa tài khoản"
+            disabled={deleteDisabled}
+            loading={isDeleteUpdating}
+            onPress={() => onDeleteUser(user)}
+            icon={<Ionicons name="trash-outline" size={18} color={theme.colors.danger} />}
+            style={{
+              backgroundColor: deleteDisabled
+                ? theme.colors.surfaceTinted
+                : theme.colors.dangerSurface,
+              borderColor: deleteDisabled ? theme.colors.inputBorder : theme.colors.danger,
+            }}
+            labelStyle={{ color: theme.colors.danger }}
+          />
+          <Text
+            style={[
+              styles.helperText,
+              { color: theme.colors.danger, fontFamily: theme.fonts.regular },
+            ]}
+          >
+            Hành động này sẽ xóa vĩnh viễn tài khoản và dữ liệu liên kết.
+          </Text>
         </View>
       </View>
     </SectionCard>

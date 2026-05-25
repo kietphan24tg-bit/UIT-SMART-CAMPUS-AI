@@ -59,6 +59,10 @@ describe('UsersController', () => {
               ...mockProfile,
               isActive: false,
             }),
+            deleteUser: jest.fn().mockResolvedValue({
+              id: 'user-2',
+              deleted: true,
+            }),
           },
         },
       ],
@@ -115,11 +119,7 @@ describe('UsersController', () => {
 
   describe('updateRole', () => {
     it('should delegate role updates with actor id', async () => {
-      const result = await controller.updateRole(
-        'user-2',
-        { role: 'admin' },
-        'admin-1',
-      );
+      const result = await controller.updateRole('user-2', { role: 'admin' }, 'admin-1');
 
       expect(usersService.updateRole).toHaveBeenCalledWith('user-2', 'admin', 'admin-1');
       expect(result.role).toBe('admin');
@@ -128,14 +128,19 @@ describe('UsersController', () => {
 
   describe('updateActive', () => {
     it('should delegate active state updates with actor id', async () => {
-      const result = await controller.updateActive(
-        'user-2',
-        { isActive: false },
-        'admin-1',
-      );
+      const result = await controller.updateActive('user-2', { isActive: false }, 'admin-1');
 
       expect(usersService.updateActive).toHaveBeenCalledWith('user-2', false, 'admin-1');
       expect(result.isActive).toBe(false);
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('should delegate account deletion with actor id', async () => {
+      const result = await controller.deleteUser('user-2', 'admin-1');
+
+      expect(usersService.deleteUser).toHaveBeenCalledWith('user-2', 'admin-1');
+      expect(result).toEqual({ id: 'user-2', deleted: true });
     });
   });
 });

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -61,7 +62,9 @@ export class UsersController {
   }
 
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('avatar', { limits: { fileSize: MAX_AVATAR_UPLOAD_SIZE_BYTES } }))
+  @UseInterceptors(
+    FileInterceptor('avatar', { limits: { fileSize: MAX_AVATAR_UPLOAD_SIZE_BYTES } }),
+  )
   @ApiOperation({ summary: 'Upload current user avatar' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -117,5 +120,12 @@ export class UsersController {
     @CurrentUser('id') actorId: string,
   ) {
     return this.usersService.updateActive(id, dto.isActive, actorId);
+  }
+
+  @Delete(':id')
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Delete a user account' })
+  deleteUser(@Param('id') id: string, @CurrentUser('id') actorId: string) {
+    return this.usersService.deleteUser(id, actorId);
   }
 }

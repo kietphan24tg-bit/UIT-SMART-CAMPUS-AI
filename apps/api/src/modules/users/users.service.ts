@@ -1,10 +1,18 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PAGINATION_DEFAULTS, type ActiveUserRole } from '@smart-campus/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { PAGINATION_DEFAULTS, type ActiveUserRole } from '@smart-campus/shared';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AvatarStorageService, type AvatarUploadFile } from '../storage/avatar-storage.service';
-import { ALLOWED_AVATAR_MIME_TYPES, MAX_AVATAR_UPLOAD_SIZE_BYTES } from '../storage/avatar-upload.constants';
+import {
+  ALLOWED_AVATAR_MIME_TYPES,
+  MAX_AVATAR_UPLOAD_SIZE_BYTES,
+} from '../storage/avatar-upload.constants';
 
 interface CreateUserData {
   email: string;
@@ -25,6 +33,7 @@ const STUDENT_ID_ALREADY_REGISTERED_MESSAGE = 'MSSV đã được đăng ký.';
 const USER_ALREADY_EXISTS_MESSAGE = 'Tài khoản đã tồn tại.';
 const CANNOT_UPDATE_OWN_ROLE_MESSAGE = 'Không thể tự thay đổi vai trò của chính mình.';
 const CANNOT_UPDATE_OWN_ACTIVE_STATE_MESSAGE = 'Không thể tự vô hiệu hóa chính mình.';
+const CANNOT_DELETE_OWN_ACCOUNT_MESSAGE = 'Không thể tự xóa chính tài khoản đang đăng nhập.';
 
 @Injectable()
 export class UsersService {
@@ -94,10 +103,7 @@ export class UsersService {
 
   async findAll(query: FindAllUsersQuery = {}) {
     const page = Math.max(query.page ?? PAGINATION_DEFAULTS.PAGE, PAGINATION_DEFAULTS.PAGE);
-    const limit = Math.min(
-      Math.max(query.limit ?? 25, 1),
-      PAGINATION_DEFAULTS.MAX_LIMIT,
-    );
+    const limit = Math.min(Math.max(query.limit ?? 25, 1), PAGINATION_DEFAULTS.MAX_LIMIT);
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
     const tokens = search?.split(/\s+/).filter(Boolean) ?? [];
@@ -214,6 +220,19 @@ export class UsersService {
 
     await this.prisma.refreshToken.deleteMany({ where: { userId: id } });
     return user;
+  }
+
+  async deleteUser(id: string, actorId?: string) {
+    if (actorId && actorId === id) {
+      throw new BadRequestException(CANNOT_DELETE_OWN_ACCOUNT_MESSAGE);
+    }
+
+    await this.findById(id);
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
+    return { id, deleted: true as const };
   }
 
   private assertValidAvatarFile(file: AvatarUploadFile) {
