@@ -1,8 +1,8 @@
-import { Image } from 'expo-image';
 import { useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -13,7 +13,7 @@ import StartupLogo from '../../assets/brand/startup-logo.png';
 const MIN_LOGO_WIDTH = 220;
 const MAX_LOGO_WIDTH = 360;
 const HORIZONTAL_PADDING = 24;
-const ENTRANCE_DURATION_MS = 1200;
+const ENTRANCE_DURATION_MS = 320;
 const GLOW_CYCLE_DURATION_MS = 1200;
 
 interface StartupLoadingScreenProps {
@@ -22,10 +22,20 @@ interface StartupLoadingScreenProps {
 
 export function StartupLoadingScreen({ onReadyToDisplay }: StartupLoadingScreenProps) {
   const { width, height } = useWindowDimensions();
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.95)).current;
+  const hasSignaledReadyRef = useRef(false);
+  const logoOpacity = useRef(new Animated.Value(0.9)).current;
+  const logoScale = useRef(new Animated.Value(0.98)).current;
   const glowOpacity = useRef(new Animated.Value(0.18)).current;
   const glowScale = useRef(new Animated.Value(0.94)).current;
+
+  const signalReadyToDisplay = () => {
+    if (hasSignaledReadyRef.current) {
+      return;
+    }
+
+    hasSignaledReadyRef.current = true;
+    onReadyToDisplay?.();
+  };
 
   useEffect(() => {
     const entranceAnimation = Animated.parallel([
@@ -96,7 +106,7 @@ export function StartupLoadingScreen({ onReadyToDisplay }: StartupLoadingScreenP
   const glowSize = Math.max(logoWidth * 0.72, 180);
 
   return (
-    <View style={styles.screen} testID="startup-loading-screen" onLayout={onReadyToDisplay}>
+    <View style={styles.screen} testID="startup-loading-screen">
       <View style={styles.stage}>
         <Animated.View
           pointerEvents="none"
@@ -136,7 +146,10 @@ export function StartupLoadingScreen({ onReadyToDisplay }: StartupLoadingScreenP
         >
           <Image
             accessibilityLabel="UIT startup logo"
-            contentFit="contain"
+            fadeDuration={0}
+            onError={signalReadyToDisplay}
+            onLoadEnd={signalReadyToDisplay}
+            resizeMode="contain"
             source={StartupLogo}
             style={styles.logo}
             testID="startup-loading-logo"

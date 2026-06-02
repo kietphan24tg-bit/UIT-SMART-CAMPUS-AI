@@ -15,6 +15,10 @@ import type {
   ListStudyMaterialsQueryDto,
   UpdateStudyMaterialDto,
 } from './dto/study-materials.dto';
+import {
+  decodeStudyMaterialFileName,
+  normalizeStudyMaterialFileName,
+} from './study-material-file-name';
 
 function normalizePaging(page?: number, limit?: number) {
   const safePage = Number.isInteger(page) && page && page > 0 ? page : 1;
@@ -106,6 +110,10 @@ export class StudyMaterialsService {
     }
 
     const uploaded = await this.storageService.uploadStudyMaterialFile(actorId, file);
+    const normalizedFileName = normalizeStudyMaterialFileName(
+      file.originalname,
+      `study-material-${Date.now()}`,
+    );
     const created = await this.prisma.studyMaterial.create({
       data: {
         category: dto.category,
@@ -113,7 +121,7 @@ export class StudyMaterialsService {
         description: toOptionalTrimmedString(dto.description),
         fileUrl: uploaded.fileUrl,
         storageKey: uploaded.key,
-        fileName: file.originalname?.trim() || `study-material-${Date.now()}`,
+        fileName: normalizedFileName,
         mimeType: file.mimetype,
         fileSizeBytes: file.size,
         uploaderId: actorId,
@@ -151,6 +159,9 @@ export class StudyMaterialsService {
     const uploaded = file
       ? await this.storageService.uploadStudyMaterialFile(existing.uploaderId, file)
       : null;
+    const normalizedFileName = file
+      ? normalizeStudyMaterialFileName(file.originalname, existing.fileName)
+      : existing.fileName;
 
     const updated = await this.prisma.studyMaterial.update({
       where: { id: materialId },
@@ -164,7 +175,7 @@ export class StudyMaterialsService {
           ? {
               fileUrl: uploaded.fileUrl,
               storageKey: uploaded.key,
-              fileName: file?.originalname?.trim() || existing.fileName,
+              fileName: normalizedFileName,
               mimeType: file?.mimetype ?? existing.mimeType,
               fileSizeBytes: file?.size ?? existing.fileSizeBytes,
             }
@@ -255,7 +266,7 @@ export class StudyMaterialsService {
       category: material.category,
       fileUrl: material.fileUrl,
       storageKey: material.storageKey,
-      fileName: material.fileName,
+      fileName: decodeStudyMaterialFileName(material.fileName),
       mimeType: material.mimeType,
       fileSizeBytes: material.fileSizeBytes,
       uploaderId: material.uploaderId,

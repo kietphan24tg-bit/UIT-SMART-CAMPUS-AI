@@ -64,7 +64,7 @@ const materialsResponse = {
       category: 'exam',
       fileUrl: 'https://cdn.example.com/material-owner.jpg',
       storageKey: 'study-materials/student-1/material-owner.jpg',
-      fileName: 'de-thi-giai-tich.jpg',
+      fileName: 'de-thi%20giai%20tich.jpg',
       mimeType: 'image/jpeg',
       fileSizeBytes: 2048,
       uploaderId: 'student-1',
@@ -120,7 +120,7 @@ describe('StudyMaterialsRoute', () => {
   });
 
   it('renders uploader info, owner actions, downloads files, and prefetches only image materials', async () => {
-    const { getByText, queryAllByText } = renderWithClient(<StudyMaterialsRoute />);
+    const { getByText, queryAllByText, queryByText } = renderWithClient(<StudyMaterialsRoute />);
 
     await waitFor(() => expect(getByText('Đề thi giải tích')).toBeTruthy());
 
@@ -140,6 +140,8 @@ describe('StudyMaterialsRoute', () => {
     expect(otherFilterLabel).toBeTruthy();
     expect(textbookFilterLabel?.props.adjustsFontSizeToFit).toBe(true);
     expect(otherFilterLabel?.props.adjustsFontSizeToFit).toBe(true);
+    expect(queryByText('de-thi%20giai%20tich.jpg')).toBeNull();
+    expect(queryByText('de-thi giai tich.jpg')).toBeNull();
     expect(getByText(/Đăng bởi Nguyen Van A/)).toBeTruthy();
     expect(getByText(/Đăng bởi Tran Thi B/)).toBeTruthy();
     expect(queryAllByText('Tải file')).toHaveLength(2);
@@ -149,13 +151,13 @@ describe('StudyMaterialsRoute', () => {
     fireEvent.press(queryAllByText('Tải file')[0]);
 
     await waitFor(() =>
-      expect(mockDownloadRemoteFileToDevice).toHaveBeenCalledWith(
-        expect.objectContaining({
-          url: 'https://cdn.example.com/material-owner.jpg',
-          fileName: 'de-thi-giai-tich.jpg',
-          mimeType: 'image/jpeg',
-        }),
-      ),
+        expect(mockDownloadRemoteFileToDevice).toHaveBeenCalledWith(
+          expect.objectContaining({
+            url: 'https://cdn.example.com/material-owner.jpg',
+            fileName: 'de-thi giai tich.jpg',
+            mimeType: 'image/jpeg',
+          }),
+        ),
     );
 
     await waitFor(() => {

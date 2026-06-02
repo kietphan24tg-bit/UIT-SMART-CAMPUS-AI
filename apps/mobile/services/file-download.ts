@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
+import { decodeDisplayFileName } from '@/utils/file-name';
+
 const DOWNLOAD_DIRECTORY_STORAGE_KEY = 'study_materials_download_directory_uri';
 const DEFAULT_DOWNLOAD_FILE_NAME = 'tai-lieu';
 
@@ -26,7 +28,7 @@ export type DownloadRemoteFileResult = {
 };
 
 function sanitizeFileName(fileName?: string | null) {
-  const candidate = (fileName ?? DEFAULT_DOWNLOAD_FILE_NAME).trim();
+  const candidate = decodeDisplayFileName(fileName) || DEFAULT_DOWNLOAD_FILE_NAME;
   const normalized = candidate
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
     .replace(/\s+/g, ' ')

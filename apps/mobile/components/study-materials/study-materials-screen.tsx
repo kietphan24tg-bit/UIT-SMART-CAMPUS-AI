@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
@@ -31,19 +31,20 @@ import {
   TopHero,
 } from '@/components/ui';
 import {
-  downloadRemoteFileToDevice,
-  type DeviceDownloadProgress,
-} from '@/services/file-download';
-import { prefetchImageUrls } from '@/services/image-cache';
-import {
   studyMaterialsApi,
   type StudyMaterialCategory,
   type StudyMaterialListResponse,
   type StudyMaterialRecord,
 } from '@/services/api/study-materials';
+import {
+  downloadRemoteFileToDevice,
+  type DeviceDownloadProgress,
+} from '@/services/file-download';
+import { prefetchImageUrls } from '@/services/image-cache';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { isAdminRole } from '@/utils/app';
+import { decodeDisplayFileName } from '@/utils/file-name';
 
 type StudyMaterialsScreenMode = 'user' | 'admin';
 type StudyMaterialFilter = 'all' | StudyMaterialCategory;
@@ -169,7 +170,7 @@ function matchesFilter(
     !normalizedKeyword ||
     material.title.toLowerCase().includes(normalizedKeyword) ||
     (material.description ?? '').toLowerCase().includes(normalizedKeyword) ||
-    material.fileName.toLowerCase().includes(normalizedKeyword) ||
+    decodeDisplayFileName(material.fileName).toLowerCase().includes(normalizedKeyword) ||
     material.uploader.fullName.toLowerCase().includes(normalizedKeyword);
   const matchesCategory = filter === 'all' || material.category === filter;
   return matchesKeyword && matchesCategory;
@@ -200,7 +201,6 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
   const theme = useAppTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const userId = useAuthStore((state) => state.user?.id ?? null);
   const role = useAuthStore((state) => state.user?.role);
   const [keyword, setKeyword] = useState('');
   const deferredKeyword = useDeferredValue(keyword.trim());
@@ -384,7 +384,7 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
         ...current,
         selectedFile: {
           uri: asset.uri,
-          fileName: asset.name,
+          fileName: decodeDisplayFileName(asset.name) || asset.name,
           mimeType,
           fileSizeBytes: asset.size ?? null,
         },
@@ -422,7 +422,7 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
 
       const result = await downloadRemoteFileToDevice({
         url: material.fileUrl,
-        fileName: material.fileName,
+        fileName: decodeDisplayFileName(material.fileName) || material.fileName,
         mimeType: material.mimeType,
         onProgress: (progress) => {
           setDownloadState({
@@ -723,14 +723,6 @@ function MaterialCard({
           <Text
             style={[
               styles.materialMeta,
-              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
-            ]}
-          >
-            {material.fileName}
-          </Text>
-          <Text
-            style={[
-              styles.materialMeta,
               { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
             ]}
           >
@@ -927,7 +919,7 @@ function MaterialEditorModal({
                       { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
                     ]}
                   >
-                    File hiện tại: {editingMaterial.fileName}
+                    File hiện tại: {decodeDisplayFileName(editingMaterial.fileName)}
                   </Text>
                 ) : null}
               </View>

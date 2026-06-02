@@ -14,7 +14,7 @@ const config = {
   userInterfaceStyle: 'automatic',
   newArchEnabled: false,
   splash: {
-    image: './assets/brand/splash-blank.png',
+    image: './assets/brand/startup-logo.png',
     resizeMode: 'contain',
     backgroundColor: '#FFFFFF',
   },
