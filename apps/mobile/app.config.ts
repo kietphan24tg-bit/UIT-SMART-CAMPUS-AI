@@ -7,7 +7,7 @@ const config = {
   name: 'UIT Smart Campus',
   slug: 'smart-campus',
   owner: 'uit-smart-campus',
-  version: '2.0.8',
+  version: '3.0.1',
   orientation: 'portrait',
   icon: './assets/brand/icon.png',
   scheme: 'smartcampus',
@@ -21,7 +21,7 @@ const config = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'vn.edu.uit.smartcampus',
-    buildNumber: '208',
+    buildNumber: '301',
   },
   android: {
     adaptiveIcon: {
@@ -29,7 +29,7 @@ const config = {
       backgroundColor: '#FFFFFF',
     },
     package: 'vn.edu.uit.smartcampus.app',
-    versionCode: 208,
+    versionCode: 301,
     softwareKeyboardLayoutMode: 'resize',
     usesCleartextTraffic: true,
   },
