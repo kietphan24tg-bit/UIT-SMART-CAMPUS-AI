@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { USER_ROLES } from '@smart-campus/shared';
 import type { Role } from '@prisma/client';
@@ -8,7 +8,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
-import { QueryChatbotDto, UpsertKnowledgeDocumentDto } from './dto/chatbot.dto';
+import {
+  GetChatbotSummaryDto,
+  QueryChatbotDto,
+  UpsertKnowledgeDocumentDto,
+} from './dto/chatbot.dto';
 import { ChatbotService } from './chatbot.service';
 
 @ApiTags('Chatbot')
@@ -19,7 +23,7 @@ export class ChatbotController {
   constructor(private readonly chatbotService: ChatbotService) {}
 
   @Post('query')
-  @ApiOperation({ summary: 'Query internal chatbot (RAG + app data)' })
+  @ApiOperation({ summary: 'Query internal chatbot (orchestrated live data + knowledge)' })
   query(
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: Role,
@@ -40,10 +44,33 @@ export class ChatbotController {
     return this.chatbotService.getMessages(userId, sessionId);
   }
 
+  @Get('summary')
+  @ApiOperation({ summary: 'Get role-aware chatbot summary without creating a chat turn' })
+  summary(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: Role,
+    @Query() query: GetChatbotSummaryDto,
+  ) {
+    return this.chatbotService.getSummary(userId, role, query.scope ?? 'today');
+  }
+
+  @Get('capabilities')
+  @ApiOperation({ summary: 'Get chatbot capabilities and quick prompts for current role' })
+  capabilities(@CurrentUser('role') role: Role) {
+    return this.chatbotService.getCapabilities(role);
+  }
+
   @Post('knowledge')
   @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
   @ApiOperation({ summary: 'Upsert knowledge document for internal retrieval' })
   upsertKnowledge(@Body() dto: UpsertKnowledgeDocumentDto) {
     return this.chatbotService.upsertKnowledgeDocument(dto);
+  }
+
+  @Post('knowledge/sync')
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Sync built-in knowledge documents from chatbot domains' })
+  syncKnowledge() {
+    return this.chatbotService.syncKnowledgeDocuments();
   }
 }

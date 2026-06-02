@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -14,8 +14,16 @@ import {
   View,
 } from 'react-native';
 
-import { Screen, TopHero } from '@/components/ui';
-import { chatbotApi } from '@/services/api/chatbot';
+import { Screen, SectionCard, TopHero } from '@/components/ui';
+import {
+  buildChatbotActionsFromDeepLinks,
+  chatbotApi,
+  type ChatbotAction,
+  type ChatbotAnswerResponse,
+  type ChatbotCapabilityScope,
+  type ChatbotCitation,
+} from '@/services/api/chatbot';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 
 // ---------------------------------------------------------------------------
@@ -27,7 +35,10 @@ interface DisplayMessage {
   content: string;
   intent?: string | null;
   confidence?: number | null;
-  deepLinks?: string[];
+  domain?: string;
+  answerType?: string;
+  actions?: ChatbotAction[];
+  citations?: ChatbotCitation[];
   suggestedQuestions?: string[];
   createdAt: string;
 }
@@ -44,30 +55,68 @@ const INITIAL_SUGGESTIONS = [
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-function normalizeDeepLinks(value: unknown) {
+function getDefaultSummaryScope(role?: string | null): 'today' | 'work' | 'ops' {
+  if (role === 'admin' || role === 'super_admin' || role === 'canteen_admin') {
+    return 'ops';
+  }
+  return 'today';
+}
+
+function normalizeActions(
+  actions: ChatbotAction[] | undefined,
+  deepLinks: string[] | unknown,
+): ChatbotAction[] | undefined {
+  const normalized = actions?.filter((item) => item?.route && item?.label) ?? [];
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  const legacy = buildChatbotActionsFromDeepLinks(deepLinks);
+  return legacy.length > 0 ? legacy : undefined;
+}
+
+function normalizeCitations(value: ChatbotCitation[] | unknown) {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
-  const links = value.filter(
-    (item): item is string => typeof item === 'string' && item.length > 0,
+  const citations = value.filter(
+    (item): item is ChatbotCitation =>
+      typeof item === 'object' &&
+      item != null &&
+      'label' in item &&
+      typeof item.label === 'string',
   );
-  return links.length > 0 ? links : undefined;
+  return citations.length > 0 ? citations : undefined;
 }
 
 export default function ChatbotScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
 
   const [message, setMessage] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [summaryScope, setSummaryScope] = useState<'today' | 'work' | 'ops'>(
+    getDefaultSummaryScope(role),
+  );
 
   const listRef = useRef<FlatList<DisplayMessage>>(null);
 
   const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
+
+  const capabilitiesQuery = useQuery({
+    queryKey: ['chatbot-capabilities'],
+    queryFn: chatbotApi.getCapabilities,
+  });
+
+  const summaryQuery = useQuery({
+    queryKey: ['chatbot-summary', summaryScope],
+    queryFn: () => chatbotApi.getSummary(summaryScope),
+  });
 
   const queryMutation = useMutation({
     mutationFn: (text: string) =>
@@ -86,7 +135,10 @@ export default function ChatbotScreen() {
         content: response.answer,
         intent: response.intent,
         confidence: response.confidence,
-        deepLinks: normalizeDeepLinks(response.deepLinks),
+        domain: response.domain,
+        answerType: response.answerType,
+        actions: normalizeActions(response.actions, response.deepLinks),
+        citations: normalizeCitations(response.citations),
         suggestedQuestions: response.suggestedQuestions,
         createdAt: now,
       };
@@ -112,15 +164,95 @@ export default function ChatbotScreen() {
     setMessage('');
   }, []);
 
+  const summaryScopes =
+    capabilitiesQuery.data?.summaryScopes ??
+    ([] as ChatbotCapabilityScope[]);
+  const summaryAnswer = summaryQuery.data;
+  const summaryActions = normalizeActions(summaryAnswer?.actions, summaryAnswer?.deepLinks);
+  const summaryCitations = normalizeCitations(summaryAnswer?.citations);
+  const quickPrompts = capabilitiesQuery.data?.quickPrompts ?? INITIAL_SUGGESTIONS;
   const lastSuggestions =
     messages.length === 0
-      ? INITIAL_SUGGESTIONS
+      ? quickPrompts
       : (messages.findLast((m) => m.role === 'assistant')?.suggestedQuestions ?? []);
   const hasSuggestions = lastSuggestions.length > 0 && !queryMutation.isPending;
 
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
+  const renderActionChips = useCallback(
+    (actions: ChatbotAction[] | undefined) => {
+      if (!actions?.length) {
+        return null;
+      }
+
+      return (
+        <View style={styles.linkRow}>
+          {actions.map((action) => (
+            <Pressable
+              key={`${action.route}-${action.label}`}
+              onPress={() => router.push(action.route as never)}
+              style={({ pressed }) => [
+                styles.linkChip,
+                { borderColor: theme.colors.primary, opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Ionicons
+                name="arrow-forward-circle-outline"
+                size={12}
+                color={theme.colors.primary}
+              />
+              <Text
+                style={[
+                  styles.linkText,
+                  { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                ]}
+              >
+                {action.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      );
+    },
+    [router, theme],
+  );
+
+  const renderCitationChips = useCallback(
+    (citations: ChatbotCitation[] | undefined) => {
+      if (!citations?.length) {
+        return null;
+      }
+
+      return (
+        <View style={styles.citationRow}>
+          {citations.slice(0, 4).map((citation) => (
+            <View
+              key={`${citation.type}-${citation.sourceId}-${citation.label}`}
+              style={[
+                styles.citationChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.citationText,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                ]}
+              >
+                {citation.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    },
+    [theme],
+  );
+
   const renderMessage = useCallback(
     ({ item }: { item: DisplayMessage }) => {
       const isUser = item.role === 'user';
@@ -155,34 +287,8 @@ export default function ChatbotScreen() {
               {item.content}
             </Text>
 
-            {!isUser && item.deepLinks && item.deepLinks.length > 0 && (
-                <View style={styles.linkRow}>
-                  {item.deepLinks.map((link) => (
-                    <Pressable
-                      key={link}
-                      onPress={() => router.push(link as never)}
-                      style={({ pressed }) => [
-                        styles.linkChip,
-                        { borderColor: theme.colors.primary, opacity: pressed ? 0.75 : 1 },
-                      ]}
-                    >
-                      <Ionicons
-                        name="arrow-forward-circle-outline"
-                        size={12}
-                        color={theme.colors.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.linkText,
-                          { color: theme.colors.primary, fontFamily: theme.fonts.medium },
-                        ]}
-                      >
-                        {link}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+            {!isUser && renderActionChips(item.actions)}
+            {!isUser && renderCitationChips(item.citations)}
 
             {!isUser && item.confidence != null && (
               <Text
@@ -198,8 +304,121 @@ export default function ChatbotScreen() {
         </View>
       );
     },
-    [theme, router],
+    [theme, renderActionChips, renderCitationChips],
   );
+
+  const renderSummaryPanel = useCallback(() => {
+    return (
+      <View style={styles.headerStack}>
+        <SectionCard
+          title="Tóm tắt nhanh"
+          subtitle="Lấy snapshot theo role trước khi bạn bắt đầu đặt câu hỏi."
+        >
+          <View style={styles.scopeRow}>
+            {summaryScopes.map((item) => (
+              <Pressable
+                key={item.scope}
+                onPress={() => setSummaryScope(item.scope)}
+                style={({ pressed }) => [
+                  styles.scopeChip,
+                  {
+                    borderColor:
+                      summaryScope === item.scope ? theme.colors.primary : theme.colors.border,
+                    backgroundColor:
+                      summaryScope === item.scope
+                        ? theme.colors.primarySurface
+                        : theme.colors.surface,
+                    opacity: pressed ? 0.78 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.scopeText,
+                    {
+                      color:
+                        summaryScope === item.scope ? theme.colors.primary : theme.colors.text,
+                      fontFamily: theme.fonts.medium,
+                    },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {summaryQuery.isLoading ? (
+            <Text
+              style={[
+                styles.summaryBody,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
+              Đang chuẩn bị tóm tắt cho bạn...
+            </Text>
+          ) : (
+            <>
+              <Text
+                style={[
+                  styles.summaryBody,
+                  { color: theme.colors.text, fontFamily: theme.fonts.regular },
+                ]}
+              >
+                {summaryAnswer?.answer ??
+                  'Bạn có thể chọn một scope ở trên để lấy tóm tắt nhanh.'}
+              </Text>
+              {renderActionChips(summaryActions)}
+              {renderCitationChips(summaryCitations)}
+            </>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Gợi ý nhanh"
+          subtitle="Các prompt ngắn theo role để bạn bắt đầu nhanh hơn."
+        >
+          <View style={styles.quickPromptRow}>
+            {quickPrompts.slice(0, 6).map((prompt) => (
+              <Pressable
+                key={prompt}
+                onPress={() => send(prompt)}
+                style={({ pressed }) => [
+                  styles.quickPromptChip,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                    opacity: pressed ? 0.78 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quickPromptText,
+                    { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                  ]}
+                >
+                  {prompt}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </SectionCard>
+      </View>
+    );
+  }, [
+    quickPrompts,
+    renderActionChips,
+    renderCitationChips,
+    send,
+    summaryActions,
+    summaryAnswer?.answer,
+    summaryCitations,
+    summaryQuery.isLoading,
+    summaryScope,
+    summaryScopes,
+    theme,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Layout
@@ -229,6 +448,7 @@ export default function ChatbotScreen() {
           contentContainerStyle={styles.messageList}
           onContentSizeChange={scrollToEnd}
           keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={renderSummaryPanel}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.textMuted} />
@@ -373,6 +593,10 @@ const styles = StyleSheet.create({
     gap: 10,
     flexGrow: 1,
   },
+  headerStack: {
+    gap: 12,
+    marginBottom: 12,
+  },
   bubbleRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -422,15 +646,61 @@ const styles = StyleSheet.create({
   linkText: {
     fontSize: 11,
   },
+  citationRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  citationChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  citationText: {
+    fontSize: 10,
+  },
   metaText: {
     fontSize: 10,
     lineHeight: 14,
+  },
+  scopeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  scopeChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  scopeText: {
+    fontSize: 12,
+  },
+  summaryBody: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  quickPromptRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickPromptChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  quickPromptText: {
+    fontSize: 12,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    paddingTop: 24,
     paddingHorizontal: 32,
     gap: 10,
   },

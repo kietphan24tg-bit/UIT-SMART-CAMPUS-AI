@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class QueryChatbotDto {
   @ApiProperty()
@@ -34,4 +34,15 @@ export class UpsertKnowledgeDocumentDto {
   @ApiProperty()
   @IsString()
   contentText!: string;
+}
+
+export class GetChatbotSummaryDto {
+  @ApiPropertyOptional({
+    enum: ['today', 'work', 'ops'],
+    default: 'today',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['today', 'work', 'ops'])
+  scope?: 'today' | 'work' | 'ops';
 }
