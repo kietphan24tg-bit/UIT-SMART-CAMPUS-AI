@@ -49,7 +49,7 @@ const PARTIAL_ERROR_MESSAGE_MAP: Array<[string, string]> = [
   ['request failed with status 403', 'Bạn không có quyền thực hiện thao tác này.'],
   ['request failed with status 404', 'Không tìm thấy dữ liệu yêu cầu.'],
   ['request failed with status 409', 'Dữ liệu bị xung đột. Vui lòng tải lại và thử lại.'],
-  ['request failed with status 413', 'Tệp tải lên quá lớn. Vui lòng chọn tệp nhỏ hơn.'],
+  ['request failed with status 413', 'Tệp tải lên vượt quá 100 MB. Vui lòng chọn tệp nhỏ hơn.'],
   ['request failed with status 422', 'Dữ liệu nhập vào chưa hợp lệ. Vui lòng kiểm tra lại.'],
   ['request failed with status 429', 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.'],
   ['request failed with status 500', 'Hệ thống đang bận. Vui lòng thử lại sau.'],
@@ -59,7 +59,8 @@ const PARTIAL_ERROR_MESSAGE_MAP: Array<[string, string]> = [
   ['only jpeg', 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.'],
   ['only jpg', 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.'],
   ['5 mb or smaller', 'Ảnh tải lên phải nhỏ hơn 5 MB.'],
-  ['file too large', 'Tệp tải lên quá lớn. Vui lòng chọn tệp nhỏ hơn.'],
+  ['file too large', 'Tệp tải lên vượt quá 100 MB. Vui lòng chọn tệp nhỏ hơn.'],
+  ['100 mb or smaller', 'Tệp tải lên phải nhỏ hơn hoặc bằng 100 MB.'],
 ];
 
 export function extractErrorMessage(error: unknown) {

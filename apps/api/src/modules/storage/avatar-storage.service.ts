@@ -200,7 +200,7 @@ export class AvatarStorageService {
     }
 
     if (file.size > MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES) {
-      throw new BadRequestException('Study material file must be 20 MB or smaller');
+      throw new BadRequestException('Study material file must be 100 MB or smaller');
     }
 
     if (!ALLOWED_STUDY_MATERIAL_MIME_TYPES.has(file.mimetype)) {

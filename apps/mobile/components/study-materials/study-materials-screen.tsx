@@ -78,6 +78,7 @@ const DOCUMENT_TYPES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
+const MAX_STUDY_MATERIAL_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
 const MULTILINE_INPUT_STYLE = {
   minHeight: 96,
@@ -371,6 +372,11 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
       const mimeType = resolveMaterialMimeType(asset.mimeType, asset.name);
       if (!mimeType) {
         Alert.alert('Tài liệu', 'Định dạng file chưa được hỗ trợ.');
+        return;
+      }
+
+      if ((asset.size ?? 0) > MAX_STUDY_MATERIAL_FILE_SIZE_BYTES) {
+        Alert.alert('Tài liệu', 'Tệp tải lên vượt quá 100 MB. Vui lòng chọn tệp nhỏ hơn.');
         return;
       }
 
@@ -891,7 +897,7 @@ function MaterialEditorModal({
                     { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
                   ]}
                 >
-                  Hỗ trợ JPG, PNG, WebP, PDF, DOC, DOCX
+                  Hỗ trợ JPG, PNG, WebP, PDF, DOC, DOCX · tối đa 100 MB
                 </Text>
                 <PrimaryButton
                   label={
