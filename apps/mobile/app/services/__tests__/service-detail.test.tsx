@@ -67,7 +67,7 @@ describe('ServiceDetailScreen - admin tools', () => {
     });
   });
 
-  it('renders canteen, study materials, and library actions', () => {
+  it('renders clickable support rows and opens the admin tool destinations', () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -77,23 +77,43 @@ describe('ServiceDetailScreen - admin tools', () => {
       },
     });
 
-    const { getByText } = render(
+    const { getByLabelText, getByText, queryByText } = render(
       <QueryClientProvider client={queryClient}>
         <ServiceDetailScreen />
       </QueryClientProvider>,
     );
 
+    expect(
+      getByText(
+        'Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus, phê duyệt đặt phòng, canteen, thư viện và tài liệu.',
+      ),
+    ).toBeTruthy();
     expect(getByText('Canteen')).toBeTruthy();
     expect(getByText('Thư viện')).toBeTruthy();
     expect(getByText('Tài liệu')).toBeTruthy();
+    expect(getByText('Vận hành campus')).toBeTruthy();
+    expect(getByText('Đặt phòng')).toBeTruthy();
 
-    fireEvent.press(getByText('Mở quản trị canteen'));
+    fireEvent.press(getByLabelText('Canteen'));
     expect(mockRouter.push).toHaveBeenCalledWith('/services/canteen/admin');
 
-    fireEvent.press(getByText('Mở quản trị tài liệu'));
+    fireEvent.press(getByLabelText('Tài liệu'));
     expect(mockRouter.push).toHaveBeenCalledWith('/services/study-materials/admin');
 
-    fireEvent.press(getByText('Mở thư viện'));
-    expect(mockRouter.push).toHaveBeenCalledWith('/services/library');
+    fireEvent.press(getByLabelText('Thư viện'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/library/admin');
+
+    fireEvent.press(getByLabelText('Vận hành campus'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/admin-tools/campus-operations');
+
+    fireEvent.press(getByLabelText('Đặt phòng'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/room-booking/approvals');
+
+    expect(queryByText('Mở quản trị canteen')).toBeNull();
+    expect(queryByText('Mở queue phê duyệt đặt phòng')).toBeNull();
+    expect(queryByText('Mở quản trị tài liệu')).toBeNull();
+    expect(queryByText('Mở thư viện')).toBeNull();
+    expect(queryByText('Mở vận hành campus')).toBeNull();
+    expect(queryByText('Parking, telemetry, fire alert')).toBeNull();
   });
 });

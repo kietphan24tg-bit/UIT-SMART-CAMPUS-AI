@@ -115,6 +115,22 @@ describe('StudyMaterialsRoute', () => {
 
     await waitFor(() => expect(getByText('Đề thi giải tích')).toBeTruthy());
 
+    const examFilterLabel = queryAllByText('Đề thi').find(
+      (node) => node.props.adjustsFontSizeToFit === true,
+    );
+    const textbookFilterLabel = queryAllByText('Giáo trình').find(
+      (node) => node.props.adjustsFontSizeToFit === true,
+    );
+    const otherFilterLabel = queryAllByText('Khác').find(
+      (node) => node.props.adjustsFontSizeToFit === true,
+    );
+
+    expect(getByText('Tất cả')).toBeTruthy();
+    expect(examFilterLabel).toBeTruthy();
+    expect(textbookFilterLabel).toBeTruthy();
+    expect(otherFilterLabel).toBeTruthy();
+    expect(textbookFilterLabel?.props.adjustsFontSizeToFit).toBe(true);
+    expect(otherFilterLabel?.props.adjustsFontSizeToFit).toBe(true);
     expect(getByText(/Đăng bởi Nguyen Van A/)).toBeTruthy();
     expect(getByText(/Đăng bởi Tran Thi B/)).toBeTruthy();
     expect(queryAllByText('Sửa')).toHaveLength(1);

@@ -126,48 +126,11 @@ describe('ChatbotScreen', () => {
     expect(await findByText('Canteen mở cửa giờ nào?')).toBeTruthy();
   });
 
-  it('shows summary scopes and loads default summary on mount', async () => {
-    const { getByText, getAllByText } = renderWithClient(<ChatbotScreen />);
+  it('does not render quick summary and skips summary requests on mount', async () => {
+    const { queryByText, findAllByText } = renderWithClient(<ChatbotScreen />);
 
-    await waitFor(() => expect(getAllByText('Hôm nay của tôi').length).toBeGreaterThan(0));
-    await waitFor(() =>
-      expect(getByText('Tóm tắt hôm nay: bạn có 2 tiết và 1 thông báo chưa đọc.')).toBeTruthy(),
-    );
-  });
-
-  it('switches summary scope and requests a new summary', async () => {
-    mockChatbotApi.getSummary
-      .mockResolvedValueOnce({
-        answer: 'Tóm tắt hôm nay: bạn có 2 tiết và 1 thông báo chưa đọc.',
-        citations: [],
-        deepLinks: [],
-        actions: [],
-        suggestedQuestions: [],
-        confidence: 0.92,
-        intent: 'summary_today',
-        domain: 'general',
-        answerType: 'summary',
-      })
-      .mockResolvedValueOnce({
-        answer: 'Học vụ của bạn đang có GPA 3.4 và 5 tài liệu mới.',
-        citations: [],
-        deepLinks: ['/services/grades'],
-        actions: [{ label: 'Mở điểm', route: '/services/grades', kind: 'navigate' }],
-        suggestedQuestions: [],
-        confidence: 0.9,
-        intent: 'summary_work',
-        domain: 'general',
-        answerType: 'summary',
-      });
-
-    const { findByText, getByText } = renderWithClient(<ChatbotScreen />);
-    fireEvent.press(await findByText('Học vụ của tôi'));
-
-    await waitFor(() => {
-      expect(mockChatbotApi.getSummary).toHaveBeenLastCalledWith('work');
-    });
-    await waitFor(() =>
-      expect(getByText('Học vụ của bạn đang có GPA 3.4 và 5 tài liệu mới.')).toBeTruthy(),
-    );
+    expect(queryByText('Tóm tắt nhanh')).toBeNull();
+    expect(mockChatbotApi.getSummary).not.toHaveBeenCalled();
+    expect((await findAllByText('Hôm nay của tôi')).length).toBeGreaterThan(0);
   });
 });

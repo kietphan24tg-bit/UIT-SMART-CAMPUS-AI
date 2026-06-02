@@ -456,13 +456,13 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
           <View style={styles.formColumn}>
             <FormField
               label="Tìm kiếm"
-              placeholder="Nhập tiêu đề, mô tả hoặc người đăng"
+              placeholder="Nhập từ khóa hoặc người đăng"
               value={keyword}
               onChangeText={setKeyword}
               leftIcon="search"
             />
 
-            <View style={styles.filterWrap}>
+            <View style={styles.compactFilterWrap}>
               {FILTER_OPTIONS.map((option) => {
                 const active = filter === option.value;
                 return (
@@ -472,6 +472,7 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
                     onPress={() => setFilter(option.value)}
                     style={[
                       styles.filterChip,
+                      styles.compactFilterChip,
                       {
                         backgroundColor: active
                           ? theme.colors.primarySurface
@@ -483,11 +484,15 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
                     <Text
                       style={[
                         styles.filterChipText,
+                        styles.compactFilterChipText,
                         {
                           color: active ? theme.colors.primary : theme.colors.textMuted,
                           fontFamily: active ? theme.fonts.semibold : theme.fonts.medium,
                         },
                       ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.84}
                     >
                       {option.label}
                     </Text>
@@ -882,6 +887,24 @@ const styles = StyleSheet.create({
   actionTextButton: {
     paddingVertical: 4,
     paddingRight: 8,
+  },
+  compactFilterChip: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    minHeight: 44,
+  },
+  compactFilterChipText: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  compactFilterWrap: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 6,
   },
   filePickerCard: {
     borderWidth: 1,

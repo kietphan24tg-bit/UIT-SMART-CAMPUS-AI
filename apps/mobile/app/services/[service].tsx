@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { USER_ROLES } from '@smart-campus/shared';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   ContentStack,
@@ -251,34 +251,37 @@ export default function ServiceDetailScreen() {
               style={[styles.body, { color: theme.colors.text, fontFamily: theme.fonts.regular }]}
             >
               Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus, phê
-              duyệt đặt phòng, canteen và thư viện.
+              duyệt đặt phòng, canteen, thư viện và tài liệu.
             </Text>
           </SectionCard>
 
-          <SectionCard title="Khu vực đang hỗ trợ" subtitle="Chỉ hiển thị lối vào có dữ liệu thật.">
+          <SectionCard
+            title="Khu vực đang hỗ trợ"
+            subtitle="Chạm vào từng mục để mở khu vực tương ứng."
+          >
             <View style={styles.column}>
-              <InfoRow label="Vận hành campus" value="Parking, telemetry, fire alert" />
-              <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
-              <InfoRow label="Canteen" value="Quản lý menu, đơn hàng và trạng thái phục vụ" />
-              <InfoRow label="Thư viện" value="Tra cứu sách, giữ chỗ và theo dõi mượn trả" />
-              <InfoRow label="Tài liệu" value="Quản trị kho tài liệu học tập và quyền chỉnh sửa" />
+              <SupportActionRow
+                label="Vận hành campus"
+                onPress={() => router.push('/services/admin-tools/campus-operations')}
+              />
+              <SupportActionRow
+                label="Đặt phòng"
+                onPress={() => router.push('/services/room-booking/approvals')}
+              />
+              <SupportActionRow
+                label="Canteen"
+                onPress={() => router.push('/services/canteen/admin')}
+              />
+              <SupportActionRow
+                label="Thư viện"
+                onPress={() => router.push('/services/library/admin')}
+              />
+              <SupportActionRow
+                label="Tài liệu"
+                onPress={() => router.push('/services/study-materials/admin')}
+              />
             </View>
           </SectionCard>
-
-          <PrimaryButton
-            label="Mở quản trị canteen"
-            onPress={() => router.push('/services/canteen/admin')}
-          />
-          <SecondaryButton
-            label="Mở queue phê duyệt đặt phòng"
-            onPress={() => router.push('/services/room-booking/approvals')}
-          />
-          <SecondaryButton
-            label="Mở quản trị tài liệu"
-            onPress={() => router.push('/services/study-materials/admin')}
-          />
-          <SecondaryButton label="Mở thư viện" onPress={() => router.push('/services/library')} />
-          <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />
         </ContentStack>
       </Screen>
     );
@@ -444,6 +447,43 @@ function GradesPanel({
   );
 }
 
+function SupportActionRow({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.supportActionRow,
+        {
+          backgroundColor: pressed ? theme.colors.primarySurface : theme.colors.surfaceSubtle,
+          borderColor: pressed ? theme.colors.primaryMuted : theme.colors.border,
+        },
+      ]}
+    >
+      <View style={styles.supportActionMain}>
+        <Text
+          style={[
+            styles.supportActionLabel,
+            { color: theme.colors.text, fontFamily: theme.fonts.medium },
+          ]}
+        >
+          {label}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   body: {
     fontSize: 14,
@@ -511,6 +551,24 @@ const styles = StyleSheet.create({
   mapGuideValue: {
     fontSize: 16,
     lineHeight: 22,
+  },
+  supportActionLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  supportActionRow: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  supportActionMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   semesterBlock: {
     gap: 12,

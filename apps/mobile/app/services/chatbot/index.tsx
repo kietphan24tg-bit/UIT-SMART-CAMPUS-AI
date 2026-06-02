@@ -19,8 +19,6 @@ import {
   buildChatbotActionsFromDeepLinks,
   chatbotApi,
   type ChatbotAction,
-  type ChatbotAnswerResponse,
-  type ChatbotCapabilityScope,
   type ChatbotCitation,
 } from '@/services/api/chatbot';
 import { useAuthStore } from '@/stores/auth-store';
@@ -51,16 +49,6 @@ const INITIAL_SUGGESTIONS = [
   'Thông báo chưa đọc',
   'SOS gần đây',
 ];
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-function getDefaultSummaryScope(role?: string | null): 'today' | 'work' | 'ops' {
-  if (role === 'admin' || role === 'super_admin' || role === 'canteen_admin') {
-    return 'ops';
-  }
-  return 'today';
-}
 
 function normalizeActions(
   actions: ChatbotAction[] | undefined,
@@ -93,14 +81,10 @@ function normalizeCitations(value: ChatbotCitation[] | unknown) {
 export default function ChatbotScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const role = useAuthStore((state) => state.user?.role);
 
   const [message, setMessage] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
-  const [summaryScope, setSummaryScope] = useState<'today' | 'work' | 'ops'>(
-    getDefaultSummaryScope(role),
-  );
 
   const listRef = useRef<FlatList<DisplayMessage>>(null);
 
@@ -111,11 +95,6 @@ export default function ChatbotScreen() {
   const capabilitiesQuery = useQuery({
     queryKey: ['chatbot-capabilities'],
     queryFn: chatbotApi.getCapabilities,
-  });
-
-  const summaryQuery = useQuery({
-    queryKey: ['chatbot-summary', summaryScope],
-    queryFn: () => chatbotApi.getSummary(summaryScope),
   });
 
   const queryMutation = useMutation({
@@ -164,12 +143,6 @@ export default function ChatbotScreen() {
     setMessage('');
   }, []);
 
-  const summaryScopes =
-    capabilitiesQuery.data?.summaryScopes ??
-    ([] as ChatbotCapabilityScope[]);
-  const summaryAnswer = summaryQuery.data;
-  const summaryActions = normalizeActions(summaryAnswer?.actions, summaryAnswer?.deepLinks);
-  const summaryCitations = normalizeCitations(summaryAnswer?.citations);
   const quickPrompts = capabilitiesQuery.data?.quickPrompts ?? INITIAL_SUGGESTIONS;
   const lastSuggestions =
     messages.length === 0
@@ -307,73 +280,9 @@ export default function ChatbotScreen() {
     [theme, renderActionChips, renderCitationChips],
   );
 
-  const renderSummaryPanel = useCallback(() => {
+  const renderQuickPromptPanel = useCallback(() => {
     return (
       <View style={styles.headerStack}>
-        <SectionCard
-          title="Tóm tắt nhanh"
-          subtitle="Lấy snapshot theo role trước khi bạn bắt đầu đặt câu hỏi."
-        >
-          <View style={styles.scopeRow}>
-            {summaryScopes.map((item) => (
-              <Pressable
-                key={item.scope}
-                onPress={() => setSummaryScope(item.scope)}
-                style={({ pressed }) => [
-                  styles.scopeChip,
-                  {
-                    borderColor:
-                      summaryScope === item.scope ? theme.colors.primary : theme.colors.border,
-                    backgroundColor:
-                      summaryScope === item.scope
-                        ? theme.colors.primarySurface
-                        : theme.colors.surface,
-                    opacity: pressed ? 0.78 : 1,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.scopeText,
-                    {
-                      color:
-                        summaryScope === item.scope ? theme.colors.primary : theme.colors.text,
-                      fontFamily: theme.fonts.medium,
-                    },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {summaryQuery.isLoading ? (
-            <Text
-              style={[
-                styles.summaryBody,
-                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-              ]}
-            >
-              Đang chuẩn bị tóm tắt cho bạn...
-            </Text>
-          ) : (
-            <>
-              <Text
-                style={[
-                  styles.summaryBody,
-                  { color: theme.colors.text, fontFamily: theme.fonts.regular },
-                ]}
-              >
-                {summaryAnswer?.answer ??
-                  'Bạn có thể chọn một scope ở trên để lấy tóm tắt nhanh.'}
-              </Text>
-              {renderActionChips(summaryActions)}
-              {renderCitationChips(summaryCitations)}
-            </>
-          )}
-        </SectionCard>
-
         <SectionCard
           title="Gợi ý nhanh"
           subtitle="Các prompt ngắn theo role để bạn bắt đầu nhanh hơn."
@@ -406,19 +315,7 @@ export default function ChatbotScreen() {
         </SectionCard>
       </View>
     );
-  }, [
-    quickPrompts,
-    renderActionChips,
-    renderCitationChips,
-    send,
-    summaryActions,
-    summaryAnswer?.answer,
-    summaryCitations,
-    summaryQuery.isLoading,
-    summaryScope,
-    summaryScopes,
-    theme,
-  ]);
+  }, [quickPrompts, send, theme]);
 
   // ---------------------------------------------------------------------------
   // Layout
@@ -448,7 +345,7 @@ export default function ChatbotScreen() {
           contentContainerStyle={styles.messageList}
           onContentSizeChange={scrollToEnd}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={renderSummaryPanel}
+          ListHeaderComponent={renderQuickPromptPanel}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.textMuted} />
@@ -663,24 +560,6 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 10,
     lineHeight: 14,
-  },
-  scopeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  scopeChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  scopeText: {
-    fontSize: 12,
-  },
-  summaryBody: {
-    fontSize: 13,
-    lineHeight: 20,
   },
   quickPromptRow: {
     flexDirection: 'row',
