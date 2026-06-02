@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Image } from 'expo-image';
 import React from 'react';
 
 import LibraryScreen from '../index';
@@ -42,6 +43,7 @@ const mockLibraryApi = libraryApi as unknown as {
   deleteLoanRequest: jest.Mock;
   renewLoan: jest.Mock;
 };
+const mockedExpoImage = Image as unknown as { prefetch: jest.Mock };
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -152,6 +154,8 @@ describe('LibraryScreen', () => {
   });
 
   it('renders book cover image when coverUrl exists', async () => {
+    const coverUrl = 'https://img.test/refactoring.jpg';
+
     mockLibraryApi.listBooks.mockResolvedValue({
       items: [
         {
@@ -165,7 +169,7 @@ describe('LibraryScreen', () => {
           publisher: 'Addison-Wesley',
           publishedAt: '2018',
           language: 'en',
-          coverUrl: 'https://img.test/refactoring.jpg',
+          coverUrl,
           shelfCode: 'SE-02',
           availableCopies: 1,
           totalCopies: 1,
@@ -180,6 +184,9 @@ describe('LibraryScreen', () => {
     const { getByLabelText } = renderWithClient(<LibraryScreen />);
 
     await waitFor(() => expect(getByLabelText('B\u00eca s\u00e1ch Refactoring')).toBeTruthy());
+    await waitFor(() => {
+      expect(mockedExpoImage.prefetch).toHaveBeenCalledWith([coverUrl], 'disk');
+    });
   });
 
   it('renders full approved and active loan badges for long-title cards on narrow layouts', async () => {

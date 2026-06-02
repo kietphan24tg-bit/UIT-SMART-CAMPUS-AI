@@ -1,6 +1,7 @@
 import { USER_ROLES } from '@smart-campus/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Image } from 'expo-image';
 import React from 'react';
 import { Alert } from 'react-native';
 
@@ -37,6 +38,8 @@ const mockCanteenApi = canteenApi as unknown as {
   createSepayPayment: jest.Mock;
   deleteOrder: jest.Mock;
 };
+const mockedExpoImage = Image as unknown as { prefetch: jest.Mock };
+const queryClients: QueryClient[] = [];
 
 function makeOrder(status: CanteenOrderRecord['status']): CanteenOrderRecord {
   return {
@@ -53,7 +56,7 @@ function makeOrder(status: CanteenOrderRecord['status']): CanteenOrderRecord {
       {
         id: 'item-1',
         productId: 'product-1',
-        productName: 'Cơm gà nướng',
+        productName: 'Chicken Rice',
         unitPrice: 35000,
         quantity: 1,
         lineTotal: 35000,
@@ -72,6 +75,7 @@ function renderWithClient(ui: React.ReactElement) {
       },
     },
   });
+  queryClients.push(queryClient);
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
@@ -80,6 +84,13 @@ describe('CanteenScreen', () => {
     jest.clearAllMocks();
     jest.useRealTimers();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
+      selector({
+        user: { id: 'student-1', role: USER_ROLES.STUDENT },
+        isHydrated: true,
+        isAuthenticated: true,
+      }),
+    );
     mockCanteenApi.getCatalog.mockResolvedValue([]);
     mockCanteenApi.getMyOrders.mockResolvedValue([]);
     mockCanteenApi.createSepayPayment.mockResolvedValue({
@@ -98,6 +109,12 @@ describe('CanteenScreen', () => {
       id: 'order-1',
       deleted: true,
     });
+  });
+
+  afterEach(() => {
+    queryClients.forEach((queryClient) => queryClient.clear());
+    queryClients.length = 0;
+    jest.useRealTimers();
   });
 
   it.each([USER_ROLES.CANTEEN_ADMIN, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN])(
@@ -120,24 +137,17 @@ describe('CanteenScreen', () => {
   );
 
   it('renders menu for student role', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-        isHydrated: true,
-        isAuthenticated: true,
-      }),
-    );
     mockCanteenApi.getCatalog.mockResolvedValue([
       {
         id: 'cat-1',
-        name: 'Cơm phần',
-        slug: 'com-phan',
+        name: 'Rice',
+        slug: 'rice',
         description: null,
         products: [
           {
             id: 'product-1',
-            name: 'Cơm gà nướng',
-            slug: 'com-ga-nuong',
+            name: 'Chicken Rice',
+            slug: 'chicken-rice',
             description: null,
             imageUrl: null,
             price: 35000,
@@ -146,22 +156,47 @@ describe('CanteenScreen', () => {
         ],
       },
     ]);
-    mockCanteenApi.getMyOrders.mockResolvedValue([]);
 
     const { getByText } = renderWithClient(<CanteenScreen />);
 
-    await waitFor(() => expect(getByText('Cơm gà nướng')).toBeTruthy());
+    await waitFor(() => expect(getByText('Chicken Rice')).toBeTruthy());
+  });
+
+  it('prefetches catalog images without prefetching QR checkout images', async () => {
+    const productImageUrl = 'https://img.test/chicken-rice.jpg';
+    const qrCheckoutUrl = 'https://qr.sepay.vn/img?acc=123456789';
+
+    mockCanteenApi.getCatalog.mockResolvedValue([
+      {
+        id: 'cat-1',
+        name: 'Rice',
+        slug: 'rice',
+        description: null,
+        products: [
+          {
+            id: 'product-1',
+            name: 'Chicken Rice',
+            slug: 'chicken-rice',
+            description: null,
+            imageUrl: productImageUrl,
+            price: 35000,
+            stock: 20,
+          },
+        ],
+      },
+    ]);
+    renderWithClient(<CanteenScreen />);
+
+    await waitFor(() => {
+      expect(mockedExpoImage.prefetch).toHaveBeenCalledWith([productImageUrl], 'disk');
+    });
+    expect(mockedExpoImage.prefetch).not.toHaveBeenCalledWith([qrCheckoutUrl], 'disk');
   });
 
   it('renders QR-only payment panel for a pending order', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-      }),
-    );
     mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
 
-    const { getByText, queryByText } = renderWithClient(<CanteenScreen />);
+    const { getByText, queryByText, unmount } = renderWithClient(<CanteenScreen />);
 
     await waitFor(() => expect(getByText('ORD-001')).toBeTruthy());
     expect(queryByText('Ẩn QR')).toBeNull();
@@ -173,16 +208,15 @@ describe('CanteenScreen', () => {
       expect(mockCanteenApi.createSepayPayment).toHaveBeenCalledWith('order-1');
       expect(getByText('Ẩn QR')).toBeTruthy();
     });
+
+    unmount();
   });
 
   it('shows an error alert when QR payment creation fails', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-      }),
-    );
     mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
-    mockCanteenApi.createSepayPayment.mockRejectedValue({ message: 'Cấu hình SePay chưa đầy đủ.' });
+    mockCanteenApi.createSepayPayment.mockRejectedValue({
+      message: 'Cấu hình SePay chưa đầy đủ.',
+    });
 
     const { getByText, queryByText } = renderWithClient(<CanteenScreen />);
 
@@ -190,18 +224,16 @@ describe('CanteenScreen', () => {
     fireEvent.press(getByText('Thanh toán QR'));
 
     await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith('Thanh toán QR', 'Cấu hình SePay chưa đầy đủ.');
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Thanh toán QR',
+        'Cấu hình SePay chưa đầy đủ.',
+      );
       expect(queryByText('Ẩn QR')).toBeNull();
     });
   });
 
   it('does not start polling when no QR panel is open', async () => {
     jest.useFakeTimers();
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-      }),
-    );
     mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
 
     renderWithClient(<CanteenScreen />);
@@ -219,11 +251,6 @@ describe('CanteenScreen', () => {
 
   it('hides QR and shows paid status after polling refresh', async () => {
     jest.useFakeTimers();
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-      }),
-    );
 
     let orderState: CanteenOrderRecord['status'] = 'pending_payment';
     mockCanteenApi.getMyOrders.mockImplementation(async () => [makeOrder(orderState)]);
@@ -253,11 +280,6 @@ describe('CanteenScreen', () => {
 
   it('hides QR and allows retry when polling refresh returns payment_failed', async () => {
     jest.useFakeTimers();
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-      }),
-    );
 
     let orderState: CanteenOrderRecord['status'] = 'pending_payment';
     mockCanteenApi.getMyOrders.mockImplementation(async () => [makeOrder(orderState)]);
@@ -283,14 +305,8 @@ describe('CanteenScreen', () => {
       expect(getByText('Thanh toán QR')).toBeTruthy();
     });
   });
+
   it('deletes a pending order from history', async () => {
-    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) =>
-      selector({
-        user: { id: 'student-1', role: USER_ROLES.STUDENT },
-        isHydrated: true,
-        isAuthenticated: true,
-      }),
-    );
     mockCanteenApi.getMyOrders.mockResolvedValue([makeOrder('pending_payment')]);
 
     const { getByText } = renderWithClient(<CanteenScreen />);
