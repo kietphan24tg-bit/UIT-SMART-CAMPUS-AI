@@ -97,6 +97,51 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
 }));
 
+jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
+  documentDirectory: 'file:///documents/',
+  EncodingType: {
+    Base64: 'base64',
+    UTF8: 'utf8',
+  },
+  makeDirectoryAsync: jest.fn().mockResolvedValue(undefined),
+  readAsStringAsync: jest.fn().mockResolvedValue('base64-contents'),
+  deleteAsync: jest.fn().mockResolvedValue(undefined),
+  moveAsync: jest.fn().mockResolvedValue(undefined),
+  createDownloadResumable: jest.fn(
+    (_url: string, fileUri: string, _options: unknown, callback?: (data: unknown) => void) => ({
+      downloadAsync: jest.fn(async () => {
+        callback?.({
+          totalBytesWritten: 100,
+          totalBytesExpectedToWrite: 100,
+        });
+        return {
+          uri: fileUri,
+          status: 200,
+          headers: {},
+          mimeType: 'application/pdf',
+        };
+      }),
+    }),
+  ),
+  StorageAccessFramework: {
+    getUriForDirectoryInRoot: jest.fn(() => 'content://downloads-root'),
+    requestDirectoryPermissionsAsync: jest
+      .fn()
+      .mockResolvedValue({
+        granted: true,
+        directoryUri:
+          'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      }),
+    createFileAsync: jest
+      .fn()
+      .mockResolvedValue(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload/document/primary%3ADownload%2Ffile.pdf',
+      ),
+    writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 jest.mock('expo-image-manipulator', () => ({
   SaveFormat: {
     JPEG: 'jpeg',

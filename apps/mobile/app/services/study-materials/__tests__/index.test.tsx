@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Image } from 'expo-image';
 import React from 'react';
 
 import AdminStudyMaterialsRoute from '../admin';
 import StudyMaterialsRoute from '../index';
 
+import { downloadRemoteFileToDevice } from '@/services/file-download';
 import { studyMaterialsApi } from '@/services/api/study-materials';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -19,6 +20,13 @@ jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
 }));
 jest.mock('@/stores/auth-store');
+jest.mock('@/services/file-download', () => ({
+  downloadRemoteFileToDevice: jest.fn().mockResolvedValue({
+    fileUri: 'content://downloads/material-owner.jpg',
+    savedFileName: 'material-owner.jpg',
+    locationLabel: 'Bộ nhớ trong/Download/material-owner.jpg',
+  }),
+}));
 jest.mock('@/services/api/study-materials', () => ({
   studyMaterialsApi: {
     list: jest.fn(),
@@ -32,6 +40,7 @@ const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
 const mockStudyMaterialsApi = studyMaterialsApi as unknown as {
   list: jest.Mock;
 };
+const mockDownloadRemoteFileToDevice = downloadRemoteFileToDevice as jest.Mock;
 const mockedExpoImage = Image as unknown as { prefetch: jest.Mock };
 
 function renderWithClient(ui: React.ReactElement) {
@@ -110,7 +119,7 @@ describe('StudyMaterialsRoute', () => {
     mockStudyMaterialsApi.list.mockResolvedValue(materialsResponse);
   });
 
-  it('renders uploader info, owner actions, and prefetches only image materials', async () => {
+  it('renders uploader info, owner actions, downloads files, and prefetches only image materials', async () => {
     const { getByText, queryAllByText } = renderWithClient(<StudyMaterialsRoute />);
 
     await waitFor(() => expect(getByText('Đề thi giải tích')).toBeTruthy());
@@ -133,8 +142,21 @@ describe('StudyMaterialsRoute', () => {
     expect(otherFilterLabel?.props.adjustsFontSizeToFit).toBe(true);
     expect(getByText(/Đăng bởi Nguyen Van A/)).toBeTruthy();
     expect(getByText(/Đăng bởi Tran Thi B/)).toBeTruthy();
+    expect(queryAllByText('Tải file')).toHaveLength(2);
     expect(queryAllByText('Sửa')).toHaveLength(1);
     expect(queryAllByText('Xóa')).toHaveLength(1);
+
+    fireEvent.press(queryAllByText('Tải file')[0]);
+
+    await waitFor(() =>
+      expect(mockDownloadRemoteFileToDevice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://cdn.example.com/material-owner.jpg',
+          fileName: 'de-thi-giai-tich.jpg',
+          mimeType: 'image/jpeg',
+        }),
+      ),
+    );
 
     await waitFor(() => {
       expect(mockedExpoImage.prefetch).toHaveBeenCalledWith(

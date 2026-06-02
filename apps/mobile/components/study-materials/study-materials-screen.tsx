@@ -30,6 +30,10 @@ import {
   StatusBadge,
   TopHero,
 } from '@/components/ui';
+import {
+  downloadRemoteFileToDevice,
+  type DeviceDownloadProgress,
+} from '@/services/file-download';
 import { prefetchImageUrls } from '@/services/image-cache';
 import {
   studyMaterialsApi,
@@ -177,6 +181,11 @@ type EditorState = {
   selectedFile: PickedMaterialFile | null;
 };
 
+type MaterialDownloadState = {
+  materialId: string;
+  progress: DeviceDownloadProgress;
+};
+
 function createEmptyEditorState(): EditorState {
   return {
     category: 'exam',
@@ -198,6 +207,7 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
   const [isEditorVisible, setIsEditorVisible] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<StudyMaterialRecord | null>(null);
   const [editorState, setEditorState] = useState<EditorState>(createEmptyEditorState);
+  const [downloadState, setDownloadState] = useState<MaterialDownloadState | null>(null);
 
   useEffect(() => {
     if (mode === 'user' && isAdminRole(role)) {
@@ -387,6 +397,64 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
     }
   };
 
+  const handleDownloadMaterial = async (material: StudyMaterialRecord) => {
+    if (downloadState && downloadState.materialId !== material.id) {
+      Alert.alert('Tài liệu', 'Vui lòng đợi lần tải hiện tại hoàn tất.');
+      return;
+    }
+
+    try {
+      setDownloadState({
+        materialId: material.id,
+        progress: {
+          stage: 'preparing',
+          transferredBytes: 0,
+          totalBytes: null,
+          progress: null,
+        },
+      });
+
+      const result = await downloadRemoteFileToDevice({
+        url: material.fileUrl,
+        fileName: material.fileName,
+        mimeType: material.mimeType,
+        onProgress: (progress) => {
+          setDownloadState({
+            materialId: material.id,
+            progress,
+          });
+        },
+      });
+
+      Alert.alert(
+        'Tài liệu',
+        `Đã tải ${result.savedFileName} về máy.\nVị trí lưu: ${result.locationLabel}`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Không thể tải file về máy lúc này.';
+      Alert.alert('Tài liệu', message);
+    } finally {
+      setDownloadState((current) => (current?.materialId === material.id ? null : current));
+    }
+  };
+
+  const getDownloadLabel = (materialId: string) => {
+    if (downloadState?.materialId !== materialId) {
+      return 'Tải file';
+    }
+
+    if (downloadState.progress.stage === 'saving') {
+      return 'Đang lưu...';
+    }
+
+    if (downloadState.progress.progress != null) {
+      return `Tải ${Math.round(downloadState.progress.progress * 100)}%`;
+    }
+
+    return 'Đang tải...';
+  };
+
   const handleSubmit = async () => {
     if (!editorState.title.trim()) {
       Alert.alert('Tài liệu', 'Vui lòng nhập tiêu đề tài liệu.');
@@ -533,6 +601,9 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
                     key={material.id}
                     material={material}
                     onOpen={() => void handleOpenMaterial(material)}
+                    onDownload={() => void handleDownloadMaterial(material)}
+                    downloadLabel={getDownloadLabel(material.id)}
+                    downloading={downloadState?.materialId === material.id}
                     onEdit={material.canEdit ? () => openEditEditor(material) : undefined}
                     onDelete={material.canDelete ? () => handleDelete(material) : undefined}
                   />
@@ -576,11 +647,17 @@ export function StudyMaterialsScreen({ mode }: { mode: StudyMaterialsScreenMode 
 function MaterialCard({
   material,
   onOpen,
+  onDownload,
+  downloadLabel,
+  downloading,
   onEdit,
   onDelete,
 }: {
   material: StudyMaterialRecord;
   onOpen: () => void;
+  onDownload: () => void;
+  downloadLabel: string;
+  downloading: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
@@ -678,6 +755,12 @@ function MaterialCard({
 
       <View style={styles.materialActions}>
         <ActionTextButton label="Mở file" onPress={onOpen} tone="primary" />
+        <ActionTextButton
+          label={downloadLabel}
+          onPress={onDownload}
+          tone="primary"
+          disabled={downloading}
+        />
         {onEdit ? <ActionTextButton label="Sửa" onPress={onEdit} tone="neutral" /> : null}
         {onDelete ? <ActionTextButton label="Xóa" onPress={onDelete} tone="danger" /> : null}
       </View>
@@ -734,6 +817,7 @@ function MaterialEditorModal({
             <ScrollView
               contentContainerStyle={styles.formColumn}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
               <View style={styles.filterWrap}>
                 {CATEGORY_OPTIONS.map((option) => {
@@ -860,21 +944,29 @@ function ActionTextButton({
   label,
   onPress,
   tone,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   tone: 'primary' | 'neutral' | 'danger';
+  disabled?: boolean;
 }) {
   const theme = useAppTheme();
-  const color =
-    tone === 'danger'
+  const color = disabled
+    ? theme.colors.textSoft
+    : tone === 'danger'
       ? theme.colors.danger
       : tone === 'neutral'
         ? theme.colors.textMuted
         : theme.colors.primary;
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.actionTextButton}>
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={styles.actionTextButton}
+    >
       <Text style={[styles.actionText, { color, fontFamily: theme.fonts.semibold }]}>{label}</Text>
     </Pressable>
   );
