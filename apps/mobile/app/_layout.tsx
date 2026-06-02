@@ -177,6 +177,8 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/campus-map/view" />
         <Stack.Screen name="services/library/index" />
         <Stack.Screen name="services/library/admin" />
+        <Stack.Screen name="services/study-materials/index" />
+        <Stack.Screen name="services/study-materials/admin" />
         <Stack.Screen name="services/canteen/index" />
         <Stack.Screen name="services/canteen/admin" />
         <Stack.Screen name="services/gps-sos/index" />

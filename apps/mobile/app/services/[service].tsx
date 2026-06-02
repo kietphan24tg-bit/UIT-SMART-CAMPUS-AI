@@ -248,13 +248,10 @@ export default function ServiceDetailScreen() {
         <ContentStack narrow overlapHero={false}>
           <SectionCard title="Trạng thái hiện tại" subtitle={service.summary}>
             <Text
-              style={[
-                styles.body,
-                { color: theme.colors.text, fontFamily: theme.fonts.regular },
-              ]}
+              style={[styles.body, { color: theme.colors.text, fontFamily: theme.fonts.regular }]}
             >
-              Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus,
-              phê duyệt đặt phòng, canteen và thư viện.
+              Ứng dụng đang tập trung vào các luồng quản trị có dữ liệu thật: vận hành campus, phê
+              duyệt đặt phòng, canteen và thư viện.
             </Text>
           </SectionCard>
 
@@ -264,6 +261,7 @@ export default function ServiceDetailScreen() {
               <InfoRow label="Đặt phòng" value="Queue phê duyệt và vòng đời yêu cầu" />
               <InfoRow label="Canteen" value="Quản lý menu, đơn hàng và trạng thái phục vụ" />
               <InfoRow label="Thư viện" value="Tra cứu sách, giữ chỗ và theo dõi mượn trả" />
+              <InfoRow label="Tài liệu" value="Quản trị kho tài liệu học tập và quyền chỉnh sửa" />
             </View>
           </SectionCard>
 
@@ -274,6 +272,10 @@ export default function ServiceDetailScreen() {
           <SecondaryButton
             label="Mở queue phê duyệt đặt phòng"
             onPress={() => router.push('/services/room-booking/approvals')}
+          />
+          <SecondaryButton
+            label="Mở quản trị tài liệu"
+            onPress={() => router.push('/services/study-materials/admin')}
           />
           <SecondaryButton label="Mở thư viện" onPress={() => router.push('/services/library')} />
           <SecondaryButton label="Mở vận hành campus" onPress={() => router.push('/schedule')} />

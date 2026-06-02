@@ -80,6 +80,14 @@ describe('ServicesScreen', () => {
     });
   });
 
+  it('opens study materials from the services grid', () => {
+    const { getByText } = render(<ServicesScreen />);
+
+    fireEvent.press(getByText('Tài liệu'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/study-materials');
+  });
+
   it('renders live and unavailable service groups', () => {
     const { getByText } = render(<ServicesScreen />);
 

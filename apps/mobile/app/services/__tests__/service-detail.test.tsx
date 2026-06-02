@@ -67,7 +67,7 @@ describe('ServiceDetailScreen - admin tools', () => {
     });
   });
 
-  it('renders canteen and library actions', () => {
+  it('renders canteen, study materials, and library actions', () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -85,9 +85,13 @@ describe('ServiceDetailScreen - admin tools', () => {
 
     expect(getByText('Canteen')).toBeTruthy();
     expect(getByText('Thư viện')).toBeTruthy();
+    expect(getByText('Tài liệu')).toBeTruthy();
 
     fireEvent.press(getByText('Mở quản trị canteen'));
     expect(mockRouter.push).toHaveBeenCalledWith('/services/canteen/admin');
+
+    fireEvent.press(getByText('Mở quản trị tài liệu'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/study-materials/admin');
 
     fireEvent.press(getByText('Mở thư viện'));
     expect(mockRouter.push).toHaveBeenCalledWith('/services/library');

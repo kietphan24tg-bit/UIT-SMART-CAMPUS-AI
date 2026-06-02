@@ -40,6 +40,11 @@ describe('app utils', () => {
     const library = studentEntries.find((item) => item.id === 'library');
     const adminLibrary = adminEntries.find((item) => item.id === 'library');
     const chatbot = studentEntries.find((item) => item.id === 'chatbot');
+    const studentMaterials = studentEntries.find((item) => item.id === 'study-materials');
+    const lecturerMaterials = getServiceEntries('lecturer').find(
+      (item) => item.id === 'study-materials',
+    );
+    const adminMaterials = adminEntries.find((item) => item.id === 'study-materials');
     const sos = studentEntries.find((item) => item.id === 'gps-sos');
 
     expect(studentCanteen?.supportState).toBe('live');
@@ -53,13 +58,22 @@ describe('app utils', () => {
     expect(library?.route).toBe('/services/library');
     expect(adminLibrary?.route).toBe('/services/library/admin');
     expect(chatbot?.supportState).toBe('live');
+    expect(studentMaterials?.route).toBe('/services/study-materials');
+    expect(lecturerMaterials?.route).toBe('/services/study-materials');
+    expect(adminMaterials).toBeUndefined();
     expect(sos?.route).toBe('/services/gps-sos');
   });
 
   it('should keep parking routes scoped by entry source', () => {
-    const studentParkingService = getServiceEntries('student').find((item) => item.id === 'parking');
-    const studentParkingQuickAction = getRoleQuickActions('student').find((item) => item.id === 'parking');
-    const adminParkingQuickAction = getRoleQuickActions('admin').find((item) => item.id === 'parking');
+    const studentParkingService = getServiceEntries('student').find(
+      (item) => item.id === 'parking',
+    );
+    const studentParkingQuickAction = getRoleQuickActions('student').find(
+      (item) => item.id === 'parking',
+    );
+    const adminParkingQuickAction = getRoleQuickActions('admin').find(
+      (item) => item.id === 'parking',
+    );
     const adminQuickActions = getRoleQuickActions('admin');
     const adminCampusMapActions = adminQuickActions.filter((item) => item.id === 'campus-map');
     const adminGpsSosAction = adminQuickActions.find((item) => item.id === 'gps-sos');

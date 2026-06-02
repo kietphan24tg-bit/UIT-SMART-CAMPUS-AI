@@ -79,6 +79,19 @@ type MultipartRequestOptions = {
   mimeType: string;
 };
 
+type MultipartFormRequestOptions = {
+  method?: 'POST' | 'PATCH';
+  fields?: Record<string, string | null | undefined>;
+  file?:
+    | {
+        fieldName: string;
+        uri: string;
+        fileName: string;
+        mimeType: string;
+      }
+    | undefined;
+};
+
 function createApiConfigurationError() {
   return new Error(
     'EXPO_PUBLIC_API_URL chưa được cấu hình cho bản build này. APK release đang không biết phải gọi backend nào.',
@@ -384,13 +397,35 @@ export async function postMultipart<T>(
   path: string,
   { fieldName, uri, fileName, mimeType }: MultipartRequestOptions,
 ): Promise<T> {
+  return requestMultipart<T>(path, {
+    method: 'POST',
+    file: {
+      fieldName,
+      uri,
+      fileName,
+      mimeType,
+    },
+  });
+}
+
+export async function requestMultipart<T>(
+  path: string,
+  { method = 'POST', fields, file }: MultipartFormRequestOptions,
+): Promise<T> {
   assertApiBaseUrlConfigured();
   const formData = new FormData();
-  formData.append(fieldName, {
-    uri,
-    name: fileName,
-    type: mimeType,
-  } as unknown as Blob);
+  Object.entries(fields ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, value);
+    }
+  });
+  if (file) {
+    formData.append(file.fieldName, {
+      uri: file.uri,
+      name: file.fileName,
+      type: file.mimeType,
+    } as unknown as Blob);
+  }
 
   const send = async (token: string | null) => {
     const headers: Record<string, string> = {};
@@ -403,7 +438,7 @@ export async function postMultipart<T>(
       : `${String(API_BASE_URL).replace(/\/+$/g, '')}/${String(path).replace(/^\/+/g, '')}`;
 
     const response = await fetch(requestUrl, {
-      method: 'POST',
+      method,
       headers,
       body: formData,
     });
