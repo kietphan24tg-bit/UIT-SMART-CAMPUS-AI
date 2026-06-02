@@ -25,6 +25,7 @@ import {
   type LibraryBookListItem,
   type LibraryLoanRequestRecord,
 } from '@/services/api/library';
+import { prefetchImageUrls } from '@/services/image-cache';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { isAdminRole } from '@/utils/app';
@@ -231,6 +232,10 @@ export default function LibraryScreen() {
       setSelectedCopyId((current) => current ?? firstAvailableCopy.id);
     }
   }, [selectedBookQuery.data]);
+
+  useEffect(() => {
+    void prefetchImageUrls((booksQuery.data?.items ?? []).map((book) => book.coverUrl));
+  }, [booksQuery.data]);
 
   const books = booksQuery.data?.items ?? [];
   const loans = loansQuery.data ?? [];
@@ -832,6 +837,8 @@ function BookCard({
             source={{ uri: item.coverUrl }}
             style={styles.bookCover}
             contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
             accessibilityLabel={`Bìa sách ${item.title}`}
           />
         ) : (

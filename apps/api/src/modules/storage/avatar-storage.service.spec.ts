@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 import { AvatarStorageService } from './avatar-storage.service';
-import { MAX_AVATAR_UPLOAD_SIZE_BYTES } from './avatar-upload.constants';
+import {
+  MAX_AVATAR_UPLOAD_SIZE_BYTES,
+  MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES,
+} from './avatar-upload.constants';
 
 describe('AvatarStorageService', () => {
   let service: AvatarStorageService;
@@ -55,10 +58,7 @@ describe('AvatarStorageService', () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(requestUrl).toContain('/avatars/user-1/');
     expect(requestInit.method).toBe('PUT');
     expect(requestInit.headers).toEqual(
@@ -67,9 +67,7 @@ describe('AvatarStorageService', () => {
         Authorization: expect.stringContaining('AWS4-HMAC-SHA256'),
       }),
     );
-    expect(result.avatarUrl).toMatch(
-      /^https:\/\/cdn\.example\.com\/avatars\/user-1\/.+\.png$/,
-    );
+    expect(result.avatarUrl).toMatch(/^https:\/\/cdn\.example\.com\/avatars\/user-1\/.+\.png$/);
   });
 
   it('rejects unsupported mime types before upload', async () => {
@@ -92,6 +90,53 @@ describe('AvatarStorageService', () => {
         mimetype: 'image/png',
         size: MAX_AVATAR_UPLOAD_SIZE_BYTES + 1,
         originalname: 'avatar.png',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('uploads a study material and returns a public url', async () => {
+    const result = await service.uploadStudyMaterialFile('student-1', {
+      buffer: Buffer.from('document-bytes'),
+      mimetype: 'application/pdf',
+      size: 128,
+      originalname: 'de-thi-cuoi-ky.pdf',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(requestUrl).toContain('/avatars/study-materials/student-1/');
+    expect(requestInit.headers).toEqual(
+      expect.objectContaining({
+        'Content-Type': 'application/pdf',
+      }),
+    );
+    expect(result.fileUrl).toMatch(
+      /^https:\/\/cdn\.example\.com\/study-materials\/student-1\/.+\.pdf$/,
+    );
+  });
+
+  it('rejects unsupported study material mime types before upload', async () => {
+    await expect(
+      service.uploadStudyMaterialFile('student-1', {
+        buffer: Buffer.from('document-bytes'),
+        mimetype: 'application/zip',
+        size: 128,
+        originalname: 'archive.zip',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized study materials before upload', async () => {
+    await expect(
+      service.uploadStudyMaterialFile('student-1', {
+        buffer: Buffer.alloc(MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES + 1),
+        mimetype: 'application/pdf',
+        size: MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES + 1,
+        originalname: 'large.pdf',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 

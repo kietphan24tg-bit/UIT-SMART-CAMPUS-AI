@@ -844,6 +844,8 @@ export default function LibraryAdminScreen() {
                                 source={{ uri: book.coverUrl }}
                                 style={styles.thumbnail}
                                 contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={0}
                               />
                             ) : (
                               <View
@@ -1381,6 +1383,8 @@ export default function LibraryAdminScreen() {
                     source={{ uri: bookForm.coverUrl }}
                     style={styles.imageUploadPreviewImage}
                     contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={0}
                   />
                   <Pressable
                     accessibilityRole="button"

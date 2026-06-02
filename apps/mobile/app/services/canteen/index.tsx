@@ -22,6 +22,7 @@ import {
   type CanteenCatalogCategory,
   type CanteenOrderRecord,
 } from '@/services/api/canteen';
+import { prefetchImageUrls } from '@/services/image-cache';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { canManageCanteenRole, formatCurrency, getRoleLabel } from '@/utils/app';
@@ -112,7 +113,10 @@ export default function CanteenScreen() {
       await queryClient.invalidateQueries({ queryKey: ['canteen', 'orders', 'me'] });
     },
     onError: (error) => {
-      Alert.alert('Xóa đơn', getErrorMessage(error, 'Không thể xóa đơn lúc này. Vui lòng thử lại.'));
+      Alert.alert(
+        'Xóa đơn',
+        getErrorMessage(error, 'Không thể xóa đơn lúc này. Vui lòng thử lại.'),
+      );
     },
     onSettled: () => {
       setActiveDeleteOrderId(null);
@@ -120,7 +124,10 @@ export default function CanteenScreen() {
   });
 
   const allProducts = useMemo(
-    () => (catalogQuery.data ?? []).flatMap((category) => category.products.map((product) => ({ ...product, category }))),
+    () =>
+      (catalogQuery.data ?? []).flatMap((category) =>
+        category.products.map((product) => ({ ...product, category })),
+      ),
     [catalogQuery.data],
   );
   const categories = catalogQuery.data ?? [];
@@ -157,6 +164,14 @@ export default function CanteenScreen() {
     });
   }, [hasActiveQrPayments, ordersQuery.data]);
 
+  useEffect(() => {
+    void prefetchImageUrls(
+      (catalogQuery.data ?? []).flatMap((category) =>
+        category.products.map((product) => product.imageUrl),
+      ),
+    );
+  }, [catalogQuery.data]);
+
   if (canManageCanteen) {
     return (
       <Screen>
@@ -192,13 +207,28 @@ export default function CanteenScreen() {
       />
 
       <ContentStack overlapHero={false}>
-        <SectionCard title="Menu hôm nay" subtitle={`${allProducts.length} sản phẩm`} variant="glass" tone="academic">
+        <SectionCard
+          title="Menu hôm nay"
+          subtitle={`${allProducts.length} sản phẩm`}
+          variant="glass"
+          tone="academic"
+        >
           {!isHydrated || !isAuthenticated ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Đang khởi tạo phiên đăng nhập...
             </Text>
           ) : catalogQuery.isLoading ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Đang tải menu...
             </Text>
           ) : catalogQuery.isError ? (
@@ -210,7 +240,11 @@ export default function CanteenScreen() {
               onActionPress={() => void catalogQuery.refetch()}
             />
           ) : allProducts.length === 0 ? (
-            <EmptyState icon="restaurant-outline" title="Menu trống" description="Hiện chưa có sản phẩm hoạt động." />
+            <EmptyState
+              icon="restaurant-outline"
+              title="Menu trống"
+              description="Hiện chưa có sản phẩm hoạt động."
+            />
           ) : (
             <View style={styles.stack}>
               {categories.map((category) => (
@@ -237,7 +271,12 @@ export default function CanteenScreen() {
           )}
         </SectionCard>
 
-        <SectionCard title="Giỏ hàng" subtitle="Kiểm tra món trước khi tạo đơn" variant="highlight" tone="campus">
+        <SectionCard
+          title="Giỏ hàng"
+          subtitle="Kiểm tra món trước khi tạo đơn"
+          variant="highlight"
+          tone="campus"
+        >
           <View style={styles.stack}>
             <View
               style={[
@@ -249,31 +288,61 @@ export default function CanteenScreen() {
               ]}
             >
               <View style={styles.cartSummaryItem}>
-                <Text style={[styles.cartSummaryValue, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                <Text
+                  style={[
+                    styles.cartSummaryValue,
+                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
                   {cartCount}
                 </Text>
-                <Text style={[styles.cartSummaryLabel, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+                <Text
+                  style={[
+                    styles.cartSummaryLabel,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                  ]}
+                >
                   Món đã chọn
                 </Text>
               </View>
               <View style={[styles.cartSummaryDivider, { backgroundColor: theme.colors.border }]} />
               <View style={styles.cartSummaryItem}>
-                <Text style={[styles.cartSummaryValue, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                <Text
+                  style={[
+                    styles.cartSummaryValue,
+                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                  ]}
+                >
                   {formatCurrency(cartAmount)}đ
                 </Text>
-                <Text style={[styles.cartSummaryLabel, { color: theme.colors.textMuted, fontFamily: theme.fonts.medium }]}>
+                <Text
+                  style={[
+                    styles.cartSummaryLabel,
+                    { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                  ]}
+                >
                   Tạm tính
                 </Text>
               </View>
             </View>
 
             {!consumer ? (
-              <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+              <Text
+                style={[
+                  styles.body,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                ]}
+              >
                 Vai trò hiện tại chỉ có quyền xem menu và lịch sử đơn, không thể tạo thanh toán.
               </Text>
             ) : null}
 
-            <View style={[styles.notePanel, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSubtle }]}>
+            <View
+              style={[
+                styles.notePanel,
+                { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSubtle },
+              ]}
+            >
               <FormField
                 label="Ghi chú đơn"
                 value={note}
@@ -307,7 +376,12 @@ export default function CanteenScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.inlineButtonText, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+                  <Text
+                    style={[
+                      styles.inlineButtonText,
+                      { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                    ]}
+                  >
                     {note ? 'Xóa ghi chú' : 'Thêm ghi chú mẫu'}
                   </Text>
                 </Pressable>
@@ -316,17 +390,35 @@ export default function CanteenScreen() {
           </View>
         </SectionCard>
 
-        <SectionCard title="Lịch sử hóa đơn" subtitle="Theo dõi thanh toán và trạng thái đơn." variant="outlined">
+        <SectionCard
+          title="Lịch sử hóa đơn"
+          subtitle="Theo dõi thanh toán và trạng thái đơn."
+          variant="outlined"
+        >
           {!consumer ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Tài khoản này không có lịch sử đặt món cá nhân.
             </Text>
           ) : ordersQuery.isLoading ? (
-            <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+            <Text
+              style={[
+                styles.body,
+                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+              ]}
+            >
               Đang tải lịch sử hóa đơn...
             </Text>
           ) : (ordersQuery.data?.length ?? 0) === 0 ? (
-            <EmptyState icon="receipt-outline" title="Chưa có đơn hàng" description="Bạn chưa tạo đơn canteen nào." />
+            <EmptyState
+              icon="receipt-outline"
+              title="Chưa có đơn hàng"
+              description="Bạn chưa tạo đơn canteen nào."
+            />
           ) : (
             <View style={styles.stack}>
               {ordersQuery.data?.map((order) => (
@@ -368,7 +460,12 @@ function CategoryBlock({
   const theme = useAppTheme();
   return (
     <View style={styles.categoryBlock}>
-      <Text style={[styles.categoryTitle, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+      <Text
+        style={[
+          styles.categoryTitle,
+          { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+        ]}
+      >
         {category.name}
       </Text>
       <View style={styles.stack}>
@@ -397,23 +494,44 @@ function CategoryBlock({
                     ]}
                   >
                     {product.imageUrl ? (
-                      <Image source={{ uri: product.imageUrl }} style={styles.productImage} contentFit="cover" />
+                      <Image
+                        source={{ uri: product.imageUrl }}
+                        style={styles.productImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={0}
+                      />
                     ) : (
                       <Ionicons name="image-outline" size={22} color={theme.colors.textSoft} />
                     )}
                   </View>
                   <View style={styles.productText}>
-                    <Text style={[styles.productName, { color: theme.colors.text, fontFamily: theme.fonts.medium }]}>
+                    <Text
+                      style={[
+                        styles.productName,
+                        { color: theme.colors.text, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
                       {product.name}
                     </Text>
-                    <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+                    <Text
+                      style={[
+                        styles.body,
+                        { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                      ]}
+                    >
                       {formatCurrency(product.price)}đ · Tồn {product.stock}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.qtyWrap}>
                   <IconButton icon="remove" onPress={() => onChangeQty(product.id, -1)} />
-                  <Text style={[styles.qtyLabel, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+                  <Text
+                    style={[
+                      styles.qtyLabel,
+                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                    ]}
+                  >
                     {quantity}
                   </Text>
                   <IconButton icon="add" onPress={() => onChangeQty(product.id, 1)} />
@@ -465,7 +583,8 @@ function OrderCard({
   onHideQr: () => void;
 }) {
   const theme = useAppTheme();
-  const showPaymentActions = order.status === 'pending_payment' || order.status === 'payment_failed';
+  const showPaymentActions =
+    order.status === 'pending_payment' || order.status === 'payment_failed';
 
   return (
     <View
@@ -479,7 +598,12 @@ function OrderCard({
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderCodeWrap}>
-          <Text style={[styles.orderCode, { color: theme.colors.text, fontFamily: theme.fonts.semibold }]}>
+          <Text
+            style={[
+              styles.orderCode,
+              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+            ]}
+          >
             {order.orderCode}
           </Text>
         </View>
@@ -491,7 +615,9 @@ function OrderCard({
           />
         </View>
       </View>
-      <Text style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}>
+      <Text
+        style={[styles.body, { color: theme.colors.textMuted, fontFamily: theme.fonts.regular }]}
+      >
         Tổng tiền: {formatCurrency(order.totalAmount)}đ
       </Text>
       <View style={styles.stack}>
@@ -512,8 +638,10 @@ function OrderCard({
               style={[
                 styles.orderActionButton,
                 {
-                  borderColor: deleting || qrPaying ? theme.colors.inputBorder : theme.colors.danger,
-                  backgroundColor: deleting || qrPaying ? theme.colors.surfaceTinted : theme.colors.dangerSurface,
+                  borderColor:
+                    deleting || qrPaying ? theme.colors.inputBorder : theme.colors.danger,
+                  backgroundColor:
+                    deleting || qrPaying ? theme.colors.surfaceTinted : theme.colors.dangerSurface,
                 },
               ]}
               labelStyle={{ color: theme.colors.danger }}
@@ -531,11 +659,20 @@ function OrderCard({
             ]}
           >
             <Pressable accessibilityRole="button" onPress={onHideQr} style={styles.qrDismiss}>
-              <Text style={[styles.qrLink, { color: theme.colors.primary, fontFamily: theme.fonts.medium }]}>
+              <Text
+                style={[
+                  styles.qrLink,
+                  { color: theme.colors.primary, fontFamily: theme.fonts.medium },
+                ]}
+              >
                 Ẩn QR
               </Text>
             </Pressable>
-            <Image source={{ uri: qrPayment.checkoutUrl }} style={styles.qrImage} contentFit="contain" />
+            <Image
+              source={{ uri: qrPayment.checkoutUrl }}
+              style={styles.qrImage}
+              contentFit="contain"
+            />
           </View>
         ) : null}
       </View>
@@ -584,7 +721,9 @@ function getErrorMessage(error: unknown, fallback?: string) {
       return message;
     }
     if (Array.isArray(message) && message.length > 0) {
-      const flattened = message.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+      const flattened = message.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      );
       if (flattened.length > 0) {
         return flattened.join('\n');
       }

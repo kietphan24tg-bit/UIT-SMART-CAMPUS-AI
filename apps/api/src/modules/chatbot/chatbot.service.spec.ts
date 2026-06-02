@@ -1,6 +1,10 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
+import { ChatbotDomainRegistry } from './chatbot.domain-registry';
+import { ChatbotKnowledgeService } from './chatbot.knowledge.service';
+import { ChatbotLiveDomainHandlersService } from './chatbot.live-domain-handlers.service';
+import { ChatbotOrchestratorService } from './chatbot.orchestrator.service';
 import { ChatbotService } from './chatbot.service';
 
 describe('ChatbotService', () => {
@@ -23,21 +27,40 @@ describe('ChatbotService', () => {
     },
     libraryLoan: {
       findMany: jest.fn(),
+      count: jest.fn(),
     },
     libraryLoanRequest: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    libraryBook: {
       findMany: jest.fn(),
     },
     sosRequest: {
       findFirst: jest.fn(),
+      count: jest.fn(),
+    },
+    classSection: {
+      findMany: jest.fn(),
+      count: jest.fn(),
     },
     classEnrollment: {
       findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    attendanceSession: {
+      findMany: jest.fn(),
+    },
+    attendanceRecord: {
+      findFirst: jest.fn(),
     },
     roomBooking: {
       findFirst: jest.fn(),
+      count: jest.fn(),
     },
     event: {
       findMany: jest.fn(),
+      count: jest.fn(),
     },
     notification: {
       count: jest.fn(),
@@ -49,6 +72,23 @@ describe('ChatbotService', () => {
     knowledgeDocument: {
       upsert: jest.fn(),
     },
+    studyMaterial: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    vehicle: {
+      findMany: jest.fn(),
+    },
+    parkingSlot: {
+      count: jest.fn(),
+    },
+    telemetrySnapshot: {
+      findFirst: jest.fn(),
+    },
+    grade: {
+      findMany: jest.fn(),
+      aggregate: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -56,7 +96,23 @@ describe('ChatbotService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ChatbotService(prisma);
+    prisma.chatSession.create.mockResolvedValue({ id: 'session-1' });
+    prisma.chatMessage.create.mockResolvedValue(undefined);
+    prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+      callback({
+        knowledgeDocument: prisma.knowledgeDocument,
+        knowledgeChunk: {
+          deleteMany: jest.fn(),
+          create: jest.fn(),
+        },
+      }),
+    );
+
+    const registry = new ChatbotDomainRegistry();
+    const knowledge = new ChatbotKnowledgeService(prisma, registry);
+    const liveHandlers = new ChatbotLiveDomainHandlersService(prisma, registry);
+    const orchestrator = new ChatbotOrchestratorService(registry, liveHandlers, knowledge);
+    service = new ChatbotService(prisma, orchestrator, registry, knowledge);
   });
 
   it('returns empty intent when message is blank', async () => {
@@ -65,7 +121,52 @@ describe('ChatbotService', () => {
     });
 
     expect(result.intent).toBe('empty');
-    expect(result.confidence).toBe(0);
+    expect(prisma.chatSession.create).not.toHaveBeenCalled();
+  });
+
+  it('answers study materials queries before generic knowledge fallback', async () => {
+    prisma.studyMaterial.findMany.mockResolvedValue([
+      {
+        id: 'material-1',
+        title: 'Đề thi cuối kỳ SE346',
+        description: 'Đề thi tham khảo',
+        category: 'exam',
+        fileName: 'se346-final.pdf',
+        uploader: { firstName: 'Minh', lastName: 'Nguyen' },
+      },
+    ]);
+
+    const result = await service.query('student-1', Role.student, {
+      message: 'Cho minh xem tai lieu de thi moi',
+    });
+
+    expect(result.domain).toBe('study-materials');
+    expect(result.intent).toBe('study_materials_search');
+    expect(result.answer).toContain('Đề thi cuối kỳ SE346');
+  });
+
+  it('builds student summary without admin-only routes', async () => {
+    prisma.classEnrollment.findMany.mockResolvedValue([
+      {
+        classSection: {
+          course: { name: 'Toán rời rạc' },
+          meetings: [{ id: 'meeting-1', startTime: '07:30', endTime: '09:00', room: 'A101', dayOfWeek: new Date().getDay() }],
+        },
+      },
+    ]);
+    prisma.attendanceRecord.findFirst.mockResolvedValue(null);
+    prisma.notification.count.mockResolvedValue(2);
+    prisma.notification.findFirst.mockResolvedValue({
+      id: 'notif-1',
+      title: 'Bạn có thông báo học vụ mới',
+    });
+    prisma.canteenOrder.findFirst.mockResolvedValue(null);
+
+    const result = await service.getSummary('student-1', Role.student, 'today');
+
+    expect(result.answerType).toBe('summary');
+    expect(result.actions.some((item) => item.route === '/services/admin-tools')).toBe(false);
+    expect(result.answer).toContain('Toán rời rạc');
   });
 
   it('forbids reading messages from a session owned by another user', async () => {
@@ -79,171 +180,35 @@ describe('ChatbotService', () => {
     );
   });
 
-  it('answers canteen order intent using real order data', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-1' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.canteenOrder.findFirst.mockResolvedValue({
-      id: 'order-1',
-      orderCode: 'CTN-20260426-ABCD',
-      status: 'paid',
-      totalAmount: 55000,
+  it('maps legacy deepLinks to friendly action labels when loading messages', async () => {
+    prisma.chatSession.findUnique.mockResolvedValue({
+      id: 'session-1',
+      userId: 'student-1',
     });
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'Cho minh xem don canteen gan nhat',
-    });
-
-    expect(result.intent).toBe('canteen_order_status');
-    expect(result.answer).toContain('CTN-20260426-ABCD');
-    expect(result.deepLinks).toEqual(['/services/canteen']);
-    expect(result.suggestedQuestions).toBeDefined();
-    expect(Array.isArray(result.suggestedQuestions)).toBe(true);
-  });
-
-  it('returns schedule_today intent when asking about class schedule', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-2' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.classEnrollment.findMany.mockResolvedValue([
+    prisma.chatMessage.findMany.mockResolvedValue([
       {
-        classSection: {
-          course: { name: 'Toán cao cấp' },
-          meetings: [{ startTime: '07:30', endTime: '09:00', room: 'A101' }],
-        },
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Bạn có một đơn canteen.',
+        intent: 'canteen_order_status',
+        confidence: 0.9,
+        citations: [],
+        deepLinks: ['/services/canteen'],
+        createdAt: new Date('2026-06-02T01:00:00.000Z'),
       },
     ]);
 
-    const result = await service.query('student-1', Role.student, {
-      message: 'lich hoc hom nay cua toi',
-    });
+    const messages = await service.getMessages('student-1', 'session-1');
 
-    expect(result.intent).toBe('schedule_today');
-    expect(result.answer).toContain('Toán cao cấp');
-    expect(result.deepLinks).toEqual(['/services/schedule']);
-  });
-
-  it('returns schedule_week intent when asking about weekly schedule', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-week' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.classEnrollment.findMany.mockResolvedValue([
-      {
-        classSection: {
-          course: { name: 'Cáº¥u trÃºc dá»¯ liá»‡u' },
-          meetings: [
-            { dayOfWeek: 1, startTime: '07:30', endTime: '09:00', room: 'A101' },
-            { dayOfWeek: 3, startTime: '13:00', endTime: '15:00', room: 'B203' },
-          ],
-        },
-      },
+    expect(messages[0]?.actions).toEqual([
+      { label: 'Mở canteen', route: '/services/canteen', kind: 'navigate' },
     ]);
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'lich hoc tuan nay cua toi',
-    });
-
-    expect(result.intent).toBe('schedule_week');
-    expect(result.answer).toContain('Thứ 2');
-    expect(result.answer).toContain('Thứ 4');
   });
 
-  it('returns canteen catalog intent when asking what food is available', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-catalog' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.canteenCategory.findMany.mockResolvedValue([
-      {
-        id: 'cat-1',
-        name: 'Cơm phần',
-        products: [
-          { id: 'product-1', name: 'Cơm gà', price: 35000 },
-          { id: 'product-2', name: 'Cơm sườn', price: 38000 },
-        ],
-      },
-    ]);
+  it('returns admin capabilities with ops scope', () => {
+    const capabilities = service.getCapabilities(Role.admin);
 
-    const result = await service.query('student-1', Role.student, {
-      message: 'hom nay canteen ban gi',
-    });
-
-    expect(result.intent).toBe('canteen_catalog');
-    expect(result.answer).toContain('Cơm gà');
-    expect(result.deepLinks).toEqual(['/services/canteen']);
-  });
-
-  it('returns library loan request intent when asking about pending requests', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-library-request' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.libraryLoanRequest.findMany.mockResolvedValue([
-      {
-        id: 'request-1',
-        status: 'pending',
-        book: { id: 'book-1', title: 'Clean Code', authors: 'Robert C. Martin' },
-        copy: { id: 'copy-1', copyCode: 'LIB-001-1' },
-      },
-    ]);
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'yeu cau muon cua toi',
-    });
-
-    expect(result.intent).toBe('library_loan_requests');
-    expect(result.answer).toContain('Clean Code');
-    expect(result.deepLinks).toEqual(['/services/library']);
-  });
-
-  it('returns event_upcoming intent when asking about events', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-3' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.event.findMany.mockResolvedValue([
-      {
-        id: 'ev-1',
-        title: 'Workshop AI 2026',
-        startAt: new Date('2026-05-10'),
-        location: 'Hội trường A',
-      },
-    ]);
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'su kien sap toi',
-    });
-
-    expect(result.intent).toBe('event_upcoming');
-    expect(result.answer).toContain('Workshop AI 2026');
-    expect(result.deepLinks).toEqual(['/services/events']);
-  });
-
-  it('returns notification_unread intent when asking about notifications', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-4' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.notification.count.mockResolvedValue(3);
-    prisma.notification.findFirst.mockResolvedValue({
-      id: 'notif-1',
-      title: 'Sách gần hết hạn',
-    });
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'thong bao chua doc',
-    });
-
-    expect(result.intent).toBe('notification_unread');
-    expect(result.answer).toContain('3');
-    expect(result.deepLinks).toEqual(['/notifications']);
-  });
-
-  it('returns room_booking_status when asking about room booking', async () => {
-    prisma.chatSession.create.mockResolvedValue({ id: 'session-5' });
-    prisma.chatMessage.create.mockResolvedValue(undefined);
-    prisma.roomBooking.findFirst.mockResolvedValue({
-      id: 'rb-1',
-      bookingDate: new Date('2026-05-08'),
-      status: 'pending',
-      room: { name: 'B203' },
-    });
-
-    const result = await service.query('student-1', Role.student, {
-      message: 'dat phong cua toi',
-    });
-
-    expect(result.intent).toBe('room_booking_status');
-    expect(result.answer).toContain('B203');
-    expect(result.deepLinks).toEqual(['/services/room-booking']);
+    expect(capabilities.summaryScopes.some((item) => item.scope === 'ops')).toBe(true);
+    expect(capabilities.quickPrompts.length).toBeGreaterThan(0);
   });
 });

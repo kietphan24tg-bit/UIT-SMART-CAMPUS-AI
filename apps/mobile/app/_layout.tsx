@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { ParkingRealtimeProvider } from '@/components/system/parking-realtime-provider';
+import { ServiceWarmupProvider } from '@/components/system/service-warmup-provider';
 import { SosRealtimeProvider } from '@/components/system/sos-realtime-provider';
 import { StartupLoadingScreen } from '@/components/system/startup-loading-screen';
 import { syncPushToken } from '@/services/notifications/push';
@@ -130,6 +131,7 @@ export default function RootLayout() {
         <ParkingRealtimeProvider>
           <SosRealtimeProvider>
             <>
+              <ServiceWarmupProvider />
               <RootNavigator isStartupScreenVisible={isStartupScreenVisible} />
               {isStartupScreenVisible ? (
                 <StartupLoadingScreen onReadyToDisplay={handleStartupScreenReady} />
@@ -169,6 +171,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/[service]" />
         <Stack.Screen name="services/course-registration/index" />
         <Stack.Screen name="services/admin-catalog/index" />
+        <Stack.Screen name="services/admin-tools/campus-operations" />
         <Stack.Screen name="services/attendance/index" />
         <Stack.Screen name="services/attendance/lecturer" />
         <Stack.Screen name="services/attendance/scan" />
@@ -177,6 +180,8 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="services/campus-map/view" />
         <Stack.Screen name="services/library/index" />
         <Stack.Screen name="services/library/admin" />
+        <Stack.Screen name="services/study-materials/index" />
+        <Stack.Screen name="services/study-materials/admin" />
         <Stack.Screen name="services/canteen/index" />
         <Stack.Screen name="services/canteen/admin" />
         <Stack.Screen name="services/gps-sos/index" />

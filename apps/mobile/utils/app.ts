@@ -281,7 +281,12 @@ export function getRoleQuickActions(role?: string | null) {
       { id: 'operations', label: 'Vận hành', icon: 'pulse-outline', route: '/schedule' },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
-      { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
+      {
+        id: 'campus-map',
+        label: 'Bản đồ khuôn viên',
+        icon: 'map-outline',
+        route: '/services/campus-map',
+      },
       { id: 'gps-sos', label: 'GPS/SOS', icon: 'locate-outline', route: '/services/gps-sos' },
       { id: 'services', label: 'Dịch vụ', icon: 'grid-outline', route: '/services' },
     ];
@@ -290,8 +295,18 @@ export function getRoleQuickActions(role?: string | null) {
   if (isLecturerRole(role)) {
     return [
       { id: 'schedule', label: 'Lịch dạy', icon: 'calendar-outline', route: '/schedule' },
-      { id: 'attendance', label: 'Điểm danh QR', icon: 'qr-code-outline', route: '/services/attendance' },
-      { id: 'grades', label: 'Nhập điểm', icon: 'bar-chart-outline', route: '/services/grades/lecturer' },
+      {
+        id: 'attendance',
+        label: 'Điểm danh QR',
+        icon: 'qr-code-outline',
+        route: '/services/attendance',
+      },
+      {
+        id: 'grades',
+        label: 'Nhập điểm',
+        icon: 'bar-chart-outline',
+        route: '/services/grades/lecturer',
+      },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
     ];
@@ -301,7 +316,12 @@ export function getRoleQuickActions(role?: string | null) {
     { id: 'schedule', label: 'Lịch học', icon: 'calendar-outline', route: '/schedule' },
     { id: 'grades', label: 'Điểm & GPA', icon: 'bar-chart-outline', route: '/services/grades' },
     { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
-    { id: 'campus-map', label: 'Bản đồ khuôn viên', icon: 'map-outline', route: '/services/campus-map' },
+    {
+      id: 'campus-map',
+      label: 'Bản đồ khuôn viên',
+      icon: 'map-outline',
+      route: '/services/campus-map',
+    },
     { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
   ];
 }
@@ -349,7 +369,7 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       description: isStudentRole
         ? 'Hiển thị GPA, tổng tín chỉ và các học phần đã có điểm.'
         : gradesManager
-        ? 'Giảng viên có thể nhập điểm theo lớp học phần.'
+          ? 'Giảng viên có thể nhập điểm theo lớp học phần.'
           : isOperatorAdminRole
             ? 'Chỉ có giảng viên mới có quyền nhập điểm.'
             : 'Chỉ có giảng viên mới có quyền nhập điểm.',
@@ -388,7 +408,8 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       icon: 'document-text-outline',
       supportState: 'unsupported',
       isInteractive: false,
-      disabledReason: 'Đăng ký môn học hiện đang được cập nhật và tạm thời chưa khả dụng trong ứng dụng.',
+      disabledReason:
+        'Đăng ký môn học hiện đang được cập nhật và tạm thời chưa khả dụng trong ứng dụng.',
       lastVerifiedSource: 'schedule',
       primaryAction: 'Xem trạng thái',
       route: '/services',
@@ -506,6 +527,24 @@ export function getServiceEntries(role?: string | null): ServiceEntry[] {
       route: '/services/chatbot',
       description: 'Không gọi AI ngoài; truy vấn theo quyền và trả lời kèm nguồn/citation.',
     },
+    ...(isStudentRole || isLecturerRole(role)
+      ? [
+          {
+            id: 'study-materials',
+            title: 'Tài liệu',
+            summary: 'Chia sẻ đề thi, giáo trình và tài liệu học tập dùng chung trong app.',
+            category: 'Học vụ' as const,
+            icon: 'document-attach-outline',
+            supportState: 'live' as const,
+            isInteractive: true,
+            lastVerifiedSource: 'manual' as const,
+            primaryAction: 'Mở tài liệu',
+            route: '/services/study-materials',
+            description:
+              'Sinh viên và giảng viên có thể tải lên, mở file và theo dõi người đăng tài liệu.',
+          },
+        ]
+      : []),
     {
       id: 'smart-classroom',
       title: 'Lớp học thông minh',

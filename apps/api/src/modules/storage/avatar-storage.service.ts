@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { ALLOWED_AVATAR_MIME_TYPES, MAX_AVATAR_UPLOAD_SIZE_BYTES } from './avatar-upload.constants';
+import {
+  ALLOWED_AVATAR_MIME_TYPES,
+  ALLOWED_STUDY_MATERIAL_MIME_TYPES,
+  MAX_AVATAR_UPLOAD_SIZE_BYTES,
+  MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES,
+} from './avatar-upload.constants';
 
 export interface AvatarUploadFile {
   buffer: Buffer;
@@ -30,6 +35,11 @@ export interface UploadedCanteenProductImageAsset {
 export interface UploadedLibraryBookCoverAsset {
   key: string;
   imageUrl: string;
+}
+
+export interface UploadedStudyMaterialAsset {
+  key: string;
+  fileUrl: string;
 }
 
 @Injectable()
@@ -92,8 +102,30 @@ export class AvatarStorageService {
     };
   }
 
+  async uploadStudyMaterialFile(
+    actorId: string,
+    file: AvatarUploadFile,
+  ): Promise<UploadedStudyMaterialAsset> {
+    const key = this.buildScopedFileKey(['study-materials', actorId], file.mimetype);
+    const publicUrl = await this.uploadFileObject(key, file);
+
+    return {
+      key,
+      fileUrl: publicUrl,
+    };
+  }
+
   private async uploadImageObject(key: string, file: AvatarUploadFile) {
     this.assertValidImageFile(file);
+    return this.uploadObject(key, file);
+  }
+
+  private async uploadFileObject(key: string, file: AvatarUploadFile) {
+    this.assertValidStudyMaterialFile(file);
+    return this.uploadObject(key, file);
+  }
+
+  private async uploadObject(key: string, file: AvatarUploadFile) {
     this.assertStorageConfigured();
 
     const requestUrl = this.buildObjectUrl(key);
@@ -140,6 +172,10 @@ export class AvatarStorageService {
   }
 
   private buildScopedImageKey(pathSegments: string[], mimetype: string) {
+    return this.buildScopedFileKey(pathSegments, mimetype);
+  }
+
+  private buildScopedFileKey(pathSegments: string[], mimetype: string) {
     const extension = this.resolveExtension(mimetype);
     return `${pathSegments.join('/')}/${randomUUID()}.${extension}`;
   }
@@ -158,10 +194,25 @@ export class AvatarStorageService {
     }
   }
 
+  private assertValidStudyMaterialFile(file: AvatarUploadFile) {
+    if (!file?.buffer || !file.size) {
+      throw new BadRequestException('Study material file is required');
+    }
+
+    if (file.size > MAX_STUDY_MATERIAL_UPLOAD_SIZE_BYTES) {
+      throw new BadRequestException('Study material file must be 20 MB or smaller');
+    }
+
+    if (!ALLOWED_STUDY_MATERIAL_MIME_TYPES.has(file.mimetype)) {
+      throw new BadRequestException('Only JPG, PNG, WebP, PDF, DOC, and DOCX files are allowed');
+    }
+  }
+
   private resolveExtension(mimetype: string) {
-    const extension = ALLOWED_AVATAR_MIME_TYPES.get(mimetype);
+    const extension =
+      ALLOWED_AVATAR_MIME_TYPES.get(mimetype) ?? ALLOWED_STUDY_MATERIAL_MIME_TYPES.get(mimetype);
     if (!extension) {
-      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed');
+      throw new BadRequestException('Unsupported upload file type');
     }
     return extension;
   }
@@ -218,7 +269,12 @@ export class AvatarStorageService {
     return this.buildObjectUrl(key).toString();
   }
 
-  private getSignatureKey(secretKey: string, dateStamp: string, regionName: string, serviceName: string) {
+  private getSignatureKey(
+    secretKey: string,
+    dateStamp: string,
+    regionName: string,
+    serviceName: string,
+  ) {
     const kDate = createHmac('sha256', `AWS4${secretKey}`).update(dateStamp).digest();
     const kRegion = createHmac('sha256', kDate).update(regionName).digest();
     const kService = createHmac('sha256', kRegion).update(serviceName).digest();

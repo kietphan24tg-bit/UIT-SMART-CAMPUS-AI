@@ -20,6 +20,7 @@ import { RegistrationsModule } from './modules/registrations/registrations.modul
 import { RoomBookingsModule } from './modules/room-bookings/room-bookings.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { SosModule } from './modules/sos/sos.module';
+import { StudyMaterialsModule } from './modules/study-materials/study-materials.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -48,6 +49,7 @@ import { UsersModule } from './modules/users/users.module';
     RegistrationsModule,
     IotModule,
     PaymentsModule,
+    StudyMaterialsModule,
   ],
 })
 export class AppModule {}

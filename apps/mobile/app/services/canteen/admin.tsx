@@ -1037,6 +1037,8 @@ export default function CanteenAdminScreen() {
                     source={{ uri: productForm.imageUrl }}
                     style={styles.imageUploadPreviewImage}
                     contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={0}
                   />
                   <Pressable
                     accessibilityRole="button"
@@ -1835,7 +1837,13 @@ function ProductImageThumbnail({
       ]}
     >
       {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.productImageAsset} contentFit="cover" />
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.productImageAsset}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={0}
+        />
       ) : (
         <View style={styles.productImagePlaceholder}>
           <Ionicons name="image-outline" size={showLabel ? 22 : 18} color={theme.colors.textSoft} />

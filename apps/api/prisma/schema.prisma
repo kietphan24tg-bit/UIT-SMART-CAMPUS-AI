@@ -149,6 +149,12 @@ enum KnowledgeDocumentSource {
   service
 }
 
+enum StudyMaterialCategory {
+  exam
+  textbook
+  other
+}
+
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
@@ -194,6 +200,7 @@ model User {
   resolvedSosRequests   SosRequest[]          @relation("SosRequestResolver")
   chatbotSessions       ChatSession[]
   chatbotMessages       ChatMessage[]
+  uploadedStudyMaterials StudyMaterial[]
 
   @@map("users")
 }
@@ -816,6 +823,28 @@ model KnowledgeDocument {
 
   @@index([isActive])
   @@map("knowledge_documents")
+}
+
+model StudyMaterial {
+  id            String                @id @default(uuid())
+  title         String
+  description   String?
+  category      StudyMaterialCategory
+  fileUrl       String                @map("file_url")
+  storageKey    String                @map("storage_key")
+  fileName      String                @map("file_name")
+  mimeType      String                @map("mime_type")
+  fileSizeBytes Int                   @map("file_size_bytes")
+  uploaderId    String                @map("uploader_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  uploader User @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([uploaderId, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
+  @@map("study_materials")
 }
 
 model KnowledgeChunk {
