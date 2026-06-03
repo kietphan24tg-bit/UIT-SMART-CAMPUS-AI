@@ -264,7 +264,7 @@ export function getOperationsTaskConfig(
                       formatDateTime(item.reportedAt),
                       item.isResolved ? 'Đã xử lý' : 'Đang mở',
                       item.isResolved ? 'info' : 'danger',
-                      '/alerts',
+                      '/operations/alerts',
                     ),
                   ),
               }
@@ -275,7 +275,7 @@ export function getOperationsTaskConfig(
         ],
         primaryAction: {
           label: 'Mở trung tâm cảnh báo',
-          route: '/alerts',
+          route: '/operations/alerts',
           kind: 'primary',
           supportState: 'live',
           lastVerifiedSource: 'safety',
@@ -322,7 +322,7 @@ export function getOperationsTaskConfig(
         ],
         primaryAction: {
           label: 'Mở Parking + IoT',
-          route: '/parking',
+          route: '/operations/parking',
           kind: 'primary',
           supportState: 'live',
           lastVerifiedSource: 'parking',

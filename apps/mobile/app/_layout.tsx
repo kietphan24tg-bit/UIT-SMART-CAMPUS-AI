@@ -161,6 +161,8 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="schedule/semester/[id]" />
         <Stack.Screen name="schedule/[task]" />
+        <Stack.Screen name="operations/alerts" />
+        <Stack.Screen name="operations/parking" />
         <Stack.Screen name="operations/[task]" />
         <Stack.Screen name="parking/[task]" />
         <Stack.Screen name="services/room-booking/index" />

@@ -436,4 +436,28 @@ describe('ScheduleScreen', () => {
     expect(getByText('Broadcast')).toBeTruthy();
     expect(getByText('Tài khoản')).toBeTruthy();
   });
+
+  it('keeps admin entry tiles scoped to the operations route tree', () => {
+    mockUseEffectiveRole.mockReturnValue('admin');
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = { user: { role: 'admin' } };
+      return selector(state);
+    });
+    mockUseScheduleScreenData.mockReturnValue({
+      semesters: [],
+      resolvedSemesterId: undefined,
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      schedule: [],
+    });
+
+    const { getByText } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByText('Fire alert'));
+    fireEvent.press(getByText('Parking + IoT'));
+
+    expect(mockRouter.push).toHaveBeenNthCalledWith(1, '/operations/fire-alerts');
+    expect(mockRouter.push).toHaveBeenNthCalledWith(2, '/operations/parking-ops');
+  });
 });

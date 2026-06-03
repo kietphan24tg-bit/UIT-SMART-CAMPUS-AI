@@ -22,7 +22,7 @@ export default function SettingsScreen() {
   const role = useAuthStore((state) => state.user?.role);
   const preference = useThemePreference();
   const setPreference = useSetThemePreference();
-  const appVersion = Constants.expoConfig?.version ?? '3.0.2';
+  const appVersion = Constants.expoConfig?.version ?? '3.0.3';
 
   const handleLogout = async () => {
     await logout();
