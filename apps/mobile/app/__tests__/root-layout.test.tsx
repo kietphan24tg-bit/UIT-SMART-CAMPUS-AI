@@ -108,12 +108,14 @@ describe('RootLayout startup loading screen', () => {
     expect(screen.getByTestId('startup-loading-screen')).toBeTruthy();
   });
 
-  it('hides the native splash once the startup logo is ready to render', async () => {
+  it('hides the native splash once the startup loading screen is laid out', async () => {
     const screen = render(<RootLayout />);
 
     expect(splashScreen.hideAsync).not.toHaveBeenCalled();
 
-    fireEvent(screen.getByTestId('startup-loading-logo'), 'loadEnd');
+    fireEvent(screen.getByTestId('startup-loading-screen'), 'layout', {
+      nativeEvent: { layout: { height: 812, width: 375, x: 0, y: 0 } },
+    });
 
     await waitFor(() => {
       expect(splashScreen.hideAsync).toHaveBeenCalledTimes(1);
