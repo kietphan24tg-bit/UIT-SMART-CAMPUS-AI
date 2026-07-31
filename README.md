@@ -8,7 +8,7 @@
 ![Turborepo](https://img.shields.io/badge/Turborepo-EF4444?style=for-the-badge&logo=turbo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 
-**Ứng dụng tất-cả-trong-một dành cho sinh viên Trường Đại học Công nghệ Thông tin (UIT)**
+**Ứng dụng tất-cả-trong-một dành cho sinh viên Trường Đại học Công nghệ Thông tin (UIT)** BẢN QUYỀN ĐƯỢC BẢO LƯU
 
 ---
 
