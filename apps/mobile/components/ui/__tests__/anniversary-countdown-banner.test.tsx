@@ -97,6 +97,54 @@ describe('AnniversaryCountdownBanner', () => {
     expect(screen.queryByText('Hôm nay UIT tròn 20 năm')).toBeNull();
   });
 
+  it.each([
+    {
+      label: 'compact phones',
+      layout: {
+        ...baseLayout,
+        viewportWidth: 340,
+        isCompact: true,
+        isRegularPhone: false,
+        availableWidth: 312,
+      },
+    },
+    {
+      label: 'regular phones',
+      layout: {
+        ...baseLayout,
+      },
+    },
+    {
+      label: 'large phones',
+      layout: {
+        ...baseLayout,
+        viewportWidth: 430,
+        isWidePhone: false,
+        isLargePhone: true,
+        availableWidth: 390,
+      },
+    },
+  ])('keeps three-digit day values readable on $label', ({ layout }) => {
+    jest.setSystemTime(new Date('2026-06-09T00:00:00+07:00'));
+    mockUseResponsiveLayout.mockReturnValue(layout);
+
+    render(<AnniversaryCountdownBanner />);
+
+    const dayValue = screen.getByTestId('anniversary-countdown-days-value');
+    const flattenedStyle = ReactNative.StyleSheet.flatten(dayValue.props.style);
+
+    expect(dayValue).toHaveTextContent('364');
+    expect(dayValue.props.numberOfLines).toBe(1);
+    expect(dayValue.props.adjustsFontSizeToFit).toBe(true);
+    expect(dayValue.props.minimumFontScale).toBe(0.8);
+    expect(flattenedStyle).toMatchObject({
+      fontSize: 24,
+      lineHeight: 28,
+      textAlign: 'center',
+      width: '100%',
+    });
+  });
+
   it('uses a wrapped 2x2 grid on compact layouts', () => {
     mockUseResponsiveLayout.mockReturnValue({
       ...baseLayout,

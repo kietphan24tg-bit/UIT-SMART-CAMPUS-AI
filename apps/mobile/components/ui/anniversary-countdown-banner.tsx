@@ -325,9 +325,13 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
                 ]}
               />
               <Text
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                numberOfLines={1}
                 testID={`anniversary-countdown-${item.id}-value`}
                 style={[
                   styles.countdownValue,
+                  item.value.length > 2 ? styles.countdownValueThreeDigits : null,
                   layout.isTablet ? styles.countdownValueTablet : null,
                   { color: theme.colors.heroText, fontFamily: theme.fonts.bold },
                 ]}
@@ -484,6 +488,8 @@ const styles = StyleSheet.create({
   },
   countdownCardRegular: {
     flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
   },
   countdownCardCompact: {
     width: '48%',
@@ -501,6 +507,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.6,
     lineHeight: 32,
+    textAlign: 'center',
+    width: '100%',
+  },
+  countdownValueThreeDigits: {
+    fontSize: 24,
+    letterSpacing: -0.4,
+    lineHeight: 28,
   },
   countdownValueTablet: {
     fontSize: 32,
