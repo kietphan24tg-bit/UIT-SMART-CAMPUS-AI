@@ -52,6 +52,45 @@ export class PasswordResetMailerService {
     }
   }
 
+  async sendRegistrationOtpEmail(email: string, otp: string, expiresInMinutes: number) {
+    const transporter = this.getTransporter();
+    const from = this.getFromAddress();
+    if (!transporter || !from) {
+      return false;
+    }
+
+    try {
+      await transporter.sendMail({
+        from,
+        to: email,
+        subject: 'UIT Smart Campus | Mã OTP xác thực đăng ký',
+        text: [
+          'Bạn đang tạo tài khoản UIT Smart Campus.',
+          `Mã OTP xác thực đăng ký của bạn là: ${otp}`,
+          `Mã có hiệu lực trong ${expiresInMinutes} phút.`,
+          'Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.',
+        ].join('\n'),
+        html: `
+          <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+            <p>Bạn đang tạo tài khoản <strong>UIT Smart Campus</strong>.</p>
+            <p style="margin: 20px 0;">
+              <span style="display: inline-block; padding: 12px 18px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; font-size: 24px; font-weight: 700; letter-spacing: 4px;">
+                ${otp}
+              </span>
+            </p>
+            <p>Mã OTP có hiệu lực trong <strong>${expiresInMinutes} phút</strong>.</p>
+            <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.</p>
+          </div>
+        `,
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown mail transport error';
+      this.logger.warn(`Failed to send registration OTP email: ${message}`);
+      return false;
+    }
+  }
+
   private getFromAddress() {
     return this.configService.get<string>('SMTP_FROM', '').trim();
   }
@@ -76,6 +115,10 @@ export class PasswordResetMailerService {
       port,
       secure: this.configService.get<boolean>('SMTP_SECURE', port === 465),
       auth: user && pass ? { user, pass } : undefined,
+      // Keep delivery bounded below the mobile OTP request timeout.
+      connectionTimeout: 5_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 15_000,
     });
 
     return this.transporter;

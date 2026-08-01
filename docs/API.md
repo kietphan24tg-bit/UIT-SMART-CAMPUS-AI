@@ -21,6 +21,15 @@ Use JWT bearer tokens for all protected endpoints.
 Authorization: Bearer <access_token>
 ```
 
+### Authentication Email Policy
+
+The OTP registration contract below is the target contract for the coordinated direct cutover. It must be released together with the matching API, mobile, and database changes.
+
+- Registration and every password-reset step accept only addresses whose complete, normalized domain is exactly `gm.uit.edu.vn` or `uit.edu.vn`.
+- Normalize email by trimming surrounding whitespace and converting it to lowercase before lookup, uniqueness checks, storage, OTP delivery, and comparison. Suffix-only checks such as `endsWith("uit.edu.vn")` are not sufficient.
+- Login and refresh remain available to existing accounts. Existing `users` rows are backfilled as verified during migration, including accounts created before this domain policy.
+- The domain restriction still applies when an existing account requests a password reset. Preflight must report legacy addresses outside the two accepted domains before cutover.
+
 ## IoT Secret
 
 Gateway and firmware calls must include a shared secret header:
@@ -61,15 +70,17 @@ This applies only to IoT and safety ingress endpoints, not to mobile clients.
 
 ### Auth
 
-| Method | Endpoint                       | Auth |
-| ------ | ------------------------------ | ---- |
-| POST   | `/auth/register`               | No   |
-| POST   | `/auth/login`                  | No   |
-| POST   | `/auth/refresh`                | No   |
-| POST   | `/auth/password-reset/request` | No   |
-| POST   | `/auth/password-reset/verify`  | No   |
-| POST   | `/auth/password-reset/reset`   | No   |
-| POST   | `/auth/logout`                 | Yes  |
+| Method | Endpoint                       | Auth | Purpose |
+| ------ | ------------------------------ | ---- | ------- |
+| POST   | `/auth/register`               | No   | Create a pending registration and send OTP; does not issue tokens |
+| POST   | `/auth/register/verify`        | No   | Verify OTP, create the user, and issue tokens |
+| POST   | `/auth/register/resend`        | No   | Rotate and resend the pending registration OTP |
+| POST   | `/auth/login`                  | No   | Login an existing verified or legacy-backfilled account |
+| POST   | `/auth/refresh`                | No   | Rotate an authenticated session |
+| POST   | `/auth/password-reset/request` | No   | Start password-reset OTP challenge |
+| POST   | `/auth/password-reset/verify`  | No   | Validate password-reset OTP |
+| POST   | `/auth/password-reset/reset`   | No   | Consume OTP and replace password |
+| POST   | `/auth/logout`                 | Yes  | Revoke the current user's refresh tokens |
 
 ### Users
 
@@ -84,7 +95,99 @@ This applies only to IoT and safety ingress endpoints, not to mobile clients.
 | PATCH  | `/users/:id/active` | Admin / Super Admin |
 | DELETE | `/users/:id`        | Admin / Super Admin |
 
+### Registration Verification Contracts
+
+Pending registration data is stored separately from `users`. A pending challenge must not receive an access or refresh token and must not gain access to protected APIs.
+
+#### `POST /auth/register`
+
+Body:
+
+```json
+{
+  "email": "student@gm.uit.edu.vn",
+  "password": "Password123",
+  "studentId": "22520001",
+  "firstName": "Van A",
+  "lastName": "Nguyen"
+}
+```
+
+Response `data` (`201 Created`):
+
+```json
+{
+  "challengeId": "9e0df78c-d9e1-43ff-ad1e-3788f07309c6",
+  "maskedEmail": "st***@gm.uit.edu.vn",
+  "expiresInSeconds": 600,
+  "resendAvailableInSeconds": 60,
+  "delivery": "email"
+}
+```
+
+The API hashes the password and OTP before storing the pending row. Existing `users.email` or `users.student_id` returns `409 Conflict`. A repeated registration request for the same email or MSSV returns `429` during cooldown; after cooldown it replaces the earlier active challenge. Clients should normally retain `challengeId` and use `/auth/register/resend`.
+
+Only the explicit `development` and `test` environments may return `delivery: "preview"` and `previewCode`. Missing, unknown, staging, and production environments fail closed and require working SMTP.
+
+#### `POST /auth/register/verify`
+
+Body:
+
+```json
+{
+  "challengeId": "9e0df78c-d9e1-43ff-ad1e-3788f07309c6",
+  "otp": "123456"
+}
+```
+
+Response `data` (`200 OK`):
+
+```json
+{
+  "accessToken": "<jwt>",
+  "refreshToken": "<opaque-refresh-token>"
+}
+```
+
+Verification is a single transaction: claim the registration challenge, recheck email and MSSV uniqueness, create `users` with `email_verified_at = now()`, create the refresh-token row, then delete the challenge containing the password/OTP hashes. A failed transaction leaves no partial user. Only the current unexpired OTP is valid, and five failed attempts lock verification until resend creates a fresh code.
+
+#### `POST /auth/register/resend`
+
+Body:
+
+```json
+{
+  "challengeId": "9e0df78c-d9e1-43ff-ad1e-3788f07309c6"
+}
+```
+
+Response `data` (`200 OK`):
+
+```json
+{
+  "challengeId": "9e0df78c-d9e1-43ff-ad1e-3788f07309c6",
+  "maskedEmail": "st***@gm.uit.edu.vn",
+  "expiresInSeconds": 600,
+  "resendAvailableInSeconds": 60,
+  "delivery": "email"
+}
+```
+
+Resend resolves the pending identity by opaque `challengeId`, applies a cooldown, replaces the stored OTP hash/expiry atomically, resets failed attempts, and invalidates the earlier code. Expired or consumed challenge IDs return the same generic invalid-challenge error. The mobile client sends an expired flow back through registration so the API can clean the old challenge and issue a new one.
+
+Common registration errors:
+
+| Status | Meaning |
+| ------ | ------- |
+| `400` | Invalid payload/domain or missing, expired, or consumed challenge |
+| `401` | OTP is wrong, superseded, or has reached the failed-attempt limit |
+| `409` | Email or MSSV already exists in `users` |
+| `429` | Registration/resend cooldown has not elapsed |
+| `500` | Production SMTP is unavailable; no preview OTP is returned |
+
 ### Password Reset Contracts
+
+All three password-reset endpoints use the same exact-domain policy (`gm.uit.edu.vn` or `uit.edu.vn`) and normalized email described above.
 
 #### `POST /auth/password-reset/request`
 

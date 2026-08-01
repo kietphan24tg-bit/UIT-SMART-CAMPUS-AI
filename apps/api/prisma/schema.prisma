@@ -171,6 +171,7 @@ model User {
   dateOfBirth     DateTime? @map("date_of_birth")
   address         String?
   isActive        Boolean   @default(true) @map("is_active")
+  emailVerifiedAt DateTime? @map("email_verified_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -334,6 +335,28 @@ model PasswordResetOtp {
 
   @@index([userId, consumedAt, expiresAt])
   @@map("password_reset_otps")
+}
+
+model RegistrationChallenge {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  studentId         String    @map("student_id")
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  otpHash           String    @map("otp_hash")
+  expiresAt         DateTime  @map("expires_at")
+  resendAvailableAt DateTime  @map("resend_available_at")
+  failedAttempts    Int       @default(0) @map("failed_attempts")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  lastSentAt        DateTime  @map("last_sent_at")
+  consumedAt        DateTime? @map("consumed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([studentId, consumedAt, expiresAt])
+  @@index([expiresAt])
+  @@map("registration_challenges")
 }
 
 model RefreshToken {

@@ -1,4 +1,10 @@
-import { isStrongPassword, isValidEmail, isValidStudentId } from '../validation';
+import {
+  isStrongPassword,
+  isValidEmail,
+  isValidStudentId,
+  isValidUitEmail,
+  normalizeEmail,
+} from '../validation';
 
 describe('isValidEmail', () => {
   it('should return true for valid emails', () => {
@@ -13,6 +19,27 @@ describe('isValidEmail', () => {
     expect(isValidEmail('@no-local.com')).toBe(false);
     expect(isValidEmail('no-domain@')).toBe(false);
     expect(isValidEmail('spaces in@email.com')).toBe(false);
+  });
+});
+
+describe('UIT email helpers', () => {
+  it.each([
+    'student@gm.uit.edu.vn',
+    'student@uit.edu.vn',
+    ' STUDENT@GM.UIT.EDU.VN ',
+  ])('accepts the supported UIT email %s', (email) => {
+    expect(isValidUitEmail(email)).toBe(true);
+  });
+
+  it.each(['student@gmail.com', 'student@sub.gm.uit.edu.vn', 'student@uit.edu.vn.evil.com'])(
+    'rejects the unsupported email %s',
+    (email) => {
+      expect(isValidUitEmail(email)).toBe(false);
+    },
+  );
+
+  it('normalizes email casing and surrounding whitespace', () => {
+    expect(normalizeEmail(' Student@GM.UIT.EDU.VN ')).toBe('student@gm.uit.edu.vn');
   });
 });
 

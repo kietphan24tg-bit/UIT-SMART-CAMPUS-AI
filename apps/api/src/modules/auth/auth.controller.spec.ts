@@ -11,6 +11,14 @@ describe('AuthController', () => {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
   };
+  const registrationChallenge = {
+    challengeId: '9e0df78c-d9e1-43ff-ad1e-3788f07309c6',
+    maskedEmail: 'te***@uit.edu.vn',
+    expiresInSeconds: 600,
+    resendAvailableInSeconds: 60,
+    delivery: 'preview' as const,
+    previewCode: '123456',
+  };
   const passwordResetChallenge = {
     maskedEmail: 'st***@gm.uit.edu.vn',
     expiresInSeconds: 600,
@@ -25,7 +33,9 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: {
-            register: jest.fn().mockResolvedValue(mockTokens),
+            register: jest.fn().mockResolvedValue(registrationChallenge),
+            verifyRegistrationOtp: jest.fn().mockResolvedValue(mockTokens),
+            resendRegistrationOtp: jest.fn().mockResolvedValue(registrationChallenge),
             login: jest.fn().mockResolvedValue(mockTokens),
             refreshToken: jest.fn().mockResolvedValue(mockTokens),
             requestPasswordReset: jest.fn().mockResolvedValue(passwordResetChallenge),
@@ -43,7 +53,7 @@ describe('AuthController', () => {
   });
 
   describe('register', () => {
-    it('should call authService.register and return tokens', async () => {
+    it('should call authService.register and return a challenge', async () => {
       const dto = {
         email: 'test@uit.edu.vn',
         password: 'Password123',
@@ -55,7 +65,28 @@ describe('AuthController', () => {
       const result = await controller.register(dto);
 
       expect(authService.register).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(registrationChallenge);
+    });
+
+    it('should verify the registration OTP and return tokens', async () => {
+      const dto = {
+        challengeId: registrationChallenge.challengeId,
+        otp: '123456',
+      };
+
+      const result = await controller.verifyRegistrationOtp(dto);
+
+      expect(authService.verifyRegistrationOtp).toHaveBeenCalledWith(dto.challengeId, dto.otp);
       expect(result).toEqual(mockTokens);
+    });
+
+    it('should resend registration OTP for the challenge', async () => {
+      const dto = { challengeId: registrationChallenge.challengeId };
+
+      const result = await controller.resendRegistrationOtp(dto);
+
+      expect(authService.resendRegistrationOtp).toHaveBeenCalledWith(dto.challengeId);
+      expect(result).toEqual(registrationChallenge);
     });
   });
 
@@ -136,11 +167,7 @@ describe('AuthController', () => {
 
       const result = await controller.resetPassword(dto);
 
-      expect(authService.resetPassword).toHaveBeenCalledWith(
-        dto.email,
-        dto.otp,
-        dto.newPassword,
-      );
+      expect(authService.resetPassword).toHaveBeenCalledWith(dto.email, dto.otp, dto.newPassword);
       expect(result).toEqual({ success: true });
     });
   });

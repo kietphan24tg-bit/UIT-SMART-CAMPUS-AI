@@ -69,6 +69,27 @@ describe('ForgotPasswordRoute', () => {
     });
   });
 
+  it('normalizes a valid UIT email before requesting OTP', async () => {
+    mockedAuthApi.requestPasswordReset.mockResolvedValue({
+      maskedEmail: 'st***@gm.uit.edu.vn',
+      expiresInSeconds: 600,
+      delivery: 'email',
+    });
+
+    const screen = render(<ForgotPasswordRoute />);
+    fireEvent.changeText(
+      screen.getByPlaceholderText('student@gm.uit.edu.vn'),
+      ' Student@GM.UIT.EDU.VN ',
+    );
+    fireEvent.press(screen.getByText('Gửi OTP'));
+
+    await waitFor(() => {
+      expect(mockedAuthApi.requestPasswordReset).toHaveBeenCalledWith({
+        email: 'student@gm.uit.edu.vn',
+      });
+    });
+  });
+
   it('shows an API error and stays on the email step when account does not exist', async () => {
     mockedAuthApi.requestPasswordReset.mockRejectedValue(
       new Error('Email chưa được đăng ký tài khoản.'),

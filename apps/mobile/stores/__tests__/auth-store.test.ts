@@ -11,12 +11,14 @@ import {
   AUTH_USER_SNAPSHOT_STORAGE_KEY,
   QUERY_CACHE_STORAGE_KEY,
 } from '@/services/storage/local-storage';
-
+import { REGISTRATION_SESSION_SETUP_ERROR_CODE } from '@/utils/auth-errors';
 
 jest.mock('@/services/api/auth', () => ({
   authApi: {
     login: jest.fn(),
     register: jest.fn(),
+    verifyRegistrationOtp: jest.fn(),
+    resendRegistrationOtp: jest.fn(),
     getMe: jest.fn(),
   },
 }));
@@ -41,9 +43,20 @@ const mockTokens = {
   refreshToken: 'mock-refresh-token',
 };
 
+const mockChallenge = {
+  challengeId: 'registration-challenge-1',
+  maskedEmail: 'te***@uit.edu.vn',
+  expiresInSeconds: 600,
+  resendAvailableInSeconds: 30,
+  delivery: 'preview' as const,
+  previewCode: '123456',
+};
+
 const mockedAuthApi = authApi as unknown as {
   login: jest.Mock;
   register: jest.Mock;
+  verifyRegistrationOtp: jest.Mock;
+  resendRegistrationOtp: jest.Mock;
   getMe: jest.Mock;
 };
 const mockedUsersApi = usersApi as unknown as {
@@ -74,6 +87,7 @@ describe('useAuthStore', () => {
       isAuthenticated: false,
       user: null,
       accessToken: null,
+      pendingRegistration: null,
     });
     jest.clearAllMocks();
     await AsyncStorage.clear();
@@ -90,6 +104,7 @@ describe('useAuthStore', () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.user).toBeNull();
     expect(state.accessToken).toBeNull();
+    expect(state.pendingRegistration).toBeNull();
   });
 
   describe('login', () => {
@@ -119,12 +134,12 @@ describe('useAuthStore', () => {
   });
 
   describe('register', () => {
-    it('should register, authenticate, and store cached profile snapshot', async () => {
-      mockedAuthApi.register.mockResolvedValue(mockTokens);
-      mockedAuthApi.getMe.mockResolvedValue(mockUser);
+    it('should keep the registration challenge in memory without authenticating', async () => {
+      mockedAuthApi.register.mockResolvedValue(mockChallenge);
+      const startedAt = Date.now();
 
-      await useAuthStore.getState().register({
-        email: 'test@uit.edu.vn',
+      const result = await useAuthStore.getState().register({
+        email: ' Test@UIT.EDU.VN ',
         password: 'Password123',
         studentId: '22520001',
         firstName: 'Nguyen',
@@ -132,11 +147,101 @@ describe('useAuthStore', () => {
       });
 
       const state = useAuthStore.getState();
-      expect(state.isAuthenticated).toBe(true);
-      expect(state.user).toEqual(mockUser);
-      await expect(AsyncStorage.getItem(AUTH_USER_SNAPSHOT_STORAGE_KEY)).resolves.toBe(
-        JSON.stringify(mockUser),
+      expect(result).toEqual(mockChallenge);
+      expect(mockedAuthApi.register).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'test@uit.edu.vn' }),
       );
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
+      expect(state.accessToken).toBeNull();
+      expect(state.pendingRegistration?.challenge).toEqual(mockChallenge);
+      expect(state.pendingRegistration?.expiresAtMs).toBeGreaterThanOrEqual(startedAt + 600_000);
+      expect(state.pendingRegistration?.resendAvailableAtMs).toBeGreaterThanOrEqual(
+        startedAt + 30_000,
+      );
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+      expect(mockedAuthApi.getMe).not.toHaveBeenCalled();
+    });
+
+    it('should verify OTP, persist tokens, and authenticate with the fetched profile', async () => {
+      useAuthStore.setState({
+        pendingRegistration: {
+          challenge: mockChallenge,
+          expiresAtMs: Date.now() + 600_000,
+          resendAvailableAtMs: Date.now() + 30_000,
+        },
+      });
+      mockedAuthApi.verifyRegistrationOtp.mockResolvedValue(mockTokens);
+      mockedAuthApi.getMe.mockResolvedValue(mockUser);
+
+      await useAuthStore.getState().verifyRegistrationOtp('123456');
+
+      expect(mockedAuthApi.verifyRegistrationOtp).toHaveBeenCalledWith({
+        challengeId: mockChallenge.challengeId,
+        otp: '123456',
+      });
+      expect(useAuthStore.getState()).toMatchObject({
+        isAuthenticated: true,
+        user: mockUser,
+        accessToken: mockTokens.accessToken,
+        pendingRegistration: null,
+      });
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'auth_access_token',
+        mockTokens.accessToken,
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'auth_refresh_token',
+        mockTokens.refreshToken,
+      );
+    });
+
+    it('should clear a consumed challenge and direct the user to login when profile loading fails', async () => {
+      useAuthStore.setState({
+        pendingRegistration: {
+          challenge: mockChallenge,
+          expiresAtMs: Date.now() + 600_000,
+          resendAvailableAtMs: Date.now() + 30_000,
+        },
+      });
+      mockedAuthApi.verifyRegistrationOtp.mockResolvedValue(mockTokens);
+      mockedAuthApi.getMe.mockRejectedValue(new Error('Profile unavailable'));
+
+      await expect(useAuthStore.getState().verifyRegistrationOtp('123456')).rejects.toMatchObject({
+        appCode: REGISTRATION_SESSION_SETUP_ERROR_CODE,
+      });
+
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_refresh_token');
+      expect(useAuthStore.getState()).toMatchObject({
+        isAuthenticated: false,
+        user: null,
+        accessToken: null,
+      });
+      expect(useAuthStore.getState().pendingRegistration).toBeNull();
+    });
+
+    it('should replace the pending challenge after resending registration OTP', async () => {
+      const refreshedChallenge = {
+        ...mockChallenge,
+        challengeId: 'registration-challenge-2',
+        previewCode: '654321',
+      };
+      useAuthStore.setState({
+        pendingRegistration: {
+          challenge: mockChallenge,
+          expiresAtMs: Date.now() + 600_000,
+          resendAvailableAtMs: Date.now(),
+        },
+      });
+      mockedAuthApi.resendRegistrationOtp.mockResolvedValue(refreshedChallenge);
+
+      await useAuthStore.getState().resendRegistrationOtp();
+
+      expect(mockedAuthApi.resendRegistrationOtp).toHaveBeenCalledWith({
+        challengeId: mockChallenge.challengeId,
+      });
+      expect(useAuthStore.getState().pendingRegistration?.challenge).toEqual(refreshedChallenge);
     });
   });
 

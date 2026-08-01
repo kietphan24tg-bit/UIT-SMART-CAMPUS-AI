@@ -12,6 +12,8 @@ import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordResetVerifyDto } from './dto/password-reset-verify.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegistrationOtpResendDto } from './dto/registration-otp-resend.dto';
+import { RegistrationOtpVerifyDto } from './dto/registration-otp-verify.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -22,6 +24,20 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('register/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify registration OTP and create the user' })
+  verifyRegistrationOtp(@Body() dto: RegistrationOtpVerifyDto) {
+    return this.authService.verifyRegistrationOtp(dto.challengeId, dto.otp);
+  }
+
+  @Post('register/resend')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend registration OTP' })
+  resendRegistrationOtp(@Body() dto: RegistrationOtpResendDto) {
+    return this.authService.resendRegistrationOtp(dto.challengeId);
   }
 
   @Post('login')

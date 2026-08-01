@@ -1,3 +1,5 @@
+import type { Server } from 'node:http';
+
 import { RequestMethod, ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -18,11 +20,14 @@ process.env.JWT_REFRESH_EXPIRATION ??= '7d';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.CORS_ORIGIN ??= '*';
 process.env.APP_BASE_URL ??= 'http://localhost:3000';
+process.env.NODE_ENV = 'test';
+process.env.SMTP_HOST = '';
+process.env.SMTP_FROM = '';
 
 describe('Auth API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let server: any;
+  let server: Server;
 
   const uniqueSuffix = `${Date.now()}`;
   const registerPayload = {
@@ -61,6 +66,9 @@ describe('Auth API (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.registrationChallenge.deleteMany({
+      where: { OR: [{ email: registerPayload.email }, { studentId: registerPayload.studentId }] },
+    });
     if (createdUserId) {
       await prisma.refreshToken.deleteMany({
         where: { userId: createdUserId },
@@ -105,6 +113,15 @@ describe('Auth API (e2e)', () => {
     expect(response.body.message).toBe('Email không đúng định dạng.');
   });
 
+  it('rejects a syntactically valid non-UIT registration email', async () => {
+    const response = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ ...registerPayload, email: 'student@example.com' })
+      .expect(400);
+
+    expect(response.body.message).toBe('Email cần thuộc miền UIT.');
+  });
+
   it('returns exact 400 message when register password is too short', async () => {
     const response = await request(server)
       .post('/api/v1/auth/register')
@@ -123,21 +140,52 @@ describe('Auth API (e2e)', () => {
     expect(response.body.message).toBe('Mã số sinh viên phải gồm đúng 8 chữ số.');
   });
 
-  it('registers a new student account and returns tokens', async () => {
-    const response = await request(server)
+  it('creates a challenge, resends OTP, then creates the verified account atomically', async () => {
+    const challengeResponse = await request(server)
       .post('/api/v1/auth/register')
-      .send(registerPayload)
+      .send({ ...registerPayload, email: registerPayload.email.toUpperCase() })
       .expect(201);
 
-    expect(response.body.data?.accessToken).toBeTruthy();
-    expect(response.body.data?.refreshToken).toBeTruthy();
+    expect(challengeResponse.body.data).toMatchObject({
+      maskedEmail: expect.stringContaining('@gm.uit.edu.vn'),
+      expiresInSeconds: expect.any(Number),
+      resendAvailableInSeconds: expect.any(Number),
+      delivery: 'preview',
+    });
+    expect(challengeResponse.body.data?.accessToken).toBeUndefined();
+
+    const challengeId = challengeResponse.body.data?.challengeId as string;
+    expect(challengeId).toBeTruthy();
+    expect(await prisma.user.findUnique({ where: { email: registerPayload.email } })).toBeNull();
+
+    await prisma.registrationChallenge.update({
+      where: { id: challengeId },
+      data: { resendAvailableAt: new Date(Date.now() - 1_000) },
+    });
+    const resendResponse = await request(server)
+      .post('/api/v1/auth/register/resend')
+      .send({ challengeId })
+      .expect(200);
+    const otp = resendResponse.body.data?.previewCode as string;
+    expect(otp).toMatch(/^\d{6}$/);
+
+    const verifyResponse = await request(server)
+      .post('/api/v1/auth/register/verify')
+      .send({ challengeId, otp })
+      .expect(200);
+    expect(verifyResponse.body.data?.accessToken).toBeTruthy();
+    expect(verifyResponse.body.data?.refreshToken).toBeTruthy();
 
     const createdUser = await prisma.user.findUnique({
       where: { email: registerPayload.email },
-      select: { id: true },
+      select: { id: true, emailVerifiedAt: true },
     });
 
     expect(createdUser?.id).toBeTruthy();
+    expect(createdUser?.emailVerifiedAt).toBeTruthy();
+    expect(
+      await prisma.registrationChallenge.findUnique({ where: { id: challengeId } }),
+    ).toBeNull();
     createdUserId = createdUser?.id ?? null;
   });
 
@@ -148,6 +196,15 @@ describe('Auth API (e2e)', () => {
       .expect(400);
 
     expect(response.body.message).toBe('Email không đúng định dạng.');
+  });
+
+  it('rejects a syntactically valid non-UIT password reset email', async () => {
+    const response = await request(server)
+      .post('/api/v1/auth/password-reset/request')
+      .send({ email: 'student@example.com' })
+      .expect(400);
+
+    expect(response.body.message).toBe('Email cần thuộc miền UIT.');
   });
 
   it('returns exact 400 message when password reset email is not registered', async () => {

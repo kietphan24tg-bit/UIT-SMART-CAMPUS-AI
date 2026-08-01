@@ -1,3 +1,4 @@
+import { isValidUitEmail, normalizeEmail } from '@smart-campus/shared';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,10 +31,6 @@ const EMPTY_REGISTER_FORM: RegisterFormState = {
   lastName: '',
 };
 
-function isValidUitEmail(value: string) {
-  return /@(gm\.)?uit\.edu\.vn$/i.test(value.trim());
-}
-
 function isValidPassword(value: string) {
   return /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(value);
 }
@@ -48,11 +45,12 @@ export function RegisterScreen() {
 
   const updateField = (key: keyof RegisterFormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setError('');
   };
 
   const handleRegister = async () => {
     const payload = {
-      email: form.email.trim(),
+      email: normalizeEmail(form.email),
       password: form.password,
       studentId: form.studentId.trim(),
       firstName: form.firstName.trim(),
@@ -84,7 +82,7 @@ export function RegisterScreen() {
 
     try {
       await register(payload);
-      router.replace('/home');
+      router.push('/register-otp');
     } catch (error) {
       setError(getLocalizedErrorMessage(error, 'Đăng ký chưa thành công. Vui lòng thử lại.'));
     } finally {

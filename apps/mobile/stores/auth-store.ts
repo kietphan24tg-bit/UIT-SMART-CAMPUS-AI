@@ -1,4 +1,5 @@
-import type { RegisterRequest } from '@smart-campus/shared';
+import { normalizeEmail } from '@smart-campus/shared';
+import type { AuthTokens, RegisterRequest, RegistrationChallenge } from '@smart-campus/shared';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
@@ -18,18 +19,29 @@ import {
   type StoredAuthUser,
   writeStoredAuthUser,
 } from '@/services/storage/local-storage';
+import { createRegistrationSessionSetupError } from '@/utils/auth-errors';
 
 type UserInfo = StoredAuthUser;
+
+export interface PendingRegistration {
+  challenge: RegistrationChallenge;
+  expiresAtMs: number;
+  resendAvailableAtMs: number;
+}
 
 interface AuthState {
   isHydrated: boolean;
   isAuthenticated: boolean;
   user: UserInfo | null;
   accessToken: string | null;
+  pendingRegistration: PendingRegistration | null;
 
   setUser: (user: UserInfo | null) => void;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterRequest) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<RegistrationChallenge>;
+  verifyRegistrationOtp: (otp: string) => Promise<void>;
+  resendRegistrationOtp: () => Promise<RegistrationChallenge>;
+  clearPendingRegistration: () => void;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
   refreshProfile: () => Promise<UserInfo | null>;
@@ -74,6 +86,7 @@ function setAuthenticatedState(
     isAuthenticated: true,
     user,
     accessToken,
+    pendingRegistration: null,
   });
 }
 
@@ -86,7 +99,19 @@ function setUnauthenticatedState(
     isAuthenticated: false,
     user: null,
     accessToken,
+    pendingRegistration: null,
   });
+}
+
+function createPendingRegistration(
+  challenge: RegistrationChallenge,
+  nowMs = Date.now(),
+): PendingRegistration {
+  return {
+    challenge,
+    expiresAtMs: nowMs + challenge.expiresInSeconds * 1_000,
+    resendAvailableAtMs: nowMs + challenge.resendAvailableInSeconds * 1_000,
+  };
 }
 
 async function persistUserSnapshot(user: UserInfo) {
@@ -94,11 +119,38 @@ async function persistUserSnapshot(user: UserInfo) {
   void prefetchAvatarUrl(user.avatarUrl);
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+async function completeAuthentication(
+  set: (nextState: Partial<AuthState>) => void,
+  tokens: AuthTokens,
+  context: 'login' | 'register',
+) {
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken);
+    await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
+    await logStoredTokens(context);
+
+    const user = await authApi.getMe(tokens.accessToken);
+    await persistUserSnapshot(user);
+    setAuthenticatedState(set, user, tokens.accessToken);
+  } catch (error) {
+    await clearStoredSessionState().catch(() => undefined);
+    set({
+      isHydrated: true,
+      isAuthenticated: false,
+      user: null,
+      accessToken: null,
+      pendingRegistration: null,
+    });
+    throw error;
+  }
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   isHydrated: false,
   isAuthenticated: false,
   user: null,
   accessToken: null,
+  pendingRegistration: null,
 
   setUser: (user) => {
     if (user) {
@@ -122,30 +174,58 @@ export const useAuthStore = create<AuthState>((set) => ({
         receivedRefreshToken: Boolean(tokens.refreshToken),
       });
     }
-    await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken);
-    await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
-    await logStoredTokens('login');
-
-    const user = await authApi.getMe(tokens.accessToken);
-    await persistUserSnapshot(user);
-    setAuthenticatedState(set, user, tokens.accessToken);
+    await completeAuthentication(set, tokens, 'login');
   },
 
   register: async (data) => {
-    const tokens = await authApi.register(data);
+    const challenge = await authApi.register({
+      ...data,
+      email: normalizeEmail(data.email),
+    });
+    set({ pendingRegistration: createPendingRegistration(challenge) });
+    return challenge;
+  },
+
+  verifyRegistrationOtp: async (otp) => {
+    const pendingRegistration = get().pendingRegistration;
+    if (!pendingRegistration) {
+      throw new Error('Phiên đăng ký không còn hiệu lực. Vui lòng đăng ký lại.');
+    }
+
+    const tokens = await authApi.verifyRegistrationOtp({
+      challengeId: pendingRegistration.challenge.challengeId,
+      otp,
+    });
     if (__DEV__) {
       console.warn('[auth-store] register token response', {
         receivedAccessToken: Boolean(tokens.accessToken),
         receivedRefreshToken: Boolean(tokens.refreshToken),
       });
     }
-    await SecureStore.setItemAsync(TOKEN_KEY, tokens.accessToken);
-    await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
-    await logStoredTokens('register');
+    try {
+      await completeAuthentication(set, tokens, 'register');
+    } catch {
+      // The server has already consumed the OTP and created the account. Do not
+      // leave a dead challenge that can never be verified again.
+      throw createRegistrationSessionSetupError();
+    }
+  },
 
-    const user = await authApi.getMe(tokens.accessToken);
-    await persistUserSnapshot(user);
-    setAuthenticatedState(set, user, tokens.accessToken);
+  resendRegistrationOtp: async () => {
+    const pendingRegistration = get().pendingRegistration;
+    if (!pendingRegistration) {
+      throw new Error('Phiên đăng ký không còn hiệu lực. Vui lòng đăng ký lại.');
+    }
+
+    const challenge = await authApi.resendRegistrationOtp({
+      challengeId: pendingRegistration.challenge.challengeId,
+    });
+    set({ pendingRegistration: createPendingRegistration(challenge) });
+    return challenge;
+  },
+
+  clearPendingRegistration: () => {
+    set({ pendingRegistration: null });
   },
 
   logout: async () => {
@@ -243,6 +323,7 @@ registerAuthSessionHandlers({
       isAuthenticated: false,
       user: null,
       accessToken: null,
+      pendingRegistration: null,
     });
   },
 });

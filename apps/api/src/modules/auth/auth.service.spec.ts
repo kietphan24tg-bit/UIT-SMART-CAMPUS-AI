@@ -11,7 +11,10 @@ import { AuthService } from './auth.service';
 import { PasswordResetMailerService } from './password-reset-mailer.service';
 
 jest.mock('bcrypt');
-jest.mock('node:crypto', () => ({ randomUUID: () => 'mock-uuid-token' }));
+jest.mock('node:crypto', () => ({
+  randomInt: () => 123456,
+  randomUUID: () => 'mock-uuid-token',
+}));
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -28,6 +31,7 @@ describe('AuthService', () => {
     lastName: 'Van A',
     role: 'student',
     isActive: true,
+    emailVerifiedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -39,8 +43,26 @@ describe('AuthService', () => {
     consumedAt: null,
     createdAt: new Date(),
   };
+  const mockRegistrationChallenge = {
+    id: '9e0df78c-d9e1-43ff-ad1e-3788f07309c6',
+    email: 'new@uit.edu.vn',
+    passwordHash: 'hashed-pw',
+    studentId: '22520002',
+    firstName: 'Tran',
+    lastName: 'Van B',
+    otpHash: 'hashed-otp',
+    expiresAt: new Date(Date.now() + 600_000),
+    resendAvailableAt: new Date(Date.now() + 60_000),
+    failedAttempts: 0,
+    lastAttemptAt: null,
+    lastSentAt: new Date(),
+    consumedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -49,6 +71,14 @@ describe('AuthService', () => {
           useValue: {
             $transaction: jest.fn(),
             user: { findUnique: jest.fn(), update: jest.fn() },
+            registrationChallenge: {
+              create: jest.fn(),
+              findFirst: jest.fn(),
+              findUnique: jest.fn(),
+              updateMany: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
             passwordResetOtp: {
               updateMany: jest.fn(),
               create: jest.fn(),
@@ -79,6 +109,7 @@ describe('AuthService', () => {
           useValue: {
             canSendEmail: jest.fn().mockReturnValue(false),
             sendOtpEmail: jest.fn().mockResolvedValue(false),
+            sendRegistrationOtpEmail: jest.fn().mockResolvedValue(false),
           },
         },
       ],
@@ -94,16 +125,22 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should hash password, create user, and return tokens', async () => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-pw');
-      (usersService.create as jest.Mock).mockResolvedValue({
-        id: 'user-1',
-        role: 'student',
-      });
-      (prisma.refreshToken.create as jest.Mock).mockResolvedValue({});
+    beforeEach(() => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.registrationChallenge.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.registrationChallenge.findFirst as jest.Mock).mockResolvedValue(null);
+    });
+
+    it('should create a pending challenge without creating a user or session', async () => {
+      (bcrypt.hash as jest.Mock)
+        .mockResolvedValueOnce('hashed-pw')
+        .mockResolvedValueOnce('hashed-otp');
+      (prisma.registrationChallenge.create as jest.Mock).mockResolvedValue(
+        mockRegistrationChallenge,
+      );
 
       const result = await authService.register({
-        email: 'new@uit.edu.vn',
+        email: ' New@UIT.edu.vn ',
         password: 'Password123',
         studentId: '22520002',
         firstName: 'Tran',
@@ -111,16 +148,184 @@ describe('AuthService', () => {
       });
 
       expect(bcrypt.hash).toHaveBeenCalledWith('Password123', 10);
-      expect(usersService.create).toHaveBeenCalledWith({
-        email: 'new@uit.edu.vn',
-        passwordHash: 'hashed-pw',
-        studentId: '22520002',
-        firstName: 'Tran',
-        lastName: 'Van B',
+      expect(prisma.registrationChallenge.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'new@uit.edu.vn',
+          passwordHash: 'hashed-pw',
+          studentId: '22520002',
+          otpHash: 'hashed-otp',
+        }),
+      });
+      expect(usersService.create).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        challengeId: mockRegistrationChallenge.id,
+        delivery: 'preview',
+        previewCode: '123456',
+      });
+    });
+
+    it('should fail closed without exposing an OTP preview outside development or test', async () => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'staging';
+      (bcrypt.hash as jest.Mock)
+        .mockResolvedValueOnce('hashed-pw')
+        .mockResolvedValueOnce('hashed-otp');
+      (prisma.registrationChallenge.create as jest.Mock).mockResolvedValue(
+        mockRegistrationChallenge,
+      );
+
+      try {
+        await expect(
+          authService.register({
+            email: 'new@uit.edu.vn',
+            password: 'Password123',
+            studentId: '22520002',
+            firstName: 'Tran',
+            lastName: 'Van B',
+          }),
+        ).rejects.toThrow('Không thể gửi OTP lúc này.');
+      } finally {
+        if (previousNodeEnv === undefined) {
+          delete process.env.NODE_ENV;
+        } else {
+          process.env.NODE_ENV = previousNodeEnv;
+        }
+      }
+
+      expect(prisma.registrationChallenge.deleteMany).toHaveBeenCalledWith({
+        where: { id: mockRegistrationChallenge.id },
+      });
+    });
+
+    it('should reject a non-UIT email before hashing the password', async () => {
+      await expect(
+        authService.register({
+          email: 'student@example.com',
+          password: 'Password123',
+          studentId: '22520002',
+          firstName: 'Tran',
+          lastName: 'Van B',
+        }),
+      ).rejects.toThrow('Email cần thuộc miền UIT.');
+
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+    });
+
+    it('should reject a concurrent challenge for the same email', async () => {
+      (bcrypt.hash as jest.Mock)
+        .mockResolvedValueOnce('hashed-pw')
+        .mockResolvedValueOnce('hashed-otp');
+      (prisma.registrationChallenge.create as jest.Mock).mockRejectedValue({ code: 'P2002' });
+      (prisma.registrationChallenge.findUnique as jest.Mock).mockResolvedValue(
+        mockRegistrationChallenge,
+      );
+
+      await expect(
+        authService.register({
+          email: 'new@uit.edu.vn',
+          password: 'Password123',
+          studentId: '22520002',
+          firstName: 'Tran',
+          lastName: 'Van B',
+        }),
+      ).rejects.toMatchObject({ status: 429 });
+
+      expect(prisma.registrationChallenge.deleteMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('should create the verified user and refresh token atomically after valid OTP', async () => {
+      (prisma.registrationChallenge.findUnique as jest.Mock).mockResolvedValue(
+        mockRegistrationChallenge,
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (prisma.registrationChallenge.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (usersService.create as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'student' });
+      (prisma.refreshToken.create as jest.Mock).mockResolvedValue({});
+      (prisma.registrationChallenge.delete as jest.Mock).mockResolvedValue({});
+
+      const result = await authService.verifyRegistrationOtp(
+        mockRegistrationChallenge.id,
+        '123456',
+      );
+
+      expect(usersService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'new@uit.edu.vn',
+          passwordHash: 'hashed-pw',
+          emailVerifiedAt: expect.any(Date),
+        }),
+        prisma,
+      );
+      expect(prisma.refreshToken.create).toHaveBeenCalled();
+      expect(prisma.registrationChallenge.delete).toHaveBeenCalledWith({
+        where: { id: mockRegistrationChallenge.id },
       });
       expect(result).toEqual({
         accessToken: 'mock-access-token',
         refreshToken: 'mock-uuid-token',
+      });
+    });
+
+    it('should increment failed OTP attempts and stop before user creation', async () => {
+      (prisma.registrationChallenge.findUnique as jest.Mock).mockResolvedValue(
+        mockRegistrationChallenge,
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      (prisma.registrationChallenge.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await expect(
+        authService.verifyRegistrationOtp(mockRegistrationChallenge.id, '000000'),
+      ).rejects.toThrow('OTP không hợp lệ hoặc đã hết hạn.');
+
+      expect(prisma.registrationChallenge.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ failedAttempts: { increment: 1 } }),
+        }),
+      );
+      expect(usersService.create).not.toHaveBeenCalled();
+    });
+
+    it('should block verification after five failed attempts', async () => {
+      (prisma.registrationChallenge.findUnique as jest.Mock).mockResolvedValue({
+        ...mockRegistrationChallenge,
+        failedAttempts: 5,
+      });
+
+      await expect(
+        authService.verifyRegistrationOtp(mockRegistrationChallenge.id, '123456'),
+      ).rejects.toThrow('OTP không hợp lệ hoặc đã hết hạn.');
+
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(usersService.create).not.toHaveBeenCalled();
+    });
+
+    it('should rotate the OTP and reset failed attempts on resend', async () => {
+      const resendableChallenge = {
+        ...mockRegistrationChallenge,
+        failedAttempts: 4,
+        lastAttemptAt: new Date(),
+        resendAvailableAt: new Date(Date.now() - 1_000),
+      };
+      (prisma.registrationChallenge.findUnique as jest.Mock).mockResolvedValue(resendableChallenge);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-otp-hash');
+      (prisma.registrationChallenge.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      const result = await authService.resendRegistrationOtp(resendableChallenge.id);
+
+      expect(prisma.registrationChallenge.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            otpHash: 'new-otp-hash',
+            failedAttempts: 0,
+            lastAttemptAt: null,
+          }),
+        }),
+      );
+      expect(result).toMatchObject({
+        challengeId: resendableChallenge.id,
+        delivery: 'preview',
+        previewCode: '123456',
       });
     });
   });
@@ -173,6 +378,18 @@ describe('AuthService', () => {
         authService.login({ email: 'test@uit.edu.vn', password: 'Password123' }),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should reject a user whose email is not verified', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        emailVerifiedAt: null,
+      });
+
+      await expect(
+        authService.login({ email: 'test@uit.edu.vn', password: 'Password123' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+    });
   });
 
   describe('refreshToken', () => {
@@ -181,7 +398,12 @@ describe('AuthService', () => {
         id: 'rt-1',
         token: 'valid-token',
         expiresAt: new Date(Date.now() + 86400000),
-        user: { id: 'user-1', role: 'student', isActive: true },
+        user: {
+          id: 'user-1',
+          role: 'student',
+          isActive: true,
+          emailVerifiedAt: new Date(),
+        },
       };
       (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue(stored);
       (prisma.refreshToken.delete as jest.Mock).mockResolvedValue({});
@@ -198,7 +420,12 @@ describe('AuthService', () => {
         id: 'rt-1',
         token: 'expired',
         expiresAt: new Date(Date.now() - 86400000),
-        user: { id: 'user-1', role: 'student', isActive: true },
+        user: {
+          id: 'user-1',
+          role: 'student',
+          isActive: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       await expect(authService.refreshToken('expired')).rejects.toThrow(UnauthorizedException);
@@ -215,12 +442,36 @@ describe('AuthService', () => {
         id: 'rt-1',
         token: 'inactive-user-token',
         expiresAt: new Date(Date.now() + 86400000),
-        user: { id: 'user-1', role: 'student', isActive: false },
+        user: {
+          id: 'user-1',
+          role: 'student',
+          isActive: false,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       await expect(authService.refreshToken('inactive-user-token')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('should reject a refresh token belonging to an unverified user', async () => {
+      (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+        id: 'rt-1',
+        token: 'unverified-user-token',
+        expiresAt: new Date(Date.now() + 86400000),
+        user: {
+          id: 'user-1',
+          role: 'student',
+          isActive: true,
+          emailVerifiedAt: null,
+        },
+      });
+
+      await expect(authService.refreshToken('unverified-user-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prisma.refreshToken.delete).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,7 @@
 import { Transform, plainToInstance } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -51,6 +52,10 @@ function toOptionalBoolean(defaultValue?: boolean) {
 }
 
 class EnvironmentVariables {
+  @IsIn(['development', 'test', 'staging', 'production'])
+  @IsOptional()
+  NODE_ENV?: 'development' | 'test' | 'staging' | 'production';
+
   @toOptionalNumber(3000)
   @IsNumber()
   @IsOptional()

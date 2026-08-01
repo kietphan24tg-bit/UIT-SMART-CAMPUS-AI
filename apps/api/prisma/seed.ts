@@ -1,6 +1,5 @@
-﻿import { existsSync } from 'node:fs';
+﻿import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 
 import {
   EnrollmentStatus,
@@ -16,6 +15,7 @@ import {
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
+
 import {
   DEFAULT_PARKING_GATE_ID,
   getActiveParkingSlotNumbers,
@@ -1853,6 +1853,7 @@ function timeRangesOverlap(startA: string, endA: string, startB: string, endB: s
 
 async function main() {
   const passwordHash = await bcrypt.hash('Password123', 10);
+  const emailVerifiedAt = new Date();
 
   const [superAdmin, admin, canteenAdmin, lecturer, student] = await Promise.all([
     prisma.user.upsert({
@@ -1860,6 +1861,7 @@ async function main() {
       update: {
         passwordHash,
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: 'superadmin@uit.edu.vn',
@@ -1868,6 +1870,7 @@ async function main() {
         lastName: 'Admin',
         role: Role.super_admin,
         isActive: true,
+        emailVerifiedAt,
       },
     }),
     prisma.user.upsert({
@@ -1875,6 +1878,7 @@ async function main() {
       update: {
         passwordHash,
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: 'admin@uit.edu.vn',
@@ -1883,6 +1887,7 @@ async function main() {
         lastName: 'System',
         role: Role.admin,
         isActive: true,
+        emailVerifiedAt,
       },
     }),
     prisma.user.upsert({
@@ -1893,6 +1898,7 @@ async function main() {
         lastName: 'Canteen',
         role: Role.canteen_admin,
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: 'canteen.admin@uit.edu.vn',
@@ -1902,6 +1908,7 @@ async function main() {
         role: Role.canteen_admin,
         faculty: 'Dịch vụ căn tin',
         isActive: true,
+        emailVerifiedAt,
       },
     }),
     prisma.user.upsert({
@@ -1913,6 +1920,7 @@ async function main() {
         role: Role.lecturer,
         faculty: 'Khoa Công nghệ Phần mềm',
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: 'lecturer@uit.edu.vn',
@@ -1922,6 +1930,7 @@ async function main() {
         role: Role.lecturer,
         faculty: 'Khoa Công nghệ Phần mềm',
         isActive: true,
+        emailVerifiedAt,
       },
     }),
     prisma.user.upsert({
@@ -1936,6 +1945,7 @@ async function main() {
         major: 'Công nghệ phần mềm',
         yearOfAdmission: 2022,
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: 'student@gm.uit.edu.vn',
@@ -1948,6 +1958,7 @@ async function main() {
         major: 'Công nghệ phần mềm',
         yearOfAdmission: 2022,
         isActive: true,
+        emailVerifiedAt,
       },
     }),
   ]);
@@ -1971,6 +1982,7 @@ async function main() {
         role: Role.lecturer,
         faculty: 'Giảng viên UIT',
         isActive: true,
+        emailVerifiedAt,
       },
       create: {
         email: buildLecturerEmail(instructorName),
@@ -1980,6 +1992,7 @@ async function main() {
         role: Role.lecturer,
         faculty: 'Giảng viên UIT',
         isActive: true,
+        emailVerifiedAt,
       },
     });
 

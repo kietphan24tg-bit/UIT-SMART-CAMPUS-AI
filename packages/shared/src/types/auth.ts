@@ -11,6 +11,24 @@ export interface RegisterRequest {
   lastName: string;
 }
 
+export interface RegistrationChallenge {
+  challengeId: string;
+  maskedEmail: string;
+  expiresInSeconds: number;
+  resendAvailableInSeconds: number;
+  delivery: 'email' | 'preview';
+  previewCode?: string;
+}
+
+export interface RegistrationOtpVerifyRequest {
+  challengeId: string;
+  otp: string;
+}
+
+export interface RegistrationOtpResendRequest {
+  challengeId: string;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;

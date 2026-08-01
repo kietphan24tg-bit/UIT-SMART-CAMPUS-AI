@@ -1,5 +1,5 @@
 appId: vn.edu.uit.smartcampus
-name: Register - Dang ky tai khoan
+name: Register - Dang ky va nhan OTP
 ---
 - launchApp:
     clearState: true
@@ -29,5 +29,8 @@ name: Register - Dang ky tai khoan
 - tapOn: 'Tạo tài khoản'
 
 - assertVisible:
-    text: 'Trang chủ'
+    text: 'Xác thực email'
     timeout: 5000
+
+- assertVisible: 'Mã OTP'
+- assertVisible: 'Sửa thông tin đăng ký'

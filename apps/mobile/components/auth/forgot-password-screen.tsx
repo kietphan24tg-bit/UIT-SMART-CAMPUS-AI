@@ -1,3 +1,4 @@
+import { isValidUitEmail, normalizeEmail } from '@smart-campus/shared';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -17,10 +18,6 @@ type FeedbackTone = 'success' | 'danger' | 'warning' | 'info';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return getLocalizedErrorMessage(error, fallback);
-}
-
-function isValidUitEmail(value: string) {
-  return /@(gm\.)?uit\.edu\.vn$/i.test(value.trim());
 }
 
 function isValidPassword(value: string) {
@@ -86,7 +83,9 @@ export function ForgotPasswordScreen() {
     resetFeedback();
 
     try {
-      const response = await authApi.requestPasswordReset({ email: email.trim() });
+      const normalizedEmail = normalizeEmail(email);
+      const response = await authApi.requestPasswordReset({ email: normalizedEmail });
+      setEmail(normalizedEmail);
       setMaskedEmail(response.maskedEmail);
       setExpiresInSeconds(response.expiresInSeconds);
       setPreviewCode(response.previewCode ?? null);
@@ -114,7 +113,7 @@ export function ForgotPasswordScreen() {
 
     try {
       await authApi.verifyPasswordResetOtp({
-        email: email.trim(),
+        email: normalizeEmail(email),
         otp: otp.trim(),
       });
       setStep('reset');
@@ -143,7 +142,7 @@ export function ForgotPasswordScreen() {
 
     try {
       await authApi.resetPassword({
-        email: email.trim(),
+        email: normalizeEmail(email),
         otp: otp.trim(),
         newPassword,
       });

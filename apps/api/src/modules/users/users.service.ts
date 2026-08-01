@@ -20,6 +20,7 @@ interface CreateUserData {
   studentId?: string;
   firstName: string;
   lastName: string;
+  emailVerifiedAt?: Date;
 }
 
 interface FindAllUsersQuery {
@@ -61,8 +62,11 @@ export class UsersService {
     updatedAt: true,
   } as const;
 
-  async create(data: CreateUserData) {
-    const existing = await this.prisma.user.findUnique({
+  async create(
+    data: CreateUserData,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ) {
+    const existing = await client.user.findUnique({
       where: { email: data.email },
     });
     if (existing) {
@@ -70,7 +74,7 @@ export class UsersService {
     }
 
     try {
-      return await this.prisma.user.create({
+      return await client.user.create({
         data,
         select: {
           id: true,
