@@ -8,6 +8,11 @@ import { useAppTheme } from '@/theme';
 
 export const UIT_20_ANNIVERSARY_TARGET_ISO = '2026-06-08T00:00:00+07:00';
 const UIT_20_ANNIVERSARY_TARGET_MS = new Date(UIT_20_ANNIVERSARY_TARGET_ISO).getTime();
+const UIT_FOUNDING_YEAR = 2006;
+const UIT_ANNIVERSARY_MONTH_INDEX = 5;
+const UIT_ANNIVERSARY_DAY = 8;
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1_000;
+const DAY_MS = 24 * 60 * 60 * 1_000;
 
 interface AnniversaryCountdownSnapshot {
   isComplete: boolean;
@@ -17,8 +22,30 @@ interface AnniversaryCountdownSnapshot {
   seconds: number;
 }
 
+interface AnnualAnniversarySnapshot {
+  isAnniversaryToday: boolean;
+  targetYear: number;
+  anniversaryYears: number;
+  targetDateLabel: string;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
 function padTimeUnit(value: number) {
   return value.toString().padStart(2, '0');
+}
+
+function getCountdownUnits(remainingMs: number) {
+  const totalSeconds = Math.floor(remainingMs / 1_000);
+
+  return {
+    days: Math.floor(totalSeconds / 86_400),
+    hours: Math.floor((totalSeconds % 86_400) / 3_600),
+    minutes: Math.floor((totalSeconds % 3_600) / 60),
+    seconds: totalSeconds % 60,
+  };
 }
 
 export function getAnniversaryCountdownSnapshot(
@@ -37,35 +64,52 @@ export function getAnniversaryCountdownSnapshot(
     };
   }
 
-  const totalSeconds = Math.floor(remainingMs / 1000);
-  const days = Math.floor(totalSeconds / 86_400);
-  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-
   return {
     isComplete: false,
-    days,
-    hours,
-    minutes,
-    seconds,
+    ...getCountdownUnits(remainingMs),
   };
 }
 
-function formatAccessibilityLabel(snapshot: AnniversaryCountdownSnapshot) {
-  if (snapshot.isComplete) {
-    return 'Hôm nay UIT tròn 20 năm.';
+function getUitAnniversaryStartMs(year: number) {
+  return Date.UTC(year, UIT_ANNIVERSARY_MONTH_INDEX, UIT_ANNIVERSARY_DAY) - VIETNAM_UTC_OFFSET_MS;
+}
+
+export function getAnnualAnniversarySnapshot(now = new Date()): AnnualAnniversarySnapshot {
+  const nowMs = now.getTime();
+  const vietnamCalendarYear = new Date(nowMs + VIETNAM_UTC_OFFSET_MS).getUTCFullYear();
+  const thisYearAnniversaryMs = getUitAnniversaryStartMs(vietnamCalendarYear);
+  const isAnniversaryToday =
+    nowMs >= thisYearAnniversaryMs && nowMs < thisYearAnniversaryMs + DAY_MS;
+  const targetYear =
+    nowMs < thisYearAnniversaryMs || isAnniversaryToday
+      ? vietnamCalendarYear
+      : vietnamCalendarYear + 1;
+  const targetMs = getUitAnniversaryStartMs(targetYear);
+  const remainingMs = isAnniversaryToday ? 0 : Math.max(targetMs - nowMs, 0);
+
+  return {
+    isAnniversaryToday,
+    targetYear,
+    anniversaryYears: targetYear - UIT_FOUNDING_YEAR,
+    targetDateLabel: `08.06.${targetYear}`,
+    ...getCountdownUnits(remainingMs),
+  };
+}
+
+function formatAccessibilityLabel(snapshot: AnnualAnniversarySnapshot) {
+  if (snapshot.isAnniversaryToday) {
+    return `Hôm nay UIT tròn ${snapshot.anniversaryYears} năm. Chúc mừng sinh nhật UIT!`;
   }
 
-  return `Còn ${snapshot.days} ngày, ${snapshot.hours} giờ, ${snapshot.minutes} phút, ${snapshot.seconds} giây tới kỷ niệm 20 năm UIT.`;
+  return `Còn ${snapshot.days} ngày, ${snapshot.hours} giờ, ${snapshot.minutes} phút, ${snapshot.seconds} giây tới ngày UIT tròn ${snapshot.anniversaryYears} năm, vào 08 tháng 06 năm ${snapshot.targetYear}.`;
 }
 
 export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () => void }) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
-  const snapshot = getAnniversaryCountdownSnapshot(new Date());
+  const snapshot = getAnnualAnniversarySnapshot(new Date());
 
-  useNowTick(snapshot.isComplete ? 60_000 : 1_000);
+  useNowTick(1_000);
 
   const countdownItems = [
     {
@@ -106,7 +150,9 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
       style={[
         styles.container,
         {
-          backgroundColor: theme.isDark ? theme.colors.surfaceGlass : theme.colors.surfaceGlassStrong,
+          backgroundColor: theme.isDark
+            ? theme.colors.surfaceGlass
+            : theme.colors.surfaceGlassStrong,
           borderColor: theme.colors.border,
           borderRadius: theme.radii.lg,
           padding: layout.isCompact ? 14 : layout.isTablet ? 20 : 18,
@@ -160,7 +206,7 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
                 { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
               ]}
             >
-              UIT 20 năm
+              UIT {snapshot.anniversaryYears} năm
             </Text>
           </View>
           <Text
@@ -170,7 +216,9 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
               { color: theme.colors.heroText, fontFamily: theme.fonts.bold },
             ]}
           >
-            {snapshot.isComplete ? 'Hôm nay UIT tròn 20 năm' : 'Đếm ngược tới 20 năm UIT'}
+            {snapshot.isAnniversaryToday
+              ? `Hôm nay UIT tròn ${snapshot.anniversaryYears} năm`
+              : `Đếm ngược tới ngày UIT tròn ${snapshot.anniversaryYears} năm`}
           </Text>
           <Text
             style={[
@@ -178,9 +226,9 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
               { color: theme.colors.heroSubtext, fontFamily: theme.fonts.regular },
             ]}
           >
-            {snapshot.isComplete
-              ? '08.06.2006 - 08.06.2026'
-              : 'Mốc kỷ niệm chính thức vào 08.06.2026'}
+            {snapshot.isAnniversaryToday
+              ? `08.06.${UIT_FOUNDING_YEAR} - ${snapshot.targetDateLabel}`
+              : `Sinh nhật UIT vào ${snapshot.targetDateLabel}`}
           </Text>
           <View style={styles.milestoneRow}>
             <Text
@@ -189,7 +237,7 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
                 { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
               ]}
             >
-              2006
+              {UIT_FOUNDING_YEAR}
             </Text>
             <View style={[styles.milestoneDot, { backgroundColor: theme.colors.primaryMuted }]} />
             <Text
@@ -198,7 +246,7 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
                 { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
               ]}
             >
-              2026
+              {snapshot.targetYear}
             </Text>
           </View>
         </View>
@@ -218,20 +266,16 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
               { color: theme.colors.warning, fontFamily: theme.fonts.semibold },
             ]}
           >
-            08.06.2026
+            {snapshot.targetDateLabel}
           </Text>
         </View>
       </View>
 
       {onPlayPress ? (
-        <PrimaryButton
-          label="Chơi ghép ảnh UIT"
-          onPress={onPlayPress}
-          style={styles.playButton}
-        />
+        <PrimaryButton label="Chơi ghép ảnh UIT" onPress={onPlayPress} style={styles.playButton} />
       ) : null}
 
-      {snapshot.isComplete ? (
+      {snapshot.isAnniversaryToday ? (
         <View
           style={[
             styles.celebrationPanel,
@@ -247,7 +291,8 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
               { color: theme.colors.text, fontFamily: theme.fonts.medium },
             ]}
           >
-            Hành trình 20 năm UIT đang tiếp tục được viết bằng chính trải nghiệm campus hôm nay.
+            Hành trình {snapshot.anniversaryYears} năm UIT đang tiếp tục được viết bằng chính trải
+            nghiệm campus hôm nay.
           </Text>
         </View>
       ) : (
@@ -263,7 +308,9 @@ export function AnniversaryCountdownBanner({ onPlayPress }: { onPlayPress?: () =
                 styles.countdownCard,
                 layout.isCompact ? styles.countdownCardCompact : styles.countdownCardRegular,
                 {
-                  backgroundColor: theme.isDark ? theme.colors.surfaceElevated : theme.colors.surface,
+                  backgroundColor: theme.isDark
+                    ? theme.colors.surfaceElevated
+                    : theme.colors.surface,
                   borderColor: theme.colors.border,
                 },
               ]}

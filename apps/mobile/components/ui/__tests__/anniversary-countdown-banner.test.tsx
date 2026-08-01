@@ -4,6 +4,7 @@ import * as ReactNative from 'react-native';
 
 import {
   AnniversaryCountdownBanner,
+  getAnnualAnniversarySnapshot,
   getAnniversaryCountdownSnapshot,
 } from '../anniversary-countdown-banner';
 
@@ -50,7 +51,8 @@ describe('AnniversaryCountdownBanner', () => {
   it('renders the countdown before the anniversary date', () => {
     render(<AnniversaryCountdownBanner />);
 
-    expect(screen.getByText('Đếm ngược tới 20 năm UIT')).toBeTruthy();
+    expect(screen.getByText('Đếm ngược tới ngày UIT tròn 20 năm')).toBeTruthy();
+    expect(screen.getByText('Sinh nhật UIT vào 08.06.2026')).toBeTruthy();
     expect(screen.getByTestId('anniversary-countdown-days-value')).toHaveTextContent('26');
     expect(screen.getByTestId('anniversary-countdown-hours-value')).toHaveTextContent('00');
     expect(screen.getByTestId('anniversary-countdown-minutes-value')).toHaveTextContent('00');
@@ -68,6 +70,31 @@ describe('AnniversaryCountdownBanner', () => {
         'Hành trình 20 năm UIT đang tiếp tục được viết bằng chính trải nghiệm campus hôm nay.',
       ),
     ).toBeTruthy();
+  });
+
+  it('keeps the original slogan and advances only its anniversary year', () => {
+    jest.setSystemTime(new Date('2027-06-08T12:00:00+07:00'));
+
+    render(<AnniversaryCountdownBanner />);
+
+    expect(
+      screen.getByText(
+        'Hành trình 21 năm UIT đang tiếp tục được viết bằng chính trải nghiệm campus hôm nay.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('keeps target year, age, date, and slogan in phase after the birthday', () => {
+    jest.setSystemTime(new Date('2026-06-09T00:00:00+07:00'));
+
+    render(<AnniversaryCountdownBanner />);
+
+    expect(screen.getByText('UIT 21 năm')).toBeTruthy();
+    expect(screen.getByText('Đếm ngược tới ngày UIT tròn 21 năm')).toBeTruthy();
+    expect(screen.getByText('Sinh nhật UIT vào 08.06.2027')).toBeTruthy();
+    expect(screen.getByText('08.06.2027')).toBeTruthy();
+    expect(screen.getByText('2027')).toBeTruthy();
+    expect(screen.queryByText('Hôm nay UIT tròn 20 năm')).toBeNull();
   });
 
   it('uses a wrapped 2x2 grid on compact layouts', () => {
@@ -97,7 +124,7 @@ describe('AnniversaryCountdownBanner', () => {
 
     render(<AnniversaryCountdownBanner />);
 
-    expect(screen.getByText('Đếm ngược tới 20 năm UIT')).toBeTruthy();
+    expect(screen.getByText('Đếm ngược tới ngày UIT tròn 20 năm')).toBeTruthy();
     expect(screen.getByText('08.06.2026')).toBeTruthy();
   });
 
@@ -112,8 +139,61 @@ describe('AnniversaryCountdownBanner', () => {
   });
 });
 
+describe('getAnnualAnniversarySnapshot', () => {
+  it('counts down to the current-year birthday before 08 June in Vietnam', () => {
+    const snapshot = getAnnualAnniversarySnapshot(new Date('2026-06-07T23:59:59+07:00'));
+
+    expect(snapshot).toEqual({
+      isAnniversaryToday: false,
+      targetYear: 2026,
+      anniversaryYears: 20,
+      targetDateLabel: '08.06.2026',
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 1,
+    });
+  });
+
+  it('uses the celebratory state throughout 08 June in Vietnam', () => {
+    expect(getAnnualAnniversarySnapshot(new Date('2026-06-07T17:00:00.000Z'))).toMatchObject({
+      isAnniversaryToday: true,
+      targetYear: 2026,
+      anniversaryYears: 20,
+    });
+    expect(getAnnualAnniversarySnapshot(new Date('2026-06-08T16:59:59.999Z'))).toMatchObject({
+      isAnniversaryToday: true,
+      targetYear: 2026,
+      anniversaryYears: 20,
+    });
+  });
+
+  it('rolls every banner value to the following birthday from 09 June in Vietnam', () => {
+    const snapshot = getAnnualAnniversarySnapshot(new Date('2026-06-09T00:00:00+07:00'));
+
+    expect(snapshot).toEqual({
+      isAnniversaryToday: false,
+      targetYear: 2027,
+      anniversaryYears: 21,
+      targetDateLabel: '08.06.2027',
+      days: 364,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+    });
+  });
+
+  it('derives future anniversary ages from UIT founding year', () => {
+    expect(getAnnualAnniversarySnapshot(new Date('2031-01-01T00:00:00+07:00'))).toMatchObject({
+      targetYear: 2031,
+      anniversaryYears: 25,
+      targetDateLabel: '08.06.2031',
+    });
+  });
+});
+
 describe('getAnniversaryCountdownSnapshot', () => {
-  it('returns zeroed complete state after the target date', () => {
+  it('keeps the legacy fixed-target helper contract', () => {
     const snapshot = getAnniversaryCountdownSnapshot(new Date('2026-06-08T00:00:01+07:00'));
 
     expect(snapshot).toEqual({

@@ -78,7 +78,7 @@ describe('HomeScreen', () => {
     render(<HomeScreen />);
 
     expect(screen.getByText('Xin chào, Nguyen An')).toBeTruthy();
-    expect(screen.getByText('Đếm ngược tới 20 năm UIT')).toBeTruthy();
+    expect(screen.getByText('Đếm ngược tới ngày UIT tròn 20 năm')).toBeTruthy();
     expect(screen.getByText('Buổi tiếp theo')).toBeTruthy();
     expect(screen.getByText('Kết quả')).toBeTruthy();
     expect(screen.getByText('Lối tắt')).toBeTruthy();
