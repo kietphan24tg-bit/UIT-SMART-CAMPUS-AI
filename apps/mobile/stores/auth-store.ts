@@ -29,6 +29,11 @@ export interface PendingRegistration {
   resendAvailableAtMs: number;
 }
 
+const STALE_REGISTRATION_BACKEND_MESSAGE =
+  'Máy chủ hiện tại vẫn đang chạy luồng đăng ký cũ. Cần deploy backend xác thực OTP trước khi tạo tài khoản mới.';
+const INVALID_REGISTRATION_CHALLENGE_MESSAGE =
+  'Phản hồi xác thực đăng ký không hợp lệ. Vui lòng cập nhật backend rồi thử lại.';
+
 interface AuthState {
   isHydrated: boolean;
   isAuthenticated: boolean;
@@ -103,15 +108,62 @@ function setUnauthenticatedState(
   });
 }
 
+function isFiniteTimestamp(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isRegistrationChallengeShape(value: unknown): value is RegistrationChallenge {
+  if (typeof value !== 'object' || value == null) {
+    return false;
+  }
+
+  const candidate = value as Partial<RegistrationChallenge>;
+  return (
+    typeof candidate.challengeId === 'string' &&
+    candidate.challengeId.trim().length > 0 &&
+    typeof candidate.maskedEmail === 'string' &&
+    candidate.maskedEmail.trim().length > 0 &&
+    isFiniteTimestamp(candidate.expiresInSeconds) &&
+    isFiniteTimestamp(candidate.resendAvailableInSeconds) &&
+    (candidate.delivery === 'email' || candidate.delivery === 'preview')
+  );
+}
+
+function isLegacyRegisterTokensShape(value: unknown): value is AuthTokens {
+  if (typeof value !== 'object' || value == null) {
+    return false;
+  }
+
+  const candidate = value as Partial<AuthTokens>;
+  return (
+    typeof candidate.accessToken === 'string' &&
+    candidate.accessToken.trim().length > 0 &&
+    typeof candidate.refreshToken === 'string' &&
+    candidate.refreshToken.trim().length > 0
+  );
+}
+
+function toPendingRegistration(challenge: unknown, nowMs = Date.now()): PendingRegistration {
+  if (isRegistrationChallengeShape(challenge)) {
+    return {
+      challenge,
+      expiresAtMs: nowMs + challenge.expiresInSeconds * 1_000,
+      resendAvailableAtMs: nowMs + challenge.resendAvailableInSeconds * 1_000,
+    };
+  }
+
+  if (isLegacyRegisterTokensShape(challenge)) {
+    throw new Error(STALE_REGISTRATION_BACKEND_MESSAGE);
+  }
+
+  throw new Error(INVALID_REGISTRATION_CHALLENGE_MESSAGE);
+}
+
 function createPendingRegistration(
   challenge: RegistrationChallenge,
   nowMs = Date.now(),
 ): PendingRegistration {
-  return {
-    challenge,
-    expiresAtMs: nowMs + challenge.expiresInSeconds * 1_000,
-    resendAvailableAtMs: nowMs + challenge.resendAvailableInSeconds * 1_000,
-  };
+  return toPendingRegistration(challenge, nowMs);
 }
 
 async function persistUserSnapshot(user: UserInfo) {

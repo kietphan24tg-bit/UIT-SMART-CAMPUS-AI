@@ -163,6 +163,26 @@ describe('useAuthStore', () => {
       expect(mockedAuthApi.getMe).not.toHaveBeenCalled();
     });
 
+    it('should reject a legacy register response that still returns tokens', async () => {
+      mockedAuthApi.register.mockResolvedValue(mockTokens);
+
+      await expect(
+        useAuthStore.getState().register({
+          email: 'test@uit.edu.vn',
+          password: 'Password123',
+          studentId: '22520001',
+          firstName: 'Nguyen',
+          lastName: 'Van A',
+        }),
+      ).rejects.toThrow(
+        'Máy chủ hiện tại vẫn đang chạy luồng đăng ký cũ. Cần deploy backend xác thực OTP trước khi tạo tài khoản mới.',
+      );
+
+      expect(useAuthStore.getState().pendingRegistration).toBeNull();
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    });
+
     it('should verify OTP, persist tokens, and authenticate with the fetched profile', async () => {
       useAuthStore.setState({
         pendingRegistration: {

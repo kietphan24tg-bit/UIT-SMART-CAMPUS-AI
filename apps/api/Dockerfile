@@ -11,7 +11,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/eslint-config/package.json packages/eslint-config/package.json
 COPY packages/typescript-config/package.json packages/typescript-config/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 
 COPY apps/api apps/api
 COPY packages/shared packages/shared

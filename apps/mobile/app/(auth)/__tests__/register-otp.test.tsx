@@ -115,6 +115,10 @@ describe('RegisterOtpRoute', () => {
       expect(screen.getByTestId('registration-otp-center-stage')).toHaveStyle({
         minHeight: expectedStageMinHeight,
       });
+      expect(screen.getByTestId('registration-otp-top-row')).toHaveStyle({
+        flexWrap: 'wrap',
+        width: '100%',
+      });
       expect(screen.getByTestId('registration-otp-digit-0')).toHaveStyle({
         width: expectedCellWidth,
       });
@@ -216,5 +220,22 @@ describe('RegisterOtpRoute', () => {
     await waitFor(() => {
       expect(mockRouter.replace).toHaveBeenCalledWith('/register');
     });
+  });
+
+  it('falls back to 00:00 instead of rendering NaN when countdown timestamps are invalid', () => {
+    storeState = createStoreState({
+      pendingRegistration: {
+        challenge,
+        expiresAtMs: Number.NaN,
+        resendAvailableAtMs: Number.NaN,
+      },
+    });
+
+    const screen = render(<RegisterOtpRoute />);
+
+    expect(screen.getByText('00:00')).toBeTruthy();
+    expect(screen.getByText(/Ngay b.y gi./)).toBeTruthy();
+    expect(screen.getByLabelText('Mã hết hạn sau 0 giây')).toBeTruthy();
+    expect(screen.getByLabelText('Có thể gửi lại sau 0 giây')).toBeTruthy();
   });
 });

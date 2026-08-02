@@ -29,7 +29,7 @@ type Feedback = {
 };
 
 function formatCountdown(totalSeconds: number) {
-  const safeSeconds = Math.max(totalSeconds, 0);
+  const safeSeconds = Number.isFinite(totalSeconds) ? Math.max(totalSeconds, 0) : 0;
   const minutes = Math.floor(safeSeconds / 60);
   const seconds = safeSeconds % 60;
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -69,9 +69,12 @@ export function RegisterOtpScreen() {
       return { expiresIn: 0, resendIn: 0 };
     }
 
+    const rawExpiresIn = Math.ceil((pendingRegistration.expiresAtMs - nowMs) / 1_000);
+    const rawResendIn = Math.ceil((pendingRegistration.resendAvailableAtMs - nowMs) / 1_000);
+
     return {
-      expiresIn: Math.max(Math.ceil((pendingRegistration.expiresAtMs - nowMs) / 1_000), 0),
-      resendIn: Math.max(Math.ceil((pendingRegistration.resendAvailableAtMs - nowMs) / 1_000), 0),
+      expiresIn: Number.isFinite(rawExpiresIn) ? Math.max(rawExpiresIn, 0) : 0,
+      resendIn: Number.isFinite(rawResendIn) ? Math.max(rawResendIn, 0) : 0,
     };
   }, [nowMs, pendingRegistration]);
 
@@ -217,7 +220,10 @@ export function RegisterOtpScreen() {
               },
             ]}
           >
-            <View style={[styles.topRow, layout.isCompact ? styles.topRowCompact : null]}>
+            <View
+              testID="registration-otp-top-row"
+              style={[styles.topRow, layout.isCompact ? styles.topRowCompact : null]}
+            >
               <BrandLockup
                 compact
                 compactDensity={layout.isCompact ? 'tight' : 'default'}
@@ -513,9 +519,11 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
+    width: '100%',
   },
   topRowCompact: {
     alignItems: 'flex-start',
