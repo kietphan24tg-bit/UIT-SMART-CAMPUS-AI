@@ -20,6 +20,9 @@
       }
     },
     "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://uitsmartcampus.id.vn/api/v1",
         "EXPO_PUBLIC_EAS_PROJECT_ID": "b2923cbc-a879-4209-98cd-f0b14ad11c80"
