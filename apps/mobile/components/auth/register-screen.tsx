@@ -1,6 +1,6 @@
 import { isValidUitEmail, normalizeEmail } from '@smart-campus/shared';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import RegisterHero from '../../assets/auth/register-hero.jpg';
@@ -11,7 +11,7 @@ import { FormField, PrimaryButton } from '@/components/ui';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
-import { getLocalizedErrorMessage } from '@/utils/error-message';
+import { extractErrorMessage, getLocalizedErrorMessage } from '@/utils/error-message';
 
 interface RegisterFormState {
   email: string;
@@ -35,17 +35,70 @@ function isValidPassword(value: string) {
   return /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(value);
 }
 
+function extractOtpCooldownSeconds(message: string | null) {
+  if (!message) {
+    return null;
+  }
+
+  const patterns = [
+    /vui lòng chờ\s+(\d+)\s+giây/i,
+    /wait\s+(\d+)\s+seconds?/i,
+    /retry after\s+(\d+)\s+seconds?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const parsedSeconds = Number.parseInt(match[1] ?? '', 10);
+    if (Number.isFinite(parsedSeconds) && parsedSeconds > 0) {
+      return parsedSeconds;
+    }
+  }
+
+  return null;
+}
+
 export function RegisterScreen() {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
   const register = useAuthStore((state) => state.register);
   const [form, setForm] = useState<RegisterFormState>(EMPTY_REGISTER_FORM);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [otpCooldownUntilMs, setOtpCooldownUntilMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    if (otpCooldownUntilMs == null) {
+      return;
+    }
+
+    setNowMs(Date.now());
+    const interval = setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => clearInterval(interval);
+  }, [otpCooldownUntilMs]);
+
+  const otpCooldownInSeconds = useMemo(() => {
+    if (otpCooldownUntilMs == null) {
+      return 0;
+    }
+
+    const rawSeconds = Math.ceil((otpCooldownUntilMs - nowMs) / 1_000);
+    return Number.isFinite(rawSeconds) ? Math.max(rawSeconds, 0) : 0;
+  }, [nowMs, otpCooldownUntilMs]);
+
+  const cooldownMessage =
+    otpCooldownInSeconds > 0
+      ? `Vui lòng chờ ${otpCooldownInSeconds} giây trước khi gửi lại OTP.`
+      : null;
+  const visibleFeedback = error ?? cooldownMessage;
 
   const updateField = (key: keyof RegisterFormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    setError('');
+    setError(null);
   };
 
   const handleRegister = async () => {
@@ -78,13 +131,28 @@ export function RegisterScreen() {
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
       await register(payload);
       router.push('/register-otp');
     } catch (error) {
-      setError(getLocalizedErrorMessage(error, 'Đăng ký chưa thành công. Vui lòng thử lại.'));
+      const localizedError = getLocalizedErrorMessage(
+        error,
+        'Đăng ký chưa thành công. Vui lòng thử lại.',
+      );
+      const cooldownSeconds =
+        extractOtpCooldownSeconds(extractErrorMessage(error)) ??
+        extractOtpCooldownSeconds(localizedError);
+
+      if (cooldownSeconds) {
+        setError(null);
+        setOtpCooldownUntilMs(Date.now() + cooldownSeconds * 1_000);
+        return;
+      }
+
+      setOtpCooldownUntilMs(null);
+      setError(localizedError);
     } finally {
       setLoading(false);
     }
@@ -135,7 +203,7 @@ export function RegisterScreen() {
         </Pressable>
       }
     >
-      {error ? (
+      {visibleFeedback ? (
         <View
           style={[
             styles.feedback,
@@ -148,7 +216,7 @@ export function RegisterScreen() {
               { color: theme.colors.danger, fontFamily: theme.fonts.medium },
             ]}
           >
-            {error}
+            {visibleFeedback}
           </Text>
         </View>
       ) : null}

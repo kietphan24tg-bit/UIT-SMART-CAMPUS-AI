@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import React from 'react';
 
@@ -209,5 +209,38 @@ describe('RegisterRoute', () => {
         ),
       ).toBeTruthy();
     });
+  });
+
+  it('shows a live OTP cooldown countdown and hides it when the wait finishes', async () => {
+    jest.useFakeTimers();
+    mockRegister.mockRejectedValue(new Error('Vui lòng chờ 7 giây trước khi gửi lại OTP.'));
+
+    try {
+      const screen = render(<RegisterRoute />);
+      fillValidRegistrationForm(screen, '24521449@gm.uit.edu.vn');
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Tạo tài khoản' }));
+      });
+
+      expect(screen.getByText('Vui lòng chờ 7 giây trước khi gửi lại OTP.')).toBeTruthy();
+
+      act(() => {
+        jest.advanceTimersByTime(1_000);
+      });
+
+      expect(screen.getByText('Vui lòng chờ 6 giây trước khi gửi lại OTP.')).toBeTruthy();
+
+      fireEvent.changeText(screen.getByDisplayValue('Nguyễn'), 'Phạm');
+      expect(screen.getByText('Vui lòng chờ 6 giây trước khi gửi lại OTP.')).toBeTruthy();
+
+      act(() => {
+        jest.advanceTimersByTime(6_000);
+      });
+
+      expect(screen.queryByText(/Vui lòng chờ \d+ giây trước khi gửi lại OTP\./)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
