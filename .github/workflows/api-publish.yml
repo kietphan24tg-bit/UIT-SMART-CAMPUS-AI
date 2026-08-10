@@ -1,4 +1,4 @@
-name: Build, Test, Push Staging Image
+name: Build, Test, Publish API Image
 
 on:
   push:
@@ -17,6 +17,7 @@ on:
 
 env:
   IMAGE_NAME: kietphan24/smart-campus-api
+  # The live Coolify service currently tracks this published tag.
   STAGING_TAG: staging
   RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
   COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
@@ -24,7 +25,7 @@ env:
 
 jobs:
   staging:
-    name: Build, Test, Push Staging Image
+    name: Build, Test, Publish API Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,7 +64,7 @@ jobs:
           test -n "$DOCKERHUB_TOKEN" || (echo "Missing DOCKERHUB_TOKEN" && exit 1)
         shell: bash
 
-      - name: Validate staging deploy configuration
+      - name: Validate deploy configuration
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ] && [ -z "$COOLIFY_DEPLOY_WEBHOOK" ]; then
             echo "Missing RENDER_DEPLOY_HOOK_URL or COOLIFY_DEPLOY_WEBHOOK"
@@ -89,7 +90,7 @@ jobs:
         run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
         shell: bash
 
-      - name: Build and push staging image
+      - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -101,13 +102,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trigger Render deploy (staging)
+      - name: Trigger Render deploy
         if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
           curl --fail --show-error --silent --request POST "$RENDER_DEPLOY_HOOK_URL"
         shell: bash
 
-      - name: Trigger Coolify deploy (staging fallback)
+      - name: Trigger Coolify deploy
         if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' && env.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
           curl --fail --show-error --silent \
@@ -115,12 +116,12 @@ jobs:
             "$COOLIFY_DEPLOY_WEBHOOK"
         shell: bash
 
-      - name: Explain staging deploy
+      - name: Explain deploy output
         run: |
           echo "Published image:"
           echo "- ${{ env.IMAGE_NAME }}:${{ env.STAGING_TAG }}"
           echo "- ${{ env.IMAGE_NAME }}:staging-${{ steps.meta.outputs.short_sha }}"
-          echo "Configure the staging service to pull ${{ env.IMAGE_NAME }}:${{ env.STAGING_TAG }}."
+          echo "The live Coolify service is configured to pull ${{ env.IMAGE_NAME }}:${{ env.STAGING_TAG }}."
         shell: bash
 
       - name: Upload reports on failure
