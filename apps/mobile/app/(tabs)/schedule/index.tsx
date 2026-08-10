@@ -14,7 +14,11 @@ import {
 } from '@/components/ui';
 import { useEffectiveRole, useEffectiveUser } from '@/hooks/use-effective-role';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
-import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
+import {
+  getUnreadFireAlertsCount,
+  useOperationsScreenData,
+  useScheduleScreenData,
+} from '@/hooks/use-schedule-screen';
 import { useAppTheme } from '@/theme';
 import type { FireAlertRecord, ScheduleRecord, SemesterRecord } from '@/types/app-data';
 import {
@@ -272,7 +276,7 @@ export default function ScheduleScreen() {
     const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
     const recentFireAlerts = fireAlerts.slice(0, 5);
     const totalFireAlerts = operationsState.data?.fireAlerts.meta.total ?? fireAlerts.length;
-    const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
+    const unreadFireAlerts = getUnreadFireAlertsCount(operationsState.data?.fireAlerts);
     const isMutatingFireAlerts = operationsState.isMutatingFireAlerts ?? false;
     const handleDeleteFireAlert = (item: FireAlertRecord) => {
       if (isMutatingFireAlerts) {
@@ -339,8 +343,8 @@ export default function ScheduleScreen() {
       },
       {
         label: 'Cảnh báo',
-        value: `${openFireAlerts}`,
-        helper: 'Fire alert chưa xử lý',
+        value: `${unreadFireAlerts}`,
+        helper: 'Fire alert chưa đọc',
         tone: 'danger' as const,
       },
       {
@@ -465,7 +469,7 @@ export default function ScheduleScreen() {
                         {item.message || 'Cảnh báo cháy'}
                       </Text>
                       <StatusBadge
-                        label={item.isResolved ? 'Đã xử lý' : 'Đang mở'}
+                        label={item.isResolved ? 'Đã xem' : 'Chưa xem'}
                         tone={item.isResolved ? 'info' : 'danger'}
                         size="sm"
                       />

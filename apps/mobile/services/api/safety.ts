@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-import type { FireAlertsPayload, TelemetrySnapshotRecord } from '@/types/app-data';
+import type { FireAlertRecord, FireAlertsPayload, TelemetrySnapshotRecord } from '@/types/app-data';
 
 
 export const safetyApi = {
@@ -14,6 +14,10 @@ export const safetyApi = {
     return apiClient.delete(`/safety/fire-alerts/${encodeURIComponent(id)}`) as Promise<{
       deleted: true;
     }>;
+  },
+
+  markFireAlertAsRead: async (id: string): Promise<FireAlertRecord> => {
+    return apiClient.patch(`/safety/fire-alerts/${encodeURIComponent(id)}/read`) as Promise<FireAlertRecord>;
   },
 
   deleteFireAlerts: async (): Promise<{ count: number }> => {

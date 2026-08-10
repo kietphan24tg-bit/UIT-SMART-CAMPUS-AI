@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -66,5 +67,14 @@ export class SafetyController {
   @ApiOperation({ summary: 'Delete a fire alert for administrators' })
   deleteFireAlert(@Param('id') id: string) {
     return this.iotService.deleteFireAlert(id);
+  }
+
+  @Patch('fire-alerts/:id/read')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark a fire alert as read for administrators' })
+  markFireAlertAsRead(@Param('id') id: string) {
+    return this.iotService.markFireAlertAsRead(id);
   }
 }

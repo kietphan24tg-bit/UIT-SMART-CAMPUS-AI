@@ -104,6 +104,10 @@ export interface PaginatedMeta {
   totalPages: number;
 }
 
+export interface FireAlertsMeta extends PaginatedMeta {
+  unresolvedTotal?: number;
+}
+
 export interface NotificationsPayload {
   items: NotificationRecord[];
   meta: PaginatedMeta;
@@ -139,7 +143,7 @@ export interface FireAlertRecord {
 
 export interface FireAlertsPayload {
   items: FireAlertRecord[];
-  meta: PaginatedMeta;
+  meta: FireAlertsMeta;
 }
 
 export type TelemetryHealthState = 'online' | 'stale' | 'offline' | 'fire-alert' | 'no-data';

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MetricGrid } from './metric-grid';
@@ -140,18 +141,33 @@ function TaskRecordGrid({
 }) {
   const theme = useAppTheme();
   const layout = useResponsiveLayout();
+  const [gridWidth, setGridWidth] = useState(0);
   const columns = layout.getGridColumns({
     minItemWidth: 220,
     gap: 12,
     maxColumns: layout.isTablet ? 2 : 1,
   });
-  const width = layout.getGridItemWidth({ columns, gap: 12 });
+  const width =
+    columns === 1
+      ? '100%'
+      : gridWidth > 0
+        ? Math.max((gridWidth - 12 * (columns - 1)) / columns, 0)
+        : '100%';
 
   return (
-    <View style={styles.grid}>
+    <View
+      style={styles.grid}
+      onLayout={({ nativeEvent }) => {
+        const nextWidth = nativeEvent.layout.width;
+        if (nextWidth !== gridWidth) {
+          setGridWidth(nextWidth);
+        }
+      }}
+    >
       {records.map((record) => {
         const card = (
           <View
+            testID={`task-record-${record.id}`}
             style={[
               styles.recordCard,
               { width },

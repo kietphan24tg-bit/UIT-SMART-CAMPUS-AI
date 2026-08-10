@@ -71,8 +71,8 @@ export function ParkingRealtimeProvider({
         { queryKey: ['dashboard'] },
         (previous) => applyParkingStatusToDashboard(previous, status),
       );
-      queryClient.setQueryData<OperationsSummaryState | undefined>(
-        ['operations-summary'],
+      queryClient.setQueriesData<OperationsSummaryState | undefined>(
+        { queryKey: ['operations-summary'] },
         (previous) => applyParkingStatusToOperationsSummary(previous, status),
       );
     });
@@ -80,10 +80,30 @@ export function ParkingRealtimeProvider({
       'parking:telemetry_updated',
       (telemetry: TelemetrySnapshotRecord) => {
         setConnectionState('live');
-        queryClient.setQueryData<OperationsSummaryState | undefined>(
-          ['operations-summary'],
+        const previousOperationsSummaries =
+          queryClient.getQueriesData<OperationsSummaryState | undefined>({
+            queryKey: ['operations-summary'],
+          });
+        const shouldRefreshAlerts =
+          (previousOperationsSummaries.length === 0 && telemetry.fireDetected) ||
+          previousOperationsSummaries.some(([, previous]) => {
+            if (!previous?.telemetry) {
+              return telemetry.fireDetected;
+            }
+
+            return telemetry.fireDetected && !previous.telemetry.fireDetected;
+          });
+
+        queryClient.setQueriesData<OperationsSummaryState | undefined>(
+          { queryKey: ['operations-summary'] },
           (previous) => applyTelemetryToOperationsSummary(previous, telemetry),
         );
+
+        if (shouldRefreshAlerts) {
+          void queryClient.invalidateQueries({ queryKey: ['operations-summary'] });
+          void queryClient.invalidateQueries({ queryKey: ['alert-feed'] });
+          void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        }
       },
     );
 

@@ -292,7 +292,7 @@ export class IotService {
   async listFireAlerts(page = 1, limit = 20) {
     const safePage = clampInteger(page, 1, 1, 1000);
     const safeLimit = clampInteger(limit, 20, 1, 100);
-    const [items, total] = await Promise.all([
+    const [items, total, unresolvedTotal] = await Promise.all([
       this.prisma.fireAlert.findMany({
         orderBy: { reportedAt: 'desc' },
         skip: (safePage - 1) * safeLimit,
@@ -300,6 +300,9 @@ export class IotService {
         include: { telemetrySnapshot: true },
       }),
       this.prisma.fireAlert.count(),
+      this.prisma.fireAlert.count({
+        where: { isResolved: false },
+      }),
     ]);
 
     return {
@@ -308,6 +311,7 @@ export class IotService {
         page: safePage,
         limit: safeLimit,
         total,
+        unresolvedTotal,
         totalPages: Math.max(1, Math.ceil(total / safeLimit)),
       },
     };
@@ -333,6 +337,30 @@ export class IotService {
   async deleteFireAlerts() {
     const result = await this.prisma.fireAlert.deleteMany();
     return { count: result.count };
+  }
+
+  async markFireAlertAsRead(id: string) {
+    const fireAlert = await this.prisma.fireAlert.findUnique({
+      where: { id },
+      include: { telemetrySnapshot: true },
+    });
+
+    if (!fireAlert) {
+      throw new NotFoundException('Fire alert not found');
+    }
+
+    if (fireAlert.isResolved) {
+      return fireAlert;
+    }
+
+    return this.prisma.fireAlert.update({
+      where: { id: fireAlert.id },
+      data: {
+        isResolved: true,
+        resolvedAt: fireAlert.resolvedAt ?? new Date(),
+      },
+      include: { telemetrySnapshot: true },
+    });
   }
 
   private async processTelemetryAlertTransitions(

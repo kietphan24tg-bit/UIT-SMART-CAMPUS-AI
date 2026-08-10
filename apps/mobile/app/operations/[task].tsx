@@ -5,15 +5,16 @@ import { Alert } from 'react-native';
 import { AdminUserManagementScreen } from './admin-user-management-screen';
 
 import { NotificationComposeForm } from '@/components/notifications/notification-compose-form';
+import { AdminFireAlertsTaskScreen } from '@/components/operations/admin-fire-alerts-task-screen';
 import { TaskScreen } from '@/components/tasks';
 import { ContentStack, EmptyState, Screen, TopHero } from '@/components/ui';
-import { useOperationsScreenData } from '@/hooks/use-schedule-screen';
+import { getUnreadFireAlertsCount, useOperationsScreenData } from '@/hooks/use-schedule-screen';
 import { notificationsApi } from '@/services/api/notifications';
-import { useAuthStore } from '@/stores/auth-store';
 import type { BroadcastNotificationRequest } from '@/services/api/notifications';
-import type { UserRole } from '@/types/app-data';
-import type { OperationsTaskKey, TaskActionDescriptor, TaskRecord } from '@/types/app-data';
+import { useAuthStore } from '@/stores/auth-store';
+import type { FireAlertRecord, OperationsTaskKey, TaskActionDescriptor, TaskRecord, UserRole } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 import { getOperationsTaskConfig, getPermissionDeniedCopy } from '@/utils/role-ui';
 
 export default function OperationsTaskScreen() {
@@ -64,6 +65,84 @@ export default function OperationsTaskScreen() {
     return <AdminUserManagementScreen />;
   }
 
+  if (task === 'fire-alerts') {
+    const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
+    const totalFireAlerts = operationsState.data?.fireAlerts.meta.total ?? fireAlerts.length;
+    const unreadFireAlerts = getUnreadFireAlertsCount(operationsState.data?.fireAlerts);
+    const isMutatingFireAlerts = operationsState.isMutatingFireAlerts ?? false;
+    const handleDeleteFireAlert = (item: FireAlertRecord) => {
+      if (isMutatingFireAlerts) {
+        return;
+      }
+
+      Alert.alert(
+        'Xóa cảnh báo',
+        'Cảnh báo này sẽ bị xóa khỏi danh sách vận hành. Dữ liệu telemetry gốc vẫn được giữ.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Xóa',
+            style: 'destructive',
+            onPress: () => {
+              void operationsState.deleteFireAlert(item.id).catch((error) => {
+                Alert.alert(
+                  'Không xóa được cảnh báo',
+                  getLocalizedErrorMessage(error, 'Vui lòng thử lại sau.'),
+                );
+              });
+            },
+          },
+        ],
+      );
+    };
+
+    const handleDeleteAllFireAlerts = () => {
+      if (isMutatingFireAlerts || totalFireAlerts === 0) {
+        return;
+      }
+
+      Alert.alert(
+        'Xóa tất cả cảnh báo',
+        `Xóa ${totalFireAlerts} cảnh báo khỏi danh sách vận hành? Dữ liệu telemetry gốc vẫn được giữ.`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Xóa tất cả',
+            style: 'destructive',
+            onPress: () => {
+              void operationsState.deleteFireAlerts().catch((error) => {
+                Alert.alert(
+                  'Không xóa được cảnh báo',
+                  getLocalizedErrorMessage(error, 'Vui lòng thử lại sau.'),
+                );
+              });
+            },
+          },
+        ],
+      );
+    };
+
+    return (
+      <AdminFireAlertsTaskScreen
+        fireAlerts={fireAlerts}
+        totalFireAlerts={totalFireAlerts}
+        unreadFireAlerts={unreadFireAlerts}
+        isMutating={isMutatingFireAlerts}
+        isRefetching={operationsState.isRefetching}
+        onRefresh={() => void operationsState.refetch()}
+        onDeleteAlert={handleDeleteFireAlert}
+        onDeleteAll={handleDeleteAllFireAlerts}
+        onOpenAlert={(item) =>
+          router.push({
+            pathname: '/alerts/[id]',
+            params: { id: item.id, kind: 'fire_alert' },
+          } as never)
+        }
+        onOpenAlertCenter={() => router.push('/operations/alerts')}
+      />
+    );
+  }
+
   const config = getOperationsTaskConfig(task, role, operationsState.data);
 
   if (!config) {
@@ -109,6 +188,7 @@ function AdminNotificationBroadcastScreen({ role }: { role?: string | null }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-feed'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+      queryClient.invalidateQueries({ queryKey: ['operations-summary', role] });
     },
   });
 

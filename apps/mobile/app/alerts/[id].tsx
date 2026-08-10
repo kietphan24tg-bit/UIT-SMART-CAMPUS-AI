@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import {
@@ -34,8 +35,30 @@ export default function AlertDetailScreen() {
   });
   const item: AlertFeedItem | null =
     feedItem ?? (fallbackNotification.data ? toNotificationFeed(fallbackNotification.data) : null);
+  const autoReadKeyRef = useRef<string | null>(null);
 
-  if (!item && fallbackNotification.isFetching) {
+  useEffect(() => {
+    if (!params.id || !params.kind || !item || item.isRead) {
+      return;
+    }
+
+    const autoReadKey = `${params.kind}:${params.id}`;
+    if (autoReadKeyRef.current === autoReadKey) {
+      return;
+    }
+
+    autoReadKeyRef.current = autoReadKey;
+    const markAsReadPromise =
+      item.kind === 'fire_alert'
+        ? alerts.markFireAlertAsRead(params.id)
+        : alerts.markAsRead(params.id);
+
+    void markAsReadPromise.catch(() => {
+      autoReadKeyRef.current = null;
+    });
+  }, [alerts, item, params.id, params.kind]);
+
+  if (!item && (alerts.isFetching || fallbackNotification.isFetching)) {
     return (
       <Screen>
         <ContentStack narrow>

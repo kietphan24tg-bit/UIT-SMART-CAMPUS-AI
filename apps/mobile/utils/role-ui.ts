@@ -225,6 +225,11 @@ export function getOperationsTaskConfig(
   switch (task) {
     case 'fire-alerts': {
       const items = liveData?.fireAlerts?.items ?? [];
+      const totalItems = liveData?.fireAlerts?.meta.total ?? items.length;
+      const unreadItems =
+        typeof liveData?.fireAlerts?.meta.unresolvedTotal === 'number'
+          ? Math.max(liveData.fireAlerts.meta.unresolvedTotal, 0)
+          : items.filter((item) => !item.isResolved).length;
 
       return {
         eyebrow: 'PCCC',
@@ -240,11 +245,12 @@ export function getOperationsTaskConfig(
           {
             title: 'Tổng quan',
             infoRows: [
-              { label: 'Số cảnh báo', value: `${items.length}` },
+              { label: 'Số cảnh báo', value: `${totalItems}` },
               {
-                label: 'Đang mở',
-                value: `${items.filter((item) => !item.isResolved).length}`,
+                label: 'Chưa xem',
+                value: `${unreadItems}`,
               },
+              { label: 'Đã xem', value: `${Math.max(totalItems - unreadItems, 0)}` },
               {
                 label: 'Nguồn dữ liệu',
                 value: 'GET /safety/fire-alerts',
@@ -262,7 +268,7 @@ export function getOperationsTaskConfig(
                       item.message,
                       `Cổng ${item.gateId}`,
                       formatDateTime(item.reportedAt),
-                      item.isResolved ? 'Đã xử lý' : 'Đang mở',
+                      item.isResolved ? 'Đã xem' : 'Chưa xem',
                       item.isResolved ? 'info' : 'danger',
                       '/operations/alerts',
                     ),

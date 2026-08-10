@@ -82,6 +82,7 @@ describe('IotService', () => {
               findMany: jest.fn(),
               findUnique: jest.fn(),
               count: jest.fn(),
+              update: jest.fn(),
               delete: jest.fn(),
               deleteMany: jest.fn(),
             },
@@ -282,6 +283,86 @@ describe('IotService', () => {
     });
 
     expect(notificationsService.createSystemNotifications).not.toHaveBeenCalled();
+  });
+
+  it('returns unresolved fire alert totals alongside the paginated list', async () => {
+    const reportedAt = new Date('2026-08-10T16:00:00.000Z');
+    (prisma.fireAlert.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'fire-alert-1',
+        gateId: 'uit-gate-a',
+        message: 'Phat hien khoi',
+        isResolved: false,
+        reportedAt,
+        resolvedAt: null,
+        telemetrySnapshot: null,
+      },
+    ]);
+    (prisma.fireAlert.count as jest.Mock)
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(3);
+
+    await expect(service.listFireAlerts(1, 10)).resolves.toEqual({
+      items: [
+        expect.objectContaining({
+          id: 'fire-alert-1',
+          isResolved: false,
+        }),
+      ],
+      meta: {
+        page: 1,
+        limit: 10,
+        total: 7,
+        unresolvedTotal: 3,
+        totalPages: 1,
+      },
+    });
+    expect(prisma.fireAlert.count).toHaveBeenNthCalledWith(1);
+    expect(prisma.fireAlert.count).toHaveBeenNthCalledWith(2, {
+      where: { isResolved: false },
+    });
+  });
+
+  it('marks an unread fire alert as read without touching telemetry snapshots', async () => {
+    const reportedAt = new Date('2026-08-10T16:00:00.000Z');
+    (prisma.fireAlert.findUnique as jest.Mock).mockResolvedValue({
+      id: 'fire-alert-1',
+      gateId: 'uit-gate-a',
+      message: 'Phat hien khoi',
+      isResolved: false,
+      reportedAt,
+      resolvedAt: null,
+      telemetrySnapshot: null,
+    });
+    (prisma.fireAlert.update as jest.Mock).mockResolvedValue({
+      id: 'fire-alert-1',
+      gateId: 'uit-gate-a',
+      message: 'Phat hien khoi',
+      isResolved: true,
+      reportedAt,
+      resolvedAt: new Date('2026-08-10T16:01:00.000Z'),
+      telemetrySnapshot: null,
+    });
+
+    await expect(service.markFireAlertAsRead('fire-alert-1')).resolves.toEqual(
+      expect.objectContaining({
+        id: 'fire-alert-1',
+        isResolved: true,
+      }),
+    );
+    expect(prisma.fireAlert.findUnique).toHaveBeenCalledWith({
+      where: { id: 'fire-alert-1' },
+      include: { telemetrySnapshot: true },
+    });
+    expect(prisma.fireAlert.update).toHaveBeenCalledWith({
+      where: { id: 'fire-alert-1' },
+      data: {
+        isResolved: true,
+        resolvedAt: expect.any(Date),
+      },
+      include: { telemetrySnapshot: true },
+    });
+    expect(prisma.telemetrySnapshot.create).not.toHaveBeenCalled();
   });
 
   it('deletes a fire alert without touching telemetry snapshots', async () => {

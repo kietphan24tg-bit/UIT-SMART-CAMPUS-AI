@@ -1,14 +1,21 @@
 import { getNotificationAlertCategory } from '@smart-campus/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import {
+  markFireAlertAsReadInAlertFeed,
+  markFireAlertAsReadInOperationsSummary,
+} from './use-schedule-screen';
+
 import { notificationsApi, type DeleteNotificationsQuery } from '@/services/api/notifications';
 import { safetyApi } from '@/services/api/safety';
 import { useAuthStore } from '@/stores/auth-store';
 import type {
   AlertCategory,
   AlertFeedItem,
+  DashboardSnapshot,
   FireAlertRecord,
   NotificationRecord,
+  OperationsSummaryState,
 } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
 
@@ -94,14 +101,59 @@ function toFireAlertFeed(item: FireAlertRecord): AlertFeedItem {
   };
 }
 
+function decrementUnreadCount(value: number, amount = 1) {
+  return Math.max(value - amount, 0);
+}
+
+function markNotificationAsReadInAlertFeed(current: AlertFeedItem[] | undefined, id: string) {
+  if (!current) {
+    return current;
+  }
+
+  return current.map((item) =>
+    item.kind === 'notification' && item.id === id && !item.isRead
+      ? {
+          ...item,
+          isRead: true,
+        }
+      : item,
+  );
+}
+
+function markAllNotificationsAsReadInAlertFeed(current: AlertFeedItem[] | undefined) {
+  if (!current) {
+    return current;
+  }
+
+  return current.map((item) =>
+    item.kind === 'notification' && !item.isRead
+      ? {
+          ...item,
+          isRead: true,
+        }
+      : item,
+  );
+}
+
+function removeNotificationFromAlertFeed(current: AlertFeedItem[] | undefined, id: string) {
+  if (!current) {
+    return current;
+  }
+
+  return current.filter((item) => !(item.kind === 'notification' && item.id === id));
+}
+
 export function useAlertFeed(role?: string | null) {
   const canViewFireAlerts = isAdminRole(role);
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const queryClient = useQueryClient();
+  const alertFeedQueryKey = ['alert-feed', role] as const;
+  const dashboardQueryKey = ['dashboard', role] as const;
+  const operationsQueryKey = ['operations-summary', role] as const;
 
   const query = useQuery({
-    queryKey: ['alert-feed', role],
+    queryKey: alertFeedQueryKey,
     queryFn: async (): Promise<AlertFeedItem[]> => {
       const [notifications, fireAlerts] = await Promise.all([
         notificationsApi.getNotifications(1, 20),
@@ -122,49 +174,212 @@ export function useAlertFeed(role?: string | null) {
     placeholderData: [] as AlertFeedItem[],
   });
 
+  const invalidateAlertData = () => {
+    queryClient.invalidateQueries({ queryKey: alertFeedQueryKey });
+    queryClient.invalidateQueries({ queryKey: dashboardQueryKey });
+    queryClient.invalidateQueries({ queryKey: operationsQueryKey });
+  };
+
   const markAsRead = useMutation({
     mutationFn: (id: string) => notificationsApi.markAsRead(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    onMutate: async (id) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: alertFeedQueryKey }),
+        queryClient.cancelQueries({ queryKey: dashboardQueryKey }),
+        queryClient.cancelQueries({ queryKey: operationsQueryKey }),
+      ]);
+
+      const previousAlertFeed = queryClient.getQueryData<AlertFeedItem[]>(alertFeedQueryKey);
+      const previousDashboard = queryClient.getQueryData<DashboardSnapshot>(dashboardQueryKey);
+      const previousOperationsSummary =
+        queryClient.getQueryData<OperationsSummaryState>(operationsQueryKey);
+      const target = previousAlertFeed?.find(
+        (item) => item.kind === 'notification' && item.id === id,
+      );
+      const shouldDecrement = Boolean(target && !target.isRead);
+
+      queryClient.setQueryData<AlertFeedItem[] | undefined>(alertFeedQueryKey, (current) =>
+        markNotificationAsReadInAlertFeed(current, id),
+      );
+
+      if (shouldDecrement) {
+        queryClient.setQueryData<DashboardSnapshot | undefined>(dashboardQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                unreadCount: decrementUnreadCount(current.unreadCount),
+              }
+            : current,
+        );
+        queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                unreadCount: decrementUnreadCount(current.unreadCount),
+              }
+            : current,
+        );
+      }
+
+      return { previousAlertFeed, previousDashboard, previousOperationsSummary };
     },
+    onError: (_error, _id, context) => {
+      if (context) {
+        queryClient.setQueryData(alertFeedQueryKey, context.previousAlertFeed);
+        queryClient.setQueryData(dashboardQueryKey, context.previousDashboard);
+        queryClient.setQueryData(operationsQueryKey, context.previousOperationsSummary);
+      }
+    },
+    onSettled: invalidateAlertData,
   });
 
   const markAllAsRead = useMutation({
     mutationFn: notificationsApi.markAllAsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    onMutate: async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: alertFeedQueryKey }),
+        queryClient.cancelQueries({ queryKey: dashboardQueryKey }),
+        queryClient.cancelQueries({ queryKey: operationsQueryKey }),
+      ]);
+
+      const previousAlertFeed = queryClient.getQueryData<AlertFeedItem[]>(alertFeedQueryKey);
+      const previousDashboard = queryClient.getQueryData<DashboardSnapshot>(dashboardQueryKey);
+      const previousOperationsSummary =
+        queryClient.getQueryData<OperationsSummaryState>(operationsQueryKey);
+
+      queryClient.setQueryData<AlertFeedItem[] | undefined>(alertFeedQueryKey, (current) =>
+        markAllNotificationsAsReadInAlertFeed(current),
+      );
+      queryClient.setQueryData<DashboardSnapshot | undefined>(dashboardQueryKey, (current) =>
+        current
+          ? {
+              ...current,
+              unreadCount: 0,
+            }
+          : current,
+      );
+      queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
+        current
+          ? {
+              ...current,
+              unreadCount: 0,
+            }
+          : current,
+      );
+
+      return { previousAlertFeed, previousDashboard, previousOperationsSummary };
     },
+    onError: (_error, _variables, context) => {
+      if (context) {
+        queryClient.setQueryData(alertFeedQueryKey, context.previousAlertFeed);
+        queryClient.setQueryData(dashboardQueryKey, context.previousDashboard);
+        queryClient.setQueryData(operationsQueryKey, context.previousOperationsSummary);
+      }
+    },
+    onSettled: invalidateAlertData,
+  });
+
+  const markFireAlertAsRead = useMutation({
+    mutationFn: (id: string) => safetyApi.markFireAlertAsRead(id),
+    onMutate: async (id) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: alertFeedQueryKey }),
+        queryClient.cancelQueries({ queryKey: operationsQueryKey }),
+      ]);
+
+      const previousAlertFeed = queryClient.getQueryData<AlertFeedItem[]>(alertFeedQueryKey);
+      const previousOperationsSummary =
+        queryClient.getQueryData<OperationsSummaryState>(operationsQueryKey);
+
+      queryClient.setQueryData<AlertFeedItem[] | undefined>(alertFeedQueryKey, (current) =>
+        markFireAlertAsReadInAlertFeed(current, id),
+      );
+      queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
+        markFireAlertAsReadInOperationsSummary(current, id),
+      );
+
+      return { previousAlertFeed, previousOperationsSummary };
+    },
+    onError: (_error, _id, context) => {
+      if (context) {
+        queryClient.setQueryData(alertFeedQueryKey, context.previousAlertFeed);
+        queryClient.setQueryData(operationsQueryKey, context.previousOperationsSummary);
+      }
+    },
+    onSettled: invalidateAlertData,
   });
 
   const deleteNotification = useMutation({
     mutationFn: (id: string) => notificationsApi.deleteNotification(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+    onMutate: async (id) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: alertFeedQueryKey }),
+        queryClient.cancelQueries({ queryKey: dashboardQueryKey }),
+        queryClient.cancelQueries({ queryKey: operationsQueryKey }),
+      ]);
+
+      const previousAlertFeed = queryClient.getQueryData<AlertFeedItem[]>(alertFeedQueryKey);
+      const previousDashboard = queryClient.getQueryData<DashboardSnapshot>(dashboardQueryKey);
+      const previousOperationsSummary =
+        queryClient.getQueryData<OperationsSummaryState>(operationsQueryKey);
+      const target = previousAlertFeed?.find(
+        (item) => item.kind === 'notification' && item.id === id,
+      );
+      const shouldDecrement = Boolean(target && !target.isRead);
+
+      queryClient.setQueryData<AlertFeedItem[] | undefined>(alertFeedQueryKey, (current) =>
+        removeNotificationFromAlertFeed(current, id),
+      );
+
+      if (shouldDecrement) {
+        queryClient.setQueryData<DashboardSnapshot | undefined>(dashboardQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                unreadCount: decrementUnreadCount(current.unreadCount),
+              }
+            : current,
+        );
+        queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                unreadCount: decrementUnreadCount(current.unreadCount),
+              }
+            : current,
+        );
+      }
+
+      return { previousAlertFeed, previousDashboard, previousOperationsSummary };
     },
+    onError: (_error, _id, context) => {
+      if (context) {
+        queryClient.setQueryData(alertFeedQueryKey, context.previousAlertFeed);
+        queryClient.setQueryData(dashboardQueryKey, context.previousDashboard);
+        queryClient.setQueryData(operationsQueryKey, context.previousOperationsSummary);
+      }
+    },
+    onSettled: invalidateAlertData,
   });
 
   const deleteNotifications = useMutation({
     mutationFn: (deleteQuery: DeleteNotificationsQuery) =>
       notificationsApi.deleteNotifications(deleteQuery),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
-    },
+    onSettled: invalidateAlertData,
   });
 
   return {
     ...query,
     markAsRead: (id: string) => markAsRead.mutateAsync(id),
     markAllAsRead: () => markAllAsRead.mutateAsync(),
+    markFireAlertAsRead: (id: string) => markFireAlertAsRead.mutateAsync(id),
     deleteNotification: (id: string) => deleteNotification.mutateAsync(id),
     deleteNotifications: (deleteQuery: DeleteNotificationsQuery) =>
       deleteNotifications.mutateAsync(deleteQuery),
     isMutating:
       markAsRead.isPending ||
       markAllAsRead.isPending ||
+      markFireAlertAsRead.isPending ||
       deleteNotification.isPending ||
       deleteNotifications.isPending,
   };
