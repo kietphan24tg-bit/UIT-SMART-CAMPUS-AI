@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -79,7 +80,10 @@ describe('IotService', () => {
             fireAlert: {
               create: jest.fn(),
               findMany: jest.fn(),
+              findUnique: jest.fn(),
               count: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
             },
           },
         },
@@ -278,5 +282,39 @@ describe('IotService', () => {
     });
 
     expect(notificationsService.createSystemNotifications).not.toHaveBeenCalled();
+  });
+
+  it('deletes a fire alert without touching telemetry snapshots', async () => {
+    (prisma.fireAlert.findUnique as jest.Mock).mockResolvedValue({ id: 'fire-alert-1' });
+    (prisma.fireAlert.delete as jest.Mock).mockResolvedValue({ id: 'fire-alert-1' });
+
+    await expect(service.deleteFireAlert('fire-alert-1')).resolves.toEqual({ deleted: true });
+
+    expect(prisma.fireAlert.findUnique).toHaveBeenCalledWith({
+      where: { id: 'fire-alert-1' },
+      select: { id: true },
+    });
+    expect(prisma.fireAlert.delete).toHaveBeenCalledWith({
+      where: { id: 'fire-alert-1' },
+    });
+    expect(prisma.telemetrySnapshot.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects deleting a missing fire alert', async () => {
+    (prisma.fireAlert.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(service.deleteFireAlert('missing-alert')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.fireAlert.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes all fire alerts through the fireAlert model only', async () => {
+    (prisma.fireAlert.deleteMany as jest.Mock).mockResolvedValue({ count: 3 });
+
+    await expect(service.deleteFireAlerts()).resolves.toEqual({ count: 3 });
+
+    expect(prisma.fireAlert.deleteMany).toHaveBeenCalledWith();
+    expect(prisma.telemetrySnapshot.create).not.toHaveBeenCalled();
   });
 });

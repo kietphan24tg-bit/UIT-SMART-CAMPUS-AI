@@ -313,6 +313,28 @@ export class IotService {
     };
   }
 
+  async deleteFireAlert(id: string) {
+    const fireAlert = await this.prisma.fireAlert.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!fireAlert) {
+      throw new NotFoundException('Fire alert not found');
+    }
+
+    await this.prisma.fireAlert.delete({
+      where: { id: fireAlert.id },
+    });
+
+    return { deleted: true };
+  }
+
+  async deleteFireAlerts() {
+    const result = await this.prisma.fireAlert.deleteMany();
+    return { count: result.count };
+  }
+
   private async processTelemetryAlertTransitions(
     previousSnapshot: {
       fireDetected: boolean;

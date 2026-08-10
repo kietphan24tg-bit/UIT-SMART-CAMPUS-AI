@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -46,5 +48,23 @@ export class SafetyController {
     @Query('limit') limit?: number,
   ) {
     return this.iotService.listFireAlerts(page, limit);
+  }
+
+  @Delete('fire-alerts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete all fire alerts for administrators' })
+  deleteFireAlerts() {
+    return this.iotService.deleteFireAlerts();
+  }
+
+  @Delete('fire-alerts/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a fire alert for administrators' })
+  deleteFireAlert(@Param('id') id: string) {
+    return this.iotService.deleteFireAlert(id);
   }
 }

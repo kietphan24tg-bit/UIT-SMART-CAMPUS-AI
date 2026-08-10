@@ -1,5 +1,6 @@
-﻿import { fireEvent, render } from '@testing-library/react-native';
+﻿import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import ScheduleScreen, {
   buildSubjectColorIndex,
@@ -31,6 +32,8 @@ const mockUseEffectiveUser = useEffectiveUser as jest.Mock;
 const mockUseScheduleScreenData = useScheduleScreenData as unknown as jest.Mock;
 const mockUseOperationsScreenData = useOperationsScreenData as unknown as jest.Mock;
 const mockUseAuthStore = useAuthStore as unknown as jest.Mock;
+const mockDeleteFireAlert = jest.fn();
+const mockDeleteFireAlerts = jest.fn();
 const mockColorTheme = {
   isDark: false,
   colors: {
@@ -76,6 +79,9 @@ function makeScheduleRecord(code: string): ScheduleRecord {
 describe('ScheduleScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockDeleteFireAlert.mockResolvedValue({ deleted: true });
+    mockDeleteFireAlerts.mockResolvedValue({ count: 1 });
     mockUseEffectiveRole.mockReturnValue('student');
     mockUseEffectiveUser.mockReturnValue(null);
 
@@ -136,6 +142,9 @@ describe('ScheduleScreen', () => {
       isLoading: false,
       isRefetching: false,
       refetch: jest.fn(),
+      deleteFireAlert: mockDeleteFireAlert,
+      deleteFireAlerts: mockDeleteFireAlerts,
+      isMutatingFireAlerts: false,
     });
   });
 
@@ -435,6 +444,69 @@ describe('ScheduleScreen', () => {
     expect(getByText('Điều phối campus')).toBeTruthy();
     expect(getByText('Broadcast')).toBeTruthy();
     expect(getByText('Tài khoản')).toBeTruthy();
+  });
+
+  it('confirms fire alert delete actions from the admin operations summary', () => {
+    mockUseEffectiveRole.mockReturnValue('admin');
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = { user: { role: 'admin' } };
+      return selector(state);
+    });
+    mockUseScheduleScreenData.mockReturnValue({
+      semesters: [],
+      resolvedSemesterId: undefined,
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      schedule: [],
+    });
+
+    const { getByTestId } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId('operations-delete-fire-alert-fire-1'));
+    let alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    expect(alertCall?.[0]).toBe('Xóa cảnh báo');
+    let buttons = alertCall?.[2] as Array<{ text?: string; onPress?: () => void }> | undefined;
+    buttons?.find((button) => button.text === 'Xóa')?.onPress?.();
+    expect(mockDeleteFireAlert).toHaveBeenCalledWith('fire-1');
+
+    fireEvent.press(getByTestId('operations-delete-all-fire-alerts'));
+    alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    expect(alertCall?.[0]).toBe('Xóa tất cả cảnh báo');
+    buttons = alertCall?.[2] as Array<{ text?: string; onPress?: () => void }> | undefined;
+    buttons?.find((button) => button.text === 'Xóa tất cả')?.onPress?.();
+    expect(mockDeleteFireAlerts).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a localized error when deleting a fire alert fails', async () => {
+    mockUseEffectiveRole.mockReturnValue('admin');
+    mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
+      const state = { user: { role: 'admin' } };
+      return selector(state);
+    });
+    mockUseScheduleScreenData.mockReturnValue({
+      semesters: [],
+      resolvedSemesterId: undefined,
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      schedule: [],
+    });
+    mockDeleteFireAlert.mockRejectedValueOnce(new Error('Network Error'));
+
+    const { getByTestId } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId('operations-delete-fire-alert-fire-1'));
+    const confirmCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    const buttons = confirmCall?.[2] as Array<{ text?: string; onPress?: () => void }> | undefined;
+    buttons?.find((button) => button.text === 'Xóa')?.onPress?.();
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenLastCalledWith(
+        'Không xóa được cảnh báo',
+        'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.',
+      );
+    });
   });
 
   it('keeps admin entry tiles scoped to the operations route tree', () => {

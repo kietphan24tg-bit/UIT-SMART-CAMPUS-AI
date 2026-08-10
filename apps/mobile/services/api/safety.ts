@@ -10,6 +10,16 @@ export const safetyApi = {
     }) as Promise<FireAlertsPayload>;
   },
 
+  deleteFireAlert: async (id: string): Promise<{ deleted: true }> => {
+    return apiClient.delete(`/safety/fire-alerts/${encodeURIComponent(id)}`) as Promise<{
+      deleted: true;
+    }>;
+  },
+
+  deleteFireAlerts: async (): Promise<{ count: number }> => {
+    return apiClient.delete('/safety/fire-alerts') as Promise<{ count: number }>;
+  },
+
   getLatestTelemetry: async (gateId = 'uit-gate-a'): Promise<TelemetrySnapshotRecord> => {
     return apiClient.get('/iot/telemetry/latest', {
       params: { gateId },

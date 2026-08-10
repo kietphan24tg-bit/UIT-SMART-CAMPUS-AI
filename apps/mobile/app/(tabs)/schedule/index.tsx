@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { MetricGrid } from '@/components/tasks';
 import {
@@ -8,6 +8,7 @@ import {
   EmptyState,
   Screen,
   SectionCard,
+  SecondaryButton,
   StatusBadge,
   TopHero,
 } from '@/components/ui';
@@ -27,6 +28,7 @@ import {
   isAdminRole,
   isLecturerRole,
 } from '@/utils/app';
+import { getLocalizedErrorMessage } from '@/utils/error-message';
 
 function getScheduleRoomLabel(room?: string | null) {
   return room ? `Phòng ${room}` : 'Chưa cập nhật';
@@ -268,7 +270,60 @@ export default function ScheduleScreen() {
   if (isOperationsRole) {
     const parking = operationsState.data?.parking ?? null;
     const fireAlerts = operationsState.data?.fireAlerts.items ?? [];
+    const recentFireAlerts = fireAlerts.slice(0, 5);
+    const totalFireAlerts = operationsState.data?.fireAlerts.meta.total ?? fireAlerts.length;
     const openFireAlerts = fireAlerts.filter((item: FireAlertRecord) => !item.isResolved).length;
+    const isMutatingFireAlerts = operationsState.isMutatingFireAlerts ?? false;
+    const handleDeleteFireAlert = (item: FireAlertRecord) => {
+      if (isMutatingFireAlerts) {
+        return;
+      }
+
+      Alert.alert(
+        'Xóa cảnh báo',
+        'Cảnh báo này sẽ bị xóa khỏi danh sách vận hành. Dữ liệu telemetry gốc vẫn được giữ.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Xóa',
+            style: 'destructive',
+            onPress: () => {
+              void operationsState.deleteFireAlert(item.id).catch((error) => {
+                Alert.alert(
+                  'Không xóa được cảnh báo',
+                  getLocalizedErrorMessage(error, 'Vui lòng thử lại sau.'),
+                );
+              });
+            },
+          },
+        ],
+      );
+    };
+    const handleDeleteAllFireAlerts = () => {
+      if (isMutatingFireAlerts || fireAlerts.length === 0) {
+        return;
+      }
+
+      Alert.alert(
+        'Xóa tất cả cảnh báo',
+        `Xóa ${totalFireAlerts} cảnh báo khỏi danh sách vận hành? Dữ liệu telemetry gốc vẫn được giữ.`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Xóa tất cả',
+            style: 'destructive',
+            onPress: () => {
+              void operationsState.deleteFireAlerts().catch((error) => {
+                Alert.alert(
+                  'Không xóa được cảnh báo',
+                  getLocalizedErrorMessage(error, 'Vui lòng thử lại sau.'),
+                );
+              });
+            },
+          },
+        ],
+      );
+    };
     const metrics = [
       {
         label: 'Chỗ trống',
@@ -367,19 +422,31 @@ export default function ScheduleScreen() {
             title="Cảnh báo gần đây"
             subtitle="Các mục cần xử lý trước."
             variant="outlined"
+            headerAccessory={
+              fireAlerts.length > 0 ? (
+                <SecondaryButton
+                  label="Xóa tất cả"
+                  onPress={handleDeleteAllFireAlerts}
+                  disabled={isMutatingFireAlerts}
+                  loading={isMutatingFireAlerts}
+                  style={[
+                    styles.deleteAllButton,
+                    {
+                      backgroundColor: theme.colors.dangerSurface,
+                      borderColor: theme.colors.danger,
+                    },
+                  ]}
+                  labelStyle={{ color: theme.colors.danger }}
+                  testID="operations-delete-all-fire-alerts"
+                />
+              ) : undefined
+            }
           >
             {fireAlerts.length > 0 ? (
               <View style={styles.column}>
-                {fireAlerts.slice(0, 5).map((item) => (
-                  <Pressable
+                {recentFireAlerts.map((item) => (
+                  <View
                     key={item.id}
-                    accessibilityRole="button"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/alerts/[id]',
-                        params: { id: item.id, kind: 'fire_alert' },
-                      } as never)
-                    }
                     style={[
                       styles.alertCard,
                       {
@@ -435,7 +502,66 @@ export default function ScheduleScreen() {
                         />
                       </View>
                     ) : null}
-                  </Pressable>
+                    <View style={styles.alertActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Xem chi tiết cảnh báo"
+                        onPress={() =>
+                          router.push({
+                            pathname: '/alerts/[id]',
+                            params: { id: item.id, kind: 'fire_alert' },
+                          } as never)
+                        }
+                        style={({ pressed }) => [
+                          styles.alertActionButton,
+                          {
+                            backgroundColor: theme.colors.primarySurface,
+                            borderColor: theme.colors.primary,
+                            opacity: pressed ? 0.84 : 1,
+                          },
+                        ]}
+                      >
+                        <Ionicons name="open-outline" size={16} color={theme.colors.primary} />
+                        <Text
+                          style={[
+                            styles.alertActionText,
+                            { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          Chi tiết
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Xóa cảnh báo"
+                        disabled={isMutatingFireAlerts}
+                        onPress={() => handleDeleteFireAlert(item)}
+                        testID={`operations-delete-fire-alert-${item.id}`}
+                        style={({ pressed }) => [
+                          styles.alertActionButton,
+                          {
+                            backgroundColor: theme.colors.dangerSurface,
+                            borderColor: theme.colors.danger,
+                            opacity: isMutatingFireAlerts ? 0.56 : pressed ? 0.84 : 1,
+                          },
+                        ]}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
+                        <Text
+                          style={[
+                            styles.alertActionText,
+                            { color: theme.colors.danger, fontFamily: theme.fonts.semibold },
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          Xóa
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 ))}
               </View>
             ) : (
@@ -1112,6 +1238,37 @@ const styles = StyleSheet.create({
   },
   alertHeader: {
     alignItems: 'flex-start',
+  },
+  deleteAllButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  alertActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  alertActionButton: {
+    minHeight: 40,
+    minWidth: 112,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flexGrow: 1,
+  },
+  alertActionText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   daySection: {
     gap: 8,

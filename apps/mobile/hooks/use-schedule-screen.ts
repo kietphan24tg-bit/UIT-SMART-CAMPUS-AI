@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { gradesApi } from '@/services/api/grades';
 import { notificationsApi } from '@/services/api/notifications';
@@ -67,13 +67,14 @@ export function useScheduleScreenData(selectedSemesterId?: string) {
 export function useOperationsScreenData(role?: string | null) {
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const queryClient = useQueryClient();
   const connectionState = useParkingRealtimeStore(
     (state) => state.connectionState,
   );
   const canViewTelemetry = isAdminRole(role);
   const canViewFireAlerts = isAdminRole(role);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['operations-summary', role],
     queryFn: async (): Promise<OperationsSummaryState> => {
       const [parking, telemetry, fireAlerts, unreadCount, gpa] = await Promise.all([
@@ -111,4 +112,27 @@ export function useOperationsScreenData(role?: string | null) {
       return query.state.error ? 60_000 : 10_000;
     },
   });
+
+  const invalidateOperationsData = () => {
+    queryClient.invalidateQueries({ queryKey: ['operations-summary', role] });
+    queryClient.invalidateQueries({ queryKey: ['alert-feed', role] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard', role] });
+  };
+
+  const deleteFireAlert = useMutation({
+    mutationFn: (id: string) => safetyApi.deleteFireAlert(id),
+    onSuccess: invalidateOperationsData,
+  });
+
+  const deleteFireAlerts = useMutation({
+    mutationFn: safetyApi.deleteFireAlerts,
+    onSuccess: invalidateOperationsData,
+  });
+
+  return {
+    ...query,
+    deleteFireAlert: (id: string) => deleteFireAlert.mutateAsync(id),
+    deleteFireAlerts: () => deleteFireAlerts.mutateAsync(),
+    isMutatingFireAlerts: deleteFireAlert.isPending || deleteFireAlerts.isPending,
+  };
 }
