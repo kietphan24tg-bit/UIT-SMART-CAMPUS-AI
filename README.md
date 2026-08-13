@@ -21,3 +21,7 @@ Initial endpoints:
 - `GET /health`
 - `POST /rag/query`
 - `POST /ingest/rebuild`
+
+## Deployment
+
+The staging image is published as `kietphan24/smart-campus-ai:staging`.
