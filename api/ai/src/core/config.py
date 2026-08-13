@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     ai_service_host: str = "0.0.0.0"
     ai_service_port: int = 8000
+    ai_root_path: str = ""
 
     documents_dir: str = "D:/Workspace/UIT-document-normalized"
     database_url: str | None = None
