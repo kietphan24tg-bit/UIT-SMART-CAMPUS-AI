@@ -896,8 +896,8 @@ export default function ScheduleScreen() {
                   >
                     {getDayLabel(Number(day)).toUpperCase()}
                   </Text>
-                  <View style={styles.sessionList}>
-                    {items.map((item) => {
+                  <View style={[styles.sessionList, { marginTop: 8 }]}>
+                    {items.map((item, sessionIndex) => {
                       const accent = getSubjectColorByCode(
                         theme,
                         item.course.code,
@@ -908,6 +908,7 @@ export default function ScheduleScreen() {
                           key={item.id}
                           style={[
                             styles.sessionCard,
+                            sessionIndex > 0 && { marginTop: 8 },
                             {
                               backgroundColor: accent.surface,
                               borderColor: accent.accent,
@@ -1231,9 +1232,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  sessionList: {
-    gap: 8,
-  },
+  sessionList: {},
   alertCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1275,9 +1274,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dayList: {},
-  daySection: {
-    gap: 8,
-  },
+  daySection: {},
   dayHeading: {
     fontSize: 13,
     lineHeight: 18,

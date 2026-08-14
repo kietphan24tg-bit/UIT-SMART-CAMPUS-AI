@@ -4,6 +4,7 @@ import {
   Inter_600SemiBold,
   useFonts,
 } from '@expo-google-fonts/inter';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -153,10 +154,10 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
       : 'dark';
 
   return (
-    <>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthNavigationGate />
       <StatusBar style={statusBarStyle} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="schedule/semester/[id]" />
@@ -200,7 +201,7 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
         <Stack.Screen name="account/delete" />
         <Stack.Screen name="+not-found" />
       </Stack>
-    </>
+    </ThemeProvider>
   );
 }
 

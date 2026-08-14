@@ -190,12 +190,13 @@ export default function SemesterScheduleDetailScreen() {
                   {getDayLabel(Number(day)).toUpperCase()}
                 </Text>
 
-                <View style={styles.sessionList}>
-                  {items.map((item) => (
+                <View style={[styles.sessionList, { marginTop: 8 }]}>
+                  {items.map((item, sessionIndex) => (
                     <View
                       key={item.id}
                       style={[
                         styles.sessionCard,
+                        sessionIndex > 0 && { marginTop: 8 },
                         {
                           backgroundColor: theme.colors.surfaceSubtle,
                           borderColor: theme.colors.border,
@@ -388,13 +389,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  sessionList: {
-    gap: 8,
-  },
+  sessionList: {},
   dayList: {},
-  daySection: {
-    gap: 8,
-  },
+  daySection: {},
   dayHeading: {
     fontSize: 13,
     lineHeight: 18,
