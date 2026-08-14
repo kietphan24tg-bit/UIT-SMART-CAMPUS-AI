@@ -2,7 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View, findNodeHandle } from 'react-native';
+import {
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  findNodeHandle,
+} from 'react-native';
 
 import {
   ContentStack,
@@ -50,6 +60,9 @@ const WEIGHT_FIELDS: Array<{
   { key: 'midtermWeight', label: 'GK' },
   { key: 'finalWeight', label: 'CK' },
 ];
+
+const KEYBOARD_ROW_LIFT_BUFFER = 140;
+const SCREEN_BOTTOM_PADDING_COMPENSATION = -32;
 
 function toFullName(student: LecturerGradeSheetStudent) {
   return [student.lastName, student.firstName].filter(Boolean).join(' ').trim();
@@ -117,9 +130,13 @@ function buildEditableRows(students: LecturerGradeSheetStudent[]): EditableGrade
 function GradeInput({
   value,
   onChange,
+  onFocusChange,
+  testID,
 }: {
   value: number | null;
   onChange: (nextValue: number | null) => void;
+  onFocusChange?: (focused: boolean) => void;
+  testID?: string;
 }) {
   const theme = useAppTheme();
   const screenScroll = React.useContext(ScreenScrollContext);
@@ -131,12 +148,14 @@ function GradeInput({
 
   return (
     <TextInput
+      testID={testID}
       value={text}
       onChangeText={(nextText) => {
         setText(nextText);
         onChange(parseScoreInput(nextText));
       }}
       onFocus={(event) => {
+        onFocusChange?.(true);
         if (!screenScroll?.enabled) {
           return;
         }
@@ -147,6 +166,9 @@ function GradeInput({
             : findNodeHandle(event.target as never);
 
         screenScroll.scrollToField(targetHandle ?? null);
+      }}
+      onBlur={() => {
+        onFocusChange?.(false);
       }}
       keyboardType="decimal-pad"
       maxLength={4}
@@ -184,6 +206,8 @@ export default function LecturerGradeSheetScreen() {
   const [rows, setRows] = React.useState<EditableGradeRow[]>([]);
   const [baselineRows, setBaselineRows] = React.useState('');
   const [baselineWeights, setBaselineWeights] = React.useState('');
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+  const [gradeInputFocused, setGradeInputFocused] = React.useState(false);
 
   const sheetQuery = useQuery({
     queryKey: ['grades', 'lecturer', 'sheet', classSectionId],
@@ -209,6 +233,26 @@ export default function LecturerGradeSheetScreen() {
     setBaselineRows(JSON.stringify(nextRows));
     setBaselineWeights(JSON.stringify(nextWeights));
   }, [sheetQuery.data]);
+
+  React.useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setGradeInputFocused(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const keyboardLiftSpace =
+    gradeInputFocused && keyboardHeight > 0 ? keyboardHeight + KEYBOARD_ROW_LIFT_BUFFER : 0;
 
   const weights = React.useMemo<GradeWeights>(
     () => ({
@@ -313,7 +357,7 @@ export default function LecturerGradeSheetScreen() {
   const isBusy = updateWeightsMutation.isPending || saveSheetMutation.isPending;
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={styles.screenContent}>
       <View
         style={[
           styles.headerRow,
@@ -659,7 +703,9 @@ export default function LecturerGradeSheetScreen() {
                         {SCORE_COLUMNS.map((column) => (
                           <View key={column.key} style={styles.scoreCell}>
                             <GradeInput
+                              testID={`grade-input-${row.studentId}-${column.key}`}
                               value={row[column.key]}
+                              onFocusChange={setGradeInputFocused}
                               onChange={(value) => updateRowScore(row.studentId, column.key, value)}
                             />
                           </View>
@@ -682,6 +728,14 @@ export default function LecturerGradeSheetScreen() {
                 </View>
               ) : null}
             </View>
+
+            {keyboardLiftSpace > 0 ? (
+              <View
+                testID="keyboard-lift-space"
+                pointerEvents="none"
+                style={{ height: keyboardLiftSpace }}
+              />
+            ) : null}
           </View>
         ) : null}
       </ContentStack>
@@ -710,9 +764,12 @@ const styles = StyleSheet.create({
   skeletonWrap: {
     gap: 12,
   },
+  screenContent: {
+    paddingBottom: SCREEN_BOTTOM_PADDING_COMPENSATION,
+  },
   stack: {
     gap: 14,
-    paddingBottom: 18,
+    paddingBottom: 0,
   },
   heroPanel: {
     borderWidth: 1,

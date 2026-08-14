@@ -164,6 +164,8 @@ describe('HomeScreen', () => {
 
     expect(screen.queryByText('Kết quả')).toBeNull();
     expect(screen.queryByText('Xem GPA')).toBeNull();
+    expect(screen.getByText('Nhập điểm')).toBeTruthy();
+    expect(screen.getByText('Nhập GPA.')).toBeTruthy();
   });
 
   it('shows a fallback name when user is missing', () => {

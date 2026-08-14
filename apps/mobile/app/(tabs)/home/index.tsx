@@ -415,8 +415,8 @@ export default function HomeScreen() {
                   <QuickActionTile
                     key={action.id}
                     icon={action.icon as never}
-                    label={getQuickLabel(action.id, action.label)}
-                    description={QUICK_COPY[action.id] ?? 'Mở nhanh.'}
+                    label={getQuickLabel(action.id, action.label, user?.role)}
+                    description={getQuickDescription(action.id, user?.role)}
                     onPress={() => router.push(getQuickActionRoute(action.id, action.route) as never)}
                     tone={getQuickTone(action.id)}
                   />
@@ -609,12 +609,12 @@ function getInstructorLabel(instructor?: string | null) {
   return instructor ?? 'Chưa có giảng viên';
 }
 
-function getQuickLabel(id: string, fallback: string) {
+function getQuickLabel(id: string, fallback: string, role?: string | null) {
   switch (id) {
     case 'schedule':
       return 'Lịch';
     case 'grades':
-      return 'GPA';
+      return role === USER_ROLES.LECTURER ? 'Nhập điểm' : 'GPA';
     case 'alerts':
       return 'Cảnh báo';
     case 'parking':
@@ -632,6 +632,14 @@ function getQuickLabel(id: string, fallback: string) {
     default:
       return fallback;
   }
+}
+
+function getQuickDescription(id: string, role?: string | null) {
+  if (id === 'grades') {
+    return role === USER_ROLES.LECTURER ? 'Nhập GPA.' : 'Xem GPA.';
+  }
+
+  return QUICK_COPY[id] ?? 'Mở nhanh.';
 }
 
 function getQuickTone(actionId: string) {
