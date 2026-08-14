@@ -80,15 +80,12 @@ describe('ServicesScreen', () => {
     });
   });
 
-  it('opens AI Chatbot from the services grid with the services source param', () => {
+  it('opens AI Chatbot from the services grid as a normal route push', () => {
     const { getByText } = render(<ServicesScreen />);
 
     fireEvent.press(getByText('AI Chatbot'));
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
-      pathname: '/services/chatbot',
-      params: { from: 'services' },
-    });
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/chatbot');
   });
 
   it('opens study materials from the services grid', () => {

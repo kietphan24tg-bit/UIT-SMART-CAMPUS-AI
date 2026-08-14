@@ -146,15 +146,12 @@ describe('HomeScreen', () => {
     });
   });
 
-  it('opens AI Chatbot from the home shortcut with the home source param', () => {
+  it('opens AI Chatbot from the home shortcut as a normal route push', () => {
     render(<HomeScreen />);
 
     fireEvent.press(screen.getByText('AI Chatbot'));
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
-      pathname: '/services/chatbot',
-      params: { from: 'home' },
-    });
+    expect(mockRouter.push).toHaveBeenCalledWith('/services/chatbot');
   });
 
   it('hides the GPA section for lecturers', () => {

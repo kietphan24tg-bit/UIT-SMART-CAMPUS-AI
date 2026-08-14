@@ -13,11 +13,8 @@ const mockRouter = {
   back: jest.fn(),
 };
 
-let mockParams: { from?: string } = {};
-
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
-  useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@/stores/auth-store');
 jest.mock('@/services/api/chatbot', () => ({
@@ -61,7 +58,6 @@ function renderWithClient(ui: React.ReactElement) {
 describe('ChatbotScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockParams = {};
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
       return selector(state);
@@ -131,36 +127,11 @@ describe('ChatbotScreen', () => {
   });
 
   it('does not render quick summary and skips summary requests on mount', async () => {
-    const { queryByText, findAllByText } = renderWithClient(<ChatbotScreen />);
+    const { queryByLabelText, queryByText, findAllByText } = renderWithClient(<ChatbotScreen />);
 
     expect(queryByText('Tóm tắt nhanh')).toBeNull();
+    expect(queryByLabelText(/Quay lại/i)).toBeNull();
     expect(mockChatbotApi.getSummary).not.toHaveBeenCalled();
     expect((await findAllByText('Hôm nay của tôi')).length).toBeGreaterThan(0);
-  });
-
-  it('returns to home shortcuts when chatbot is opened from home', () => {
-    mockParams = { from: 'home' };
-    const { getByLabelText } = renderWithClient(<ChatbotScreen />);
-
-    fireEvent.press(getByLabelText('Quay lại lối tắt'));
-
-    expect(mockRouter.replace).toHaveBeenCalledWith('/home');
-  });
-
-  it('returns to services when chatbot is opened from services', () => {
-    mockParams = { from: 'services' };
-    const { getByLabelText } = renderWithClient(<ChatbotScreen />);
-
-    fireEvent.press(getByLabelText('Quay lại dịch vụ'));
-
-    expect(mockRouter.replace).toHaveBeenCalledWith('/services');
-  });
-
-  it('defaults the return CTA to services for legacy chatbot entry points', () => {
-    const { getByLabelText } = renderWithClient(<ChatbotScreen />);
-
-    fireEvent.press(getByLabelText('Quay lại dịch vụ'));
-
-    expect(mockRouter.replace).toHaveBeenCalledWith('/services');
   });
 });
