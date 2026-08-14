@@ -885,7 +885,7 @@ export default function ScheduleScreen() {
 
         <SectionCard title="Theo ngày" subtitle="Danh sách theo ngày." variant="outlined">
           {Object.keys(groupedSchedule).length > 0 ? (
-            <View style={styles.column}>
+            <View style={styles.dayList}>
               {Object.entries(groupedSchedule).map(([day, items]) => (
                 <View key={day} style={styles.daySection}>
                   <Text
@@ -1273,6 +1273,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     flexShrink: 1,
     textAlign: 'center',
+  },
+  dayList: {
+    gap: 24,
   },
   daySection: {
     gap: 8,

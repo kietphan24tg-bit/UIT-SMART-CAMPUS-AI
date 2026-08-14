@@ -314,11 +314,15 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 8,
     minHeight: 150,
+    // @ts-ignore - Web only focus ring suppression
+    outlineWidth: 0,
   },
   cardFeatured: {
     borderRadius: 20,
     padding: 14,
     minHeight: 150,
+    // @ts-ignore - Web only focus ring suppression
+    outlineWidth: 0,
   },
   cardHeaderFeatured: {
     flexDirection: 'row',
