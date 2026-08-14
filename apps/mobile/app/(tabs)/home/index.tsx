@@ -486,7 +486,7 @@ function QuickActionTile({
 }
 
 function getQuickActionRoute(actionId: string, route: string) {
-  if (actionId === 'gps-sos' || actionId === 'chatbot') {
+  if (actionId === 'gps-sos') {
     return {
       pathname: route,
       params: { from: 'home' },
