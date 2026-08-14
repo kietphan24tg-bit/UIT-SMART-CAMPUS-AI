@@ -148,6 +148,7 @@ function ServiceTile({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
+      android_ripple={{ color: 'rgba(150, 150, 150, 0.15)' }}
       style={({ pressed }) => [
         styles.card,
         featured ? styles.cardFeatured : null,

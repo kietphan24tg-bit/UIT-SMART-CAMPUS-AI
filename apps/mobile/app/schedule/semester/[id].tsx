@@ -178,9 +178,9 @@ export default function SemesterScheduleDetailScreen() {
             </Text>
           </SectionCard>
         ) : groupedEntries.length > 0 ? (
-          <View style={styles.dayList}>
-            {groupedEntries.map(([day, items]) => (
-              <View key={day} style={styles.daySection}>
+          <View>
+            {groupedEntries.map(([day, items], index) => (
+              <View key={day} style={[styles.daySection, index > 0 && { marginTop: 24 }]}>
                 <Text
                   style={[
                     styles.dayHeading,
@@ -391,9 +391,7 @@ const styles = StyleSheet.create({
   sessionList: {
     gap: 8,
   },
-  dayList: {
-    gap: 24,
-  },
+  dayList: {},
   daySection: {
     gap: 8,
   },
