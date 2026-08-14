@@ -107,11 +107,7 @@ export function SectionCard({
                   ? theme.colors.surface
                   : theme.colors.surfaceElevated;
   const elevationStyle =
-    variant === 'outlined' || variant === 'list'
-      ? theme.elevation.level0
-      : variant === 'glass' || variant === 'subtle'
-        ? theme.elevation.level1
-        : theme.elevation.level2;
+    variant === 'elevated' ? theme.elevation.level1 : theme.elevation.level0;
   const cardPadding = layout.isTablet
     ? variant === 'metric'
       ? 18
@@ -137,7 +133,8 @@ export function SectionCard({
         styles.card,
         {
           backgroundColor,
-          borderColor: theme.colors.border,
+          borderColor: variant === 'subtle' || variant === 'glass' ? 'transparent' : theme.colors.border,
+          borderWidth: variant === 'subtle' || variant === 'glass' || variant === 'highlight' ? 0 : 1,
           borderRadius: theme.radii.xl,
           padding: cardPadding,
         },
