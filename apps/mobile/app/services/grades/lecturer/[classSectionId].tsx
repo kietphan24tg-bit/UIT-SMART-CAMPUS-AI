@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View, findNodeHandle } from 'react-native';
 
 import {
   ContentStack,
@@ -12,6 +12,7 @@ import {
   SecondaryButton,
   SkeletonBlock,
 } from '@/components/ui';
+import { ScreenScrollContext } from '@/components/ui/screen';
 import {
   gradesApi,
   type GradeSheetRowPayload,
@@ -121,6 +122,7 @@ function GradeInput({
   onChange: (nextValue: number | null) => void;
 }) {
   const theme = useAppTheme();
+  const screenScroll = React.useContext(ScreenScrollContext);
   const [text, setText] = React.useState(formatScore(value));
 
   React.useEffect(() => {
@@ -133,6 +135,18 @@ function GradeInput({
       onChangeText={(nextText) => {
         setText(nextText);
         onChange(parseScoreInput(nextText));
+      }}
+      onFocus={(event) => {
+        if (!screenScroll?.enabled) {
+          return;
+        }
+
+        const targetHandle =
+          typeof event.target === 'number'
+            ? event.target
+            : findNodeHandle(event.target as never);
+
+        screenScroll.scrollToField(targetHandle ?? null);
       }}
       keyboardType="decimal-pad"
       maxLength={4}
@@ -345,336 +359,330 @@ export default function LecturerGradeSheetScreen() {
         ) : null}
 
         {!sheetQuery.isLoading && sheetQuery.data ? (
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.stack}>
-              <View
+          <View style={styles.stack}>
+            <View
+              style={[
+                styles.heroPanel,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
                 style={[
-                  styles.heroPanel,
-                  {
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderColor: theme.colors.border,
-                  },
+                  styles.heroCode,
+                  { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
                 ]}
               >
+                {sheetQuery.data.classSection.course.code} · {sheetQuery.data.classSection.classCode}
+              </Text>
+              <Text
+                style={[
+                  styles.heroTitle,
+                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                ]}
+              >
+                {sheetQuery.data.classSection.course.name}
+              </Text>
+              <Text
+                style={[
+                  styles.heroMeta,
+                  { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                ]}
+              >
+                {sheetQuery.data.classSection.semester.name} ·{' '}
+                {sheetQuery.data.classSection.course.credits} TC ·{' '}
+                {sheetQuery.data.students.length} sinh viên
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.panel,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sectionHeader}>
                 <Text
                   style={[
-                    styles.heroCode,
-                    { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
-                  ]}
-                >
-                  {sheetQuery.data.classSection.course.code} ·{' '}
-                  {sheetQuery.data.classSection.classCode}
-                </Text>
-                <Text
-                  style={[
-                    styles.heroTitle,
+                    styles.panelTitle,
                     { color: theme.colors.text, fontFamily: theme.fonts.semibold },
                   ]}
                 >
-                  {sheetQuery.data.classSection.course.name}
+                  Trọng số điểm
                 </Text>
                 <Text
                   style={[
-                    styles.heroMeta,
-                    { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                    styles.weightTotal,
+                    {
+                      color: weightsValid ? theme.colors.success : theme.colors.danger,
+                      fontFamily: theme.fonts.semibold,
+                    },
                   ]}
                 >
-                  {sheetQuery.data.classSection.semester.name} ·{' '}
-                  {sheetQuery.data.classSection.course.credits} TC ·{' '}
-                  {sheetQuery.data.students.length} sinh viên
+                  Tổng: {weightTotal}%
                 </Text>
               </View>
 
-              <View
-                style={[
-                  styles.panel,
-                  {
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.sectionHeader}>
+              <View style={styles.weightsGrid}>
+                {WEIGHT_FIELDS.map((field) => (
+                  <View key={field.key} style={styles.weightItem}>
+                    <Text
+                      style={[
+                        styles.weightLabel,
+                        { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                      ]}
+                    >
+                      {field.label}
+                    </Text>
+                    <TextInput
+                      value={weightsText[field.key]}
+                      onChangeText={(text) =>
+                        setWeightsText((current) => ({ ...current, [field.key]: text }))
+                      }
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      style={[
+                        styles.weightInput,
+                        {
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.surfaceSubtle,
+                          fontFamily: theme.fonts.semibold,
+                        },
+                      ]}
+                    />
+                  </View>
+                ))}
+              </View>
+
+              {!weightsValid ? (
+                <Text
+                  style={[
+                    styles.warningText,
+                    { color: theme.colors.danger, fontFamily: theme.fonts.medium },
+                  ]}
+                >
+                  Tổng trọng số phải bằng 100% trước khi lưu.
+                </Text>
+              ) : null}
+
+              <PrimaryButton
+                label={updateWeightsMutation.isPending ? 'Đang lưu trọng số...' : 'Lưu trọng số'}
+                loading={updateWeightsMutation.isPending}
+                disabled={!weightsValid || !weightsDirty || isBusy}
+                onPress={() => updateWeightsMutation.mutate()}
+                style={styles.weightSaveButton}
+              />
+            </View>
+
+            <View
+              style={[
+                styles.panel,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.toolbar}>
+                <TextInput
+                  value={studentQuery}
+                  onChangeText={setStudentQuery}
+                  placeholder="Tìm MSSV hoặc họ tên..."
+                  placeholderTextColor={theme.colors.textSoft}
+                  style={[
+                    styles.searchInput,
+                    {
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.surfaceSubtle,
+                      fontFamily: theme.fonts.medium,
+                    },
+                  ]}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: onlyMissing }}
+                  onPress={() => setOnlyMissing((current) => !current)}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: onlyMissing
+                        ? theme.colors.primary
+                        : theme.colors.surfaceSubtle,
+                      borderColor: onlyMissing ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={onlyMissing ? 'checkbox-outline' : 'square-outline'}
+                    size={18}
+                    color={onlyMissing ? theme.colors.onPrimary : theme.colors.textMuted}
+                  />
                   <Text
                     style={[
-                      styles.panelTitle,
-                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                    ]}
-                  >
-                    Trọng số điểm
-                  </Text>
-                  <Text
-                    style={[
-                      styles.weightTotal,
+                      styles.filterText,
                       {
-                        color: weightsValid ? theme.colors.success : theme.colors.danger,
+                        color: onlyMissing ? theme.colors.onPrimary : theme.colors.textMuted,
                         fontFamily: theme.fonts.semibold,
                       },
                     ]}
                   >
-                    Tổng: {weightTotal}%
+                    Thiếu điểm
                   </Text>
-                </View>
+                </Pressable>
+              </View>
 
-                <View style={styles.weightsGrid}>
-                  {WEIGHT_FIELDS.map((field) => (
-                    <View key={field.key} style={styles.weightItem}>
-                      <Text
-                        style={[
-                          styles.weightLabel,
-                          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
-                        ]}
-                      >
-                        {field.label}
-                      </Text>
-                      <TextInput
-                        value={weightsText[field.key]}
-                        onChangeText={(text) =>
-                          setWeightsText((current) => ({ ...current, [field.key]: text }))
-                        }
-                        keyboardType="number-pad"
-                        maxLength={3}
-                        style={[
-                          styles.weightInput,
-                          {
-                            color: theme.colors.text,
-                            borderColor: theme.colors.border,
-                            backgroundColor: theme.colors.surfaceSubtle,
-                            fontFamily: theme.fonts.semibold,
-                          },
-                        ]}
-                      />
-                    </View>
-                  ))}
-                </View>
-
-                {!weightsValid ? (
-                  <Text
-                    style={[
-                      styles.warningText,
-                      { color: theme.colors.danger, fontFamily: theme.fonts.medium },
-                    ]}
-                  >
-                    Tổng trọng số phải bằng 100% trước khi lưu.
-                  </Text>
-                ) : null}
-
+              <View style={styles.actionRow}>
+                <SecondaryButton
+                  label="Hoàn tác"
+                  disabled={(!rowsDirty && !weightsDirty) || isBusy}
+                  onPress={resetChanges}
+                  style={styles.actionButton}
+                />
                 <PrimaryButton
-                  label={updateWeightsMutation.isPending ? 'Đang lưu trọng số...' : 'Lưu trọng số'}
-                  loading={updateWeightsMutation.isPending}
-                  disabled={!weightsValid || !weightsDirty || isBusy}
-                  onPress={() => updateWeightsMutation.mutate()}
-                  style={styles.weightSaveButton}
+                  label={saveSheetMutation.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  loading={saveSheetMutation.isPending}
+                  disabled={!weightsValid || !rowsDirty || isBusy}
+                  onPress={() => saveSheetMutation.mutate()}
+                  style={styles.actionButton}
                 />
               </View>
 
-              <View
-                style={[
-                  styles.panel,
-                  {
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.toolbar}>
-                  <TextInput
-                    value={studentQuery}
-                    onChangeText={setStudentQuery}
-                    placeholder="Tìm MSSV hoặc họ tên..."
-                    placeholderTextColor={theme.colors.textSoft}
+              {rows.length === 0 ? (
+                <EmptyState
+                  icon="people-outline"
+                  title="Lớp chưa có sinh viên"
+                  description="Sinh viên đang ghi danh sẽ xuất hiện trong bảng điểm."
+                />
+              ) : null}
+
+              {rows.length > 0 && filteredRows.length === 0 ? (
+                <EmptyState
+                  icon="search-outline"
+                  title="Không có dòng phù hợp"
+                  description="Thử đổi từ khóa hoặc tắt bộ lọc thiếu điểm."
+                />
+              ) : null}
+
+              {filteredRows.length > 0 ? (
+                <View style={[styles.gradeTable, { borderColor: theme.colors.border }]}>
+                  <View
                     style={[
-                      styles.searchInput,
+                      styles.gradeTableRow,
+                      styles.gradeTableHeader,
                       {
-                        color: theme.colors.text,
-                        borderColor: theme.colors.border,
                         backgroundColor: theme.colors.surfaceSubtle,
-                        fontFamily: theme.fonts.medium,
-                      },
-                    ]}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: onlyMissing }}
-                    onPress={() => setOnlyMissing((current) => !current)}
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor: onlyMissing
-                          ? theme.colors.primary
-                          : theme.colors.surfaceSubtle,
-                        borderColor: onlyMissing ? theme.colors.primary : theme.colors.border,
+                        borderColor: theme.colors.border,
                       },
                     ]}
                   >
-                    <Ionicons
-                      name={onlyMissing ? 'checkbox-outline' : 'square-outline'}
-                      size={18}
-                      color={onlyMissing ? theme.colors.onPrimary : theme.colors.textMuted}
-                    />
                     <Text
                       style={[
-                        styles.filterText,
-                        {
-                          color: onlyMissing ? theme.colors.onPrimary : theme.colors.textMuted,
-                          fontFamily: theme.fonts.semibold,
-                        },
+                        styles.headerCell,
+                        styles.studentIdCell,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
                       ]}
                     >
-                      Thiếu điểm
+                      MSSV
                     </Text>
-                  </Pressable>
-                </View>
-
-                <View style={styles.actionRow}>
-                  <SecondaryButton
-                    label="Hoàn tác"
-                    disabled={(!rowsDirty && !weightsDirty) || isBusy}
-                    onPress={resetChanges}
-                    style={styles.actionButton}
-                  />
-                  <PrimaryButton
-                    label={saveSheetMutation.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
-                    loading={saveSheetMutation.isPending}
-                    disabled={!weightsValid || !rowsDirty || isBusy}
-                    onPress={() => saveSheetMutation.mutate()}
-                    style={styles.actionButton}
-                  />
-                </View>
-
-                {rows.length === 0 ? (
-                  <EmptyState
-                    icon="people-outline"
-                    title="Lớp chưa có sinh viên"
-                    description="Sinh viên đang ghi danh sẽ xuất hiện trong bảng điểm."
-                  />
-                ) : null}
-
-                {rows.length > 0 && filteredRows.length === 0 ? (
-                  <EmptyState
-                    icon="search-outline"
-                    title="Không có dòng phù hợp"
-                    description="Thử đổi từ khóa hoặc tắt bộ lọc thiếu điểm."
-                  />
-                ) : null}
-
-                {filteredRows.length > 0 ? (
-                  <View style={[styles.gradeTable, { borderColor: theme.colors.border }]}>
-                    <View
+                    <Text
                       style={[
-                        styles.gradeTableRow,
-                        styles.gradeTableHeader,
-                        {
-                          backgroundColor: theme.colors.surfaceSubtle,
-                          borderColor: theme.colors.border,
-                        },
+                        styles.headerCell,
+                        styles.nameCell,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
                       ]}
                     >
+                      Họ và tên
+                    </Text>
+                    {SCORE_COLUMNS.map((column) => (
                       <Text
-                        style={[
-                          styles.headerCell,
-                          styles.studentIdCell,
-                          { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
-                        ]}
-                      >
-                        MSSV
-                      </Text>
-                      <Text
-                        style={[
-                          styles.headerCell,
-                          styles.nameCell,
-                          { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
-                        ]}
-                      >
-                        Họ và tên
-                      </Text>
-                      {SCORE_COLUMNS.map((column) => (
-                        <Text
-                          key={column.key}
-                          style={[
-                            styles.headerCell,
-                            styles.scoreCell,
-                            { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
-                          ]}
-                        >
-                          {column.label}
-                        </Text>
-                      ))}
-                      <Text
+                        key={column.key}
                         style={[
                           styles.headerCell,
                           styles.scoreCell,
                           { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
                         ]}
                       >
-                        TB
+                        {column.label}
                       </Text>
-                    </View>
+                    ))}
+                    <Text
+                      style={[
+                        styles.headerCell,
+                        styles.scoreCell,
+                        { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+                      ]}
+                    >
+                      TB
+                    </Text>
+                  </View>
 
-                    {filteredRows.map((row) => {
-                      const total = calculateTotal(row, weights);
+                  {filteredRows.map((row) => {
+                    const total = calculateTotal(row, weights);
 
-                      return (
-                        <View
-                          key={row.studentId}
+                    return (
+                      <View
+                        key={row.studentId}
+                        style={[
+                          styles.gradeTableRow,
+                          {
+                            borderColor: theme.colors.border,
+                            backgroundColor: theme.colors.surfaceElevated,
+                          },
+                        ]}
+                      >
+                        <Text
                           style={[
-                            styles.gradeTableRow,
+                            styles.bodyCell,
+                            styles.studentIdCell,
+                            { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                          ]}
+                        >
+                          {row.displayStudentId}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.bodyCell,
+                            styles.nameCell,
+                            { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.fullName}
+                        </Text>
+                        {SCORE_COLUMNS.map((column) => (
+                          <View key={column.key} style={styles.scoreCell}>
+                            <GradeInput
+                              value={row[column.key]}
+                              onChange={(value) => updateRowScore(row.studentId, column.key, value)}
+                            />
+                          </View>
+                        ))}
+                        <Text
+                          style={[
+                            styles.totalCell,
+                            styles.scoreCell,
                             {
-                              borderColor: theme.colors.border,
-                              backgroundColor: theme.colors.surfaceElevated,
+                              color: total === null ? theme.colors.textSoft : theme.colors.primary,
+                              fontFamily: theme.fonts.semibold,
                             },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.bodyCell,
-                              styles.studentIdCell,
-                              { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                            ]}
-                          >
-                            {row.displayStudentId}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.bodyCell,
-                              styles.nameCell,
-                              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {row.fullName}
-                          </Text>
-                          {SCORE_COLUMNS.map((column) => (
-                            <View key={column.key} style={styles.scoreCell}>
-                              <GradeInput
-                                value={row[column.key]}
-                                onChange={(value) =>
-                                  updateRowScore(row.studentId, column.key, value)
-                                }
-                              />
-                            </View>
-                          ))}
-                          <Text
-                            style={[
-                              styles.totalCell,
-                              styles.scoreCell,
-                              {
-                                color:
-                                  total === null ? theme.colors.textSoft : theme.colors.primary,
-                                fontFamily: theme.fonts.semibold,
-                              },
-                            ]}
-                          >
-                            {total === null ? '-' : total.toFixed(1)}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ) : null}
-              </View>
+                          {total === null ? '-' : total.toFixed(1)}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
-          </ScrollView>
+          </View>
         ) : null}
       </ContentStack>
     </Screen>
