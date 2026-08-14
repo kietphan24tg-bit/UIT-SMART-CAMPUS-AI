@@ -85,6 +85,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('09:00 - 11:00')).toBeTruthy();
     expect(screen.getAllByText('Parking').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bản đồ').length).toBeGreaterThan(0);
+    expect(screen.getByText('AI Chatbot')).toBeTruthy();
   });
 
   it('opens the UIT memory game from the anniversary banner', () => {
@@ -141,6 +142,17 @@ describe('HomeScreen', () => {
 
     expect(mockRouter.push).toHaveBeenCalledWith({
       pathname: '/services/gps-sos',
+      params: { from: 'home' },
+    });
+  });
+
+  it('opens AI Chatbot from the home shortcut with the home source param', () => {
+    render(<HomeScreen />);
+
+    fireEvent.press(screen.getByText('AI Chatbot'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/services/chatbot',
       params: { from: 'home' },
     });
   });

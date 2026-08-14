@@ -36,6 +36,7 @@ const QUICK_COPY: Record<string, string> = {
   alerts: 'Cảnh báo.',
   parking: 'Parking.',
   'campus-map': 'Bản đồ.',
+  chatbot: 'Hỏi đáp AI.',
   'gps-sos': 'Khẩn cấp.',
   operations: 'Vận hành.',
   services: 'Dịch vụ.',
@@ -485,7 +486,7 @@ function QuickActionTile({
 }
 
 function getQuickActionRoute(actionId: string, route: string) {
-  if (actionId === 'gps-sos') {
+  if (actionId === 'gps-sos' || actionId === 'chatbot') {
     return {
       pathname: route,
       params: { from: 'home' },
@@ -620,6 +621,8 @@ function getQuickLabel(id: string, fallback: string) {
       return 'Parking';
     case 'campus-map':
       return 'Bản đồ';
+    case 'chatbot':
+      return 'AI Chatbot';
     case 'gps-sos':
       return 'GPS/SOS';
     case 'operations':
@@ -643,6 +646,8 @@ function getQuickTone(actionId: string) {
       return 'telemetry';
     case 'campus-map':
       return 'success';
+    case 'chatbot':
+      return 'primary';
     case 'gps-sos':
       return 'danger';
     case 'operations':

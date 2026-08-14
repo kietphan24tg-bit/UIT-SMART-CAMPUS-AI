@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
@@ -21,7 +21,6 @@ import {
   type ChatbotAction,
   type ChatbotCitation,
 } from '@/services/api/chatbot';
-import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 
 // ---------------------------------------------------------------------------
@@ -81,12 +80,23 @@ function normalizeCitations(value: ChatbotCitation[] | unknown) {
 export default function ChatbotScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
 
   const [message, setMessage] = useState('');
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
 
   const listRef = useRef<FlatList<DisplayMessage>>(null);
+  const entrySource = from === 'home' ? 'home' : 'services';
+  const backDestinationLabel = entrySource === 'home' ? 'Lối tắt' : 'Dịch vụ';
+  const handleBackPress = useCallback(() => {
+    if (entrySource === 'home') {
+      router.replace('/home');
+      return;
+    }
+
+    router.replace('/services');
+  }, [entrySource, router]);
 
   const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -328,6 +338,31 @@ export default function ChatbotScreen() {
         subtitle="Trợ lý nội bộ dùng dữ liệu thật của app."
         showBrand
         variant="accent"
+        headerRight={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Quay lại ${backDestinationLabel.toLowerCase()}`}
+            onPress={handleBackPress}
+            style={({ pressed }) => [
+              styles.backButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.82 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="arrow-back" size={14} color={theme.colors.primary} />
+            <Text
+              style={[
+                styles.backButtonText,
+                { color: theme.colors.primary, fontFamily: theme.fonts.semibold },
+              ]}
+            >
+              {backDestinationLabel}
+            </Text>
+          </Pressable>
+        }
       />
 
       <KeyboardAvoidingView
@@ -594,6 +629,18 @@ const styles = StyleSheet.create({
   },
   composer: {
     borderTopWidth: 1,
+  },
+  backButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  backButtonText: {
+    fontSize: 12,
   },
   suggestStrip: {
     maxHeight: 56,

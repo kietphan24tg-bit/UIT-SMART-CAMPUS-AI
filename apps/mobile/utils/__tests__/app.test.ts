@@ -71,6 +71,12 @@ describe('app utils', () => {
     const studentParkingQuickAction = getRoleQuickActions('student').find(
       (item) => item.id === 'parking',
     );
+    const studentChatbotQuickAction = getRoleQuickActions('student').find(
+      (item) => item.id === 'chatbot',
+    );
+    const lecturerChatbotQuickAction = getRoleQuickActions('lecturer').find(
+      (item) => item.id === 'chatbot',
+    );
     const adminParkingQuickAction = getRoleQuickActions('admin').find(
       (item) => item.id === 'parking',
     );
@@ -80,6 +86,8 @@ describe('app utils', () => {
 
     expect(studentParkingService?.route).toBe('/services/parking');
     expect(studentParkingQuickAction?.route).toBe('/parking');
+    expect(studentChatbotQuickAction?.route).toBe('/services/chatbot');
+    expect(lecturerChatbotQuickAction?.route).toBe('/services/chatbot');
     expect(adminParkingQuickAction?.route).toBe('/parking');
     expect(adminCampusMapActions).toHaveLength(1);
     expect(adminGpsSosAction?.route).toBe('/services/gps-sos');

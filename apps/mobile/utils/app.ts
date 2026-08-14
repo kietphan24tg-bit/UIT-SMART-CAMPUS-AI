@@ -309,6 +309,12 @@ export function getRoleQuickActions(role?: string | null) {
       },
       { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
       { id: 'parking', label: 'Parking + IoT', icon: 'car-sport-outline', route: '/parking' },
+      {
+        id: 'chatbot',
+        label: 'AI Chatbot',
+        icon: 'chatbubble-ellipses-outline',
+        route: '/services/chatbot',
+      },
     ];
   }
 
@@ -323,6 +329,12 @@ export function getRoleQuickActions(role?: string | null) {
       route: '/services/campus-map',
     },
     { id: 'alerts', label: 'Cảnh báo', icon: 'notifications-outline', route: '/alerts' },
+    {
+      id: 'chatbot',
+      label: 'AI Chatbot',
+      icon: 'chatbubble-ellipses-outline',
+      route: '/services/chatbot',
+    },
   ];
 }
 

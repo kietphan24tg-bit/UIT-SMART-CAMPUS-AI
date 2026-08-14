@@ -1,6 +1,6 @@
-import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import ServicesScreen from '../index';
 
@@ -76,6 +76,17 @@ describe('ServicesScreen', () => {
 
     expect(mockRouter.push).toHaveBeenCalledWith({
       pathname: '/services/gps-sos',
+      params: { from: 'services' },
+    });
+  });
+
+  it('opens AI Chatbot from the services grid with the services source param', () => {
+    const { getByText } = render(<ServicesScreen />);
+
+    fireEvent.press(getByText('AI Chatbot'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/services/chatbot',
       params: { from: 'services' },
     });
   });
