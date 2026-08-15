@@ -4,12 +4,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { ScheduleDayGroup, ScheduleDayList } from '@/components/schedule/schedule-day-group';
 import { ContentStack, EmptyState, Screen, SectionCard, TopHero } from '@/components/ui';
 import { useResponsiveLayout } from '@/hooks/use-responsive-layout';
 import { scheduleApi } from '@/services/api/schedule';
 import { useAppTheme } from '@/theme';
 import type { ScheduleRecord } from '@/types/app-data';
-import { formatShortDate, getDayLabel, groupScheduleByDay } from '@/utils/app';
+import { formatShortDate, groupScheduleByDay } from '@/utils/app';
 
 type SegmentKey = 'daytime' | 'evening';
 
@@ -134,7 +135,11 @@ export default function SemesterScheduleDetailScreen() {
 
             <View style={styles.headerCopy}>
               <Text
-                style={[styles.headerTitle, layout.isCompact ? styles.headerTitleCompact : null, { color: theme.colors.text }]}
+                style={[
+                  styles.headerTitle,
+                  layout.isCompact ? styles.headerTitleCompact : null,
+                  { color: theme.colors.text },
+                ]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
@@ -178,99 +183,110 @@ export default function SemesterScheduleDetailScreen() {
             </Text>
           </SectionCard>
         ) : groupedEntries.length > 0 ? (
-          <View>
-            {groupedEntries.map(([day, items], index) => (
-              <View key={day} style={[styles.daySection, index > 0 && { marginTop: 24 }]}>
-                <Text
-                  style={[
-                    styles.dayHeading,
-                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                  ]}
-                >
-                  {getDayLabel(Number(day)).toUpperCase()}
-                </Text>
-
-                <View style={[styles.sessionList, { marginTop: 8 }]}>
-                  {items.map((item, sessionIndex) => (
-                    <View
-                      key={item.id}
-                      style={[
-                        styles.sessionCard,
-                        sessionIndex > 0 && { marginTop: 8 },
-                        {
-                          backgroundColor: theme.colors.surfaceSubtle,
-                          borderColor: theme.colors.border,
-                        },
-                      ]}
-                    >
-                      <View style={[styles.sessionBar, { backgroundColor: theme.colors.primary }]} />
-                      <View style={styles.sessionBody}>
-                        <View style={styles.sessionHeader}>
-                          <View style={styles.sessionHeaderMain}>
-                            <Text
-                              style={[
-                                styles.sessionTitle,
-                                { color: theme.colors.text, fontFamily: theme.fonts.bold },
-                              ]}
-                            >
-                              {item.course.name}
-                            </Text>
-                          </View>
-
-                          <View style={styles.sessionTimeBlock}>
-                            <Text
-                              style={[
-                                styles.sessionTime,
-                                { color: theme.colors.primary, fontFamily: theme.fonts.bold },
-                              ]}
-                            >
-                              {item.startTime}-{item.endTime}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.sessionPeriodText,
-                                { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
-                              ]}
-                            >
-                              {getPeriodText(item)}
-                            </Text>
-                          </View>
+          <ScheduleDayList testID="semester-schedule-day-list">
+            {groupedEntries.map(([day, items]) => (
+              <ScheduleDayGroup
+                key={day}
+                day={Number(day)}
+                items={items}
+                getItemKey={(item) => item.id}
+                testIDPrefix="semester-schedule"
+                renderItem={(item) => (
+                  <View
+                    testID={`semester-session-card-${item.id}`}
+                    style={[
+                      styles.sessionCard,
+                      {
+                        backgroundColor: theme.colors.surfaceSubtle,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.sessionBar, { backgroundColor: theme.colors.primary }]} />
+                    <View style={styles.sessionBody}>
+                      <View
+                        testID={`semester-session-header-${item.id}`}
+                        style={[
+                          styles.sessionHeader,
+                          layout.isCompact ? styles.sessionHeaderCompact : null,
+                        ]}
+                      >
+                        <View
+                          testID={`semester-session-header-main-${item.id}`}
+                          style={[
+                            styles.sessionHeaderMain,
+                            layout.isCompact ? styles.sessionHeaderMainCompact : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.sessionTitle,
+                              { color: theme.colors.text, fontFamily: theme.fonts.bold },
+                            ]}
+                          >
+                            {item.course.name}
+                          </Text>
                         </View>
 
-                        <Text
+                        <View
+                          testID={`semester-session-time-${item.id}`}
                           style={[
-                            styles.sessionMeta,
-                            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {getClassMetaText(item)}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.sessionMeta,
-                            { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {item.instructor ?? 'Chưa cập nhật giảng viên'}
-                        </Text>
-
-                        <Text
-                          style={[
-                            styles.sessionCode,
-                            { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                            styles.sessionTimeBlock,
+                            layout.isCompact ? styles.sessionTimeBlockCompact : null,
                           ]}
                         >
-                          {item.course.code}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.sessionTime,
+                              { color: theme.colors.primary, fontFamily: theme.fonts.bold },
+                            ]}
+                          >
+                            {item.startTime}-{item.endTime}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.sessionPeriodText,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.medium },
+                            ]}
+                          >
+                            {getPeriodText(item)}
+                          </Text>
+                        </View>
                       </View>
+
+                      <Text
+                        style={[
+                          styles.sessionMeta,
+                          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {getClassMetaText(item)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.sessionMeta,
+                          { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.instructor ?? 'Chưa cập nhật giảng viên'}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.sessionCode,
+                          { color: theme.colors.textSoft, fontFamily: theme.fonts.medium },
+                        ]}
+                      >
+                        {item.course.code}
+                      </Text>
                     </View>
-                  ))}
-                </View>
-              </View>
+                  </View>
+                )}
+              />
             ))}
-          </View>
+          </ScheduleDayList>
         ) : (
           <EmptyState
             icon="calendar-clear-outline"
@@ -389,19 +405,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  sessionList: {},
-  dayList: {},
-  daySection: {},
-  dayHeading: {
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.8,
-  },
   sessionCard: {
+    alignSelf: 'stretch',
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
+    width: '100%',
   },
   sessionBar: {
     width: 6,
@@ -411,6 +421,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 2,
+    minWidth: 0,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -418,14 +429,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  sessionHeaderCompact: {
+    flexDirection: 'column',
+    gap: 4,
+  },
   sessionHeaderMain: {
     flex: 1,
     minWidth: 0,
+  },
+  sessionHeaderMainCompact: {
+    flex: 0,
+    width: '100%',
   },
   sessionTimeBlock: {
     alignItems: 'flex-end',
     gap: 0,
     minWidth: 88,
+  },
+  sessionTimeBlockCompact: {
+    alignItems: 'flex-start',
+    minWidth: 0,
+    width: '100%',
   },
   sessionTitle: {
     fontSize: 15,

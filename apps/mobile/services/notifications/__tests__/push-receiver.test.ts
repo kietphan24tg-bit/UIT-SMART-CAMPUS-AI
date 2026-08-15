@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
+import { Platform } from 'react-native';
 
 import {
   configureForegroundNotificationHandler,
@@ -17,6 +18,25 @@ describe('push receiver', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAuthStore.setState({ isAuthenticated: true, isHydrated: true });
+  });
+
+  it('does not initialize native notification APIs on web', () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+
+    try {
+      const unsubscribe = subscribePushNotificationEvents(queryClient as never);
+      configureForegroundNotificationHandler();
+
+      expect(Notifications.setNotificationHandler).not.toHaveBeenCalled();
+      expect(Notifications.addNotificationReceivedListener).not.toHaveBeenCalled();
+      expect(Notifications.addNotificationResponseReceivedListener).not.toHaveBeenCalled();
+      expect(unsubscribe()).toBeUndefined();
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(Platform, 'OS', platformDescriptor);
+      }
+    }
   });
 
   it('configures foreground notification display behavior', async () => {
@@ -39,7 +59,8 @@ describe('push receiver', () => {
   it('invalidates notification queries when a foreground notification is received', () => {
     subscribePushNotificationEvents(queryClient as never);
 
-    const onReceived = (Notifications.addNotificationReceivedListener as jest.Mock).mock.calls[0][0];
+    const onReceived = (Notifications.addNotificationReceivedListener as jest.Mock).mock
+      .calls[0][0];
     onReceived();
 
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['alert-feed'] });

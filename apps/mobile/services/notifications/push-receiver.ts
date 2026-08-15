@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -12,6 +13,10 @@ type PushData = {
 let pendingNotificationId: string | null = null;
 
 export function configureForegroundNotificationHandler() {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -24,6 +29,10 @@ export function configureForegroundNotificationHandler() {
 }
 
 export function subscribePushNotificationEvents(queryClient: QueryClient) {
+  if (Platform.OS === 'web') {
+    return () => undefined;
+  }
+
   const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
     invalidateNotificationQueries(queryClient);
   });

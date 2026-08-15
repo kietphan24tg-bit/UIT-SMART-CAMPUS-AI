@@ -1,6 +1,6 @@
 ﻿import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
 
 import ScheduleScreen, {
   buildSubjectColorIndex,
@@ -9,9 +9,11 @@ import ScheduleScreen, {
   getSubjectColorByCode,
 } from '../index';
 
+import { getScheduleDaySpacing } from '@/components/schedule/schedule-day-group';
 import { useEffectiveRole, useEffectiveUser } from '@/hooks/use-effective-role';
 import { useOperationsScreenData, useScheduleScreenData } from '@/hooks/use-schedule-screen';
 import { useAuthStore } from '@/stores/auth-store';
+import { lightTheme } from '@/theme';
 import type { ScheduleRecord, SemesterRecord } from '@/types/app-data';
 
 const mockRouter = {
@@ -76,6 +78,11 @@ function makeScheduleRecord(code: string): ScheduleRecord {
   };
 }
 
+function setWindowWidth(width: number) {
+  const dimensions = { width, height: 800, scale: 2, fontScale: 1 };
+  Dimensions.set({ window: dimensions, screen: dimensions });
+}
+
 describe('ScheduleScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -84,6 +91,7 @@ describe('ScheduleScreen', () => {
     mockDeleteFireAlerts.mockResolvedValue({ count: 1 });
     mockUseEffectiveRole.mockReturnValue('student');
     mockUseEffectiveUser.mockReturnValue(null);
+    setWindowWidth(390);
 
     mockUseOperationsScreenData.mockReturnValue({
       data: {
@@ -208,6 +216,7 @@ describe('ScheduleScreen', () => {
   });
 
   it('renders academic schedule for student', () => {
+    setWindowWidth(320);
     mockUseEffectiveRole.mockReturnValue('student');
     mockUseAuthStore.mockImplementation((selector: (state: unknown) => unknown) => {
       const state = { user: { role: 'student' } };
@@ -242,15 +251,70 @@ describe('ScheduleScreen', () => {
           sessionType: 'daytime',
           course: { name: 'SE346', code: 'SE346', credits: 3 },
         },
+        {
+          id: 'schedule-2',
+          classCode: 'CS312',
+          sectionCode: 'CS312.1',
+          dayOfWeek: 3,
+          startTime: '13:00',
+          endTime: '15:00',
+          room: 'E3.2',
+          instructor: 'Cô Lan',
+          sessionType: 'daytime',
+          course: { name: 'CS312', code: 'CS312', credits: 3 },
+        },
       ],
     });
 
-    const { getByText, getAllByText } = render(<ScheduleScreen />);
+    const { getByText, getAllByText, getByTestId } = render(<ScheduleScreen />);
+    const spacing = getScheduleDaySpacing(lightTheme);
 
     expect(getByText('Lịch học trong học kỳ')).toBeTruthy();
     expect(getAllByText('HK2 2024-2025').length).toBeGreaterThan(0);
     expect(getAllByText('SE346').length).toBeGreaterThan(0);
     expect(getByText('Buổi học gần nhất')).toBeTruthy();
+    expect(StyleSheet.flatten(getByTestId('schedule-day-list').props.style).gap).toBe(
+      spacing.daySectionGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('schedule-day-2').props.style).gap).toBe(
+      spacing.dayContentGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('schedule-day-3').props.style).gap).toBe(
+      spacing.dayContentGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('schedule-day-header-2').props.style)).toEqual(
+      StyleSheet.flatten(getByTestId('schedule-day-header-3').props.style),
+    );
+    expect(StyleSheet.flatten(getByTestId('schedule-session-list-2').props.style).gap).toBe(
+      spacing.scheduleItemGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('schedule-session-list-3').props.style).gap).toBe(
+      spacing.scheduleItemGap,
+    );
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-day-2').props.style).paddingTop,
+    ).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-day-3').props.style).paddingTop,
+    ).toBeUndefined();
+    expect(StyleSheet.flatten(getByTestId('schedule-day-2').props.style).marginTop).toBeUndefined();
+    expect(StyleSheet.flatten(getByTestId('schedule-day-3').props.style).marginTop).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-session-header-schedule-1').props.style)
+        .flexDirection,
+    ).toBe('column');
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-session-time-schedule-1').props.style),
+    ).toMatchObject({ alignItems: 'flex-start', minWidth: 0, width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-session-header-main-schedule-1').props.style),
+    ).toMatchObject({ flex: 0, minWidth: 0, width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-session-card-schedule-1').props.style),
+    ).toMatchObject({ alignSelf: 'stretch', width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('schedule-session-card-schedule-2').props.style),
+    ).toMatchObject({ alignSelf: 'stretch', width: '100%' });
   });
 
   it('navigates to semester detail when pressing a semester chip', () => {

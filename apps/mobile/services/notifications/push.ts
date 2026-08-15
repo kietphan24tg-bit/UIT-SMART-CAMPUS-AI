@@ -85,9 +85,10 @@ function buildPushNotificationState(
     lastSuccessfulPushSyncAt:
       status === 'enabled_synced'
         ? new Date().toISOString()
-        : previousState?.lastSuccessfulPushSyncAt ?? null,
+        : (previousState?.lastSuccessfulPushSyncAt ?? null),
     lastUpdatedAt: new Date().toISOString(),
-    errorMessage: status === 'enabled_synced' ? null : errorMessage ?? previousState?.errorMessage ?? null,
+    errorMessage:
+      status === 'enabled_synced' ? null : (errorMessage ?? previousState?.errorMessage ?? null),
   };
 }
 
@@ -136,19 +137,19 @@ async function readStoredPushNotificationState(): Promise<PushNotificationState 
   }
 }
 
-async function persistPushNotificationState(
-  status: PushSyncStatus,
-  errorMessage?: string | null,
-) {
+async function persistPushNotificationState(status: PushSyncStatus, errorMessage?: string | null) {
   const previousState = await readStoredPushNotificationState();
   const nextState = buildPushNotificationState(status, previousState, errorMessage);
   return writePushNotificationState(nextState);
 }
 
 export function canUseRemotePushNotifications() {
-  return !(
-    (Platform.OS === 'android' && Constants.appOwnership === 'expo') ||
-    pushNotificationsUnsupportedReason
+  return (
+    isMobilePushPlatform() &&
+    !(
+      (Platform.OS === 'android' && Constants.appOwnership === 'expo') ||
+      pushNotificationsUnsupportedReason
+    )
   );
 }
 
@@ -231,11 +232,7 @@ export async function readPushNotificationState(): Promise<PushNotificationState
       );
     }
 
-    return buildPushNotificationState(
-      'enabled_sync_failed',
-      previousState,
-      getErrorMessage(error),
-    );
+    return buildPushNotificationState('enabled_sync_failed', previousState, getErrorMessage(error));
   }
 
   if (permissionStatus.status !== 'granted') {
@@ -301,10 +298,7 @@ export async function syncPushToken(): Promise<PushNotificationState> {
     return persistPushNotificationState('enabled_synced');
   } catch (error) {
     if (markPushNotificationsUnsupported(error)) {
-      return persistPushNotificationState(
-        'unsupported_build',
-        pushNotificationsUnsupportedReason,
-      );
+      return persistPushNotificationState('unsupported_build', pushNotificationsUnsupportedReason);
     }
 
     return persistPushNotificationState('enabled_sync_failed', getErrorMessage(error));

@@ -29,6 +29,28 @@ jest.mock('@/components/system/service-warmup-provider', () => ({
 jest.mock('@/theme', () => ({
   ThemePreferenceProvider: ({ children }: { children: React.ReactNode }) => children,
   useResolvedThemeMode: () => 'light',
+  lightTheme: {
+    isDark: false,
+    colors: {
+      primary: '#0E76FD',
+      background: '#F8FAFC',
+      surface: '#FFFFFF',
+      text: '#0F172A',
+      border: '#E2E8F0',
+      danger: '#EF4444',
+    },
+  },
+  darkTheme: {
+    isDark: true,
+    colors: {
+      primary: '#60A5FA',
+      background: '#071426',
+      surface: '#122238',
+      text: '#F8FAFC',
+      border: '#334155',
+      danger: '#F87171',
+    },
+  },
 }));
 
 jest.mock('@/stores/auth-store');

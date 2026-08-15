@@ -4,7 +4,7 @@ import {
   Inter_600SemiBold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider } from '@react-navigation/native';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -25,7 +25,8 @@ import {
 import { subscribeExpoPushTokenChanges } from '@/services/notifications/push-token-listener';
 import { appQueryClient, appQueryPersistOptions } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
+import { darkTheme, lightTheme, ThemePreferenceProvider, useResolvedThemeMode } from '@/theme';
+import { createAppNavigationTheme, createRootStackScreenOptions } from '@/theme/navigation';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -147,6 +148,8 @@ export default function RootLayout() {
 
 function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boolean }) {
   const colorScheme = useResolvedThemeMode();
+  const appTheme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const navigationTheme = createAppNavigationTheme(appTheme);
   const statusBarStyle = isStartupScreenVisible
     ? 'dark'
     : colorScheme === 'dark'
@@ -154,10 +157,10 @@ function RootNavigator({ isStartupScreenVisible }: { isStartupScreenVisible: boo
       : 'dark';
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme}>
       <AuthNavigationGate />
       <StatusBar style={statusBarStyle} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+      <Stack screenOptions={createRootStackScreenOptions(appTheme)}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="schedule/semester/[id]" />

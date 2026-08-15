@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { ScheduleDayGroup, ScheduleDayList } from '@/components/schedule/schedule-day-group';
 import { MetricGrid } from '@/components/tasks';
 import {
   ContentStack,
@@ -23,7 +24,6 @@ import { useAppTheme } from '@/theme';
 import type { FireAlertRecord, ScheduleRecord, SemesterRecord } from '@/types/app-data';
 import {
   formatDateTime,
-  getDayLabel,
   getDayLabelShort,
   getNextClass,
   getRoleLabel,
@@ -227,17 +227,17 @@ function normalizeName(value?: string | null) {
     .trim();
 }
 
-function buildLecturerNameCandidates(user?: {
-  firstName?: string | null;
-  lastName?: string | null;
-} | null) {
+function buildLecturerNameCandidates(
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null,
+) {
   const firstName = normalizeName(user?.firstName);
   const lastName = normalizeName(user?.lastName);
 
   return Array.from(
-    new Set(
-      [`${lastName} ${firstName}`.trim(), `${firstName} ${lastName}`.trim()].filter(Boolean),
-    ),
+    new Set([`${lastName} ${firstName}`.trim(), `${firstName} ${lastName}`.trim()].filter(Boolean)),
   );
 }
 
@@ -885,124 +885,136 @@ export default function ScheduleScreen() {
 
         <SectionCard title="Theo ngày" subtitle="Danh sách theo ngày." variant="outlined">
           {Object.keys(groupedSchedule).length > 0 ? (
-            <View>
-              {Object.entries(groupedSchedule).map(([day, items], index) => (
-                <View key={day} style={[styles.daySection, index > 0 && { marginTop: 24 }]}>
-                  <Text
-                    style={[
-                      styles.dayHeading,
-                      { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                    ]}
-                  >
-                    {getDayLabel(Number(day)).toUpperCase()}
-                  </Text>
-                  <View style={[styles.sessionList, { marginTop: 8 }]}>
-                    {items.map((item, sessionIndex) => {
-                      const accent = getSubjectColorByCode(
-                        theme,
-                        item.course.code,
-                        subjectColorIndex,
-                      );
-                      return (
-                        <View
-                          key={item.id}
-                          style={[
-                            styles.sessionCard,
-                            sessionIndex > 0 && { marginTop: 8 },
-                            {
-                              backgroundColor: accent.surface,
-                              borderColor: accent.accent,
-                            },
-                          ]}
-                        >
-                          <View style={[styles.sessionBar, { backgroundColor: accent.accent }]} />
-                          <View style={styles.sessionBody}>
-                            <View style={styles.sessionHeader}>
-                              <View style={styles.sessionHeaderMain}>
-                                <Text
-                                  style={[
-                                    styles.sessionTitle,
-                                    { color: theme.colors.text, fontFamily: theme.fonts.semibold },
-                                  ]}
-                                >
-                                  {item.course.name}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.sessionMeta,
-                                    {
-                                      color: theme.colors.textMuted,
-                                      fontFamily: theme.fonts.regular,
-                                    },
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {item.course.code}
-                                </Text>
-                              </View>
+            <ScheduleDayList>
+              {Object.entries(groupedSchedule).map(([day, items]) => (
+                <ScheduleDayGroup
+                  key={day}
+                  day={Number(day)}
+                  items={items}
+                  getItemKey={(item) => item.id}
+                  renderItem={(item) => {
+                    const accent = getSubjectColorByCode(
+                      theme,
+                      item.course.code,
+                      subjectColorIndex,
+                    );
 
-                              <View style={styles.sessionTimeBlock}>
-                                <Text
-                                  style={[
-                                    styles.sessionTime,
-                                    { color: accent.accent, fontFamily: theme.fonts.semibold },
-                                  ]}
-                                >
-                                  {item.startTime} - {item.endTime}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.sessionPeriodText,
-                                    {
-                                      color: theme.colors.textMuted,
-                                      fontFamily: theme.fonts.medium,
-                                    },
-                                  ]}
-                                >
-                                  {getPeriodText(item)}
-                                </Text>
-                              </View>
+                    return (
+                      <View
+                        testID={`schedule-session-card-${item.id}`}
+                        style={[
+                          styles.sessionCard,
+                          {
+                            backgroundColor: accent.surface,
+                            borderColor: accent.accent,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.sessionBar, { backgroundColor: accent.accent }]} />
+                        <View style={styles.sessionBody}>
+                          <View
+                            testID={`schedule-session-header-${item.id}`}
+                            style={[
+                              styles.sessionHeader,
+                              layout.isCompact ? styles.sessionHeaderCompact : null,
+                            ]}
+                          >
+                            <View
+                              testID={`schedule-session-header-main-${item.id}`}
+                              style={[
+                                styles.sessionHeaderMain,
+                                layout.isCompact ? styles.sessionHeaderMainCompact : null,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.sessionTitle,
+                                  { color: theme.colors.text, fontFamily: theme.fonts.semibold },
+                                ]}
+                              >
+                                {item.course.name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.sessionMeta,
+                                  {
+                                    color: theme.colors.textMuted,
+                                    fontFamily: theme.fonts.regular,
+                                  },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {item.course.code}
+                              </Text>
                             </View>
 
-                            <Text
+                            <View
+                              testID={`schedule-session-time-${item.id}`}
                               style={[
-                                styles.sessionMeta,
-                                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                                styles.sessionTimeBlock,
+                                layout.isCompact ? styles.sessionTimeBlockCompact : null,
                               ]}
-                              numberOfLines={1}
                             >
-                              {getClassMetaText(item)}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.sessionMeta,
-                                { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {getScheduleInstructorLabel(item.instructor)}
-                            </Text>
-
-                            <View style={styles.badgeRow}>
-                              <StatusBadge
-                                label={`Tiết ${item.startPeriod ?? '--'}-${item.endPeriod ?? '--'}`}
-                                tone="info"
-                                size="sm"
-                              />
-                              <StatusBadge
-                                label={item.sessionType === 'daytime' ? 'Ban ngày' : 'Buổi tối'}
-                                tone="primary"
-                                size="sm"
-                              />
+                              <Text
+                                style={[
+                                  styles.sessionTime,
+                                  { color: accent.accent, fontFamily: theme.fonts.semibold },
+                                ]}
+                              >
+                                {item.startTime} - {item.endTime}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.sessionPeriodText,
+                                  {
+                                    color: theme.colors.textMuted,
+                                    fontFamily: theme.fonts.medium,
+                                  },
+                                ]}
+                              >
+                                {getPeriodText(item)}
+                              </Text>
                             </View>
                           </View>
+
+                          <Text
+                            style={[
+                              styles.sessionMeta,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {getClassMetaText(item)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.sessionMeta,
+                              { color: theme.colors.textMuted, fontFamily: theme.fonts.regular },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {getScheduleInstructorLabel(item.instructor)}
+                          </Text>
+
+                          <View style={styles.badgeRow}>
+                            <StatusBadge
+                              label={`Tiết ${item.startPeriod ?? '--'}-${item.endPeriod ?? '--'}`}
+                              tone="info"
+                              size="sm"
+                            />
+                            <StatusBadge
+                              label={item.sessionType === 'daytime' ? 'Ban ngày' : 'Buổi tối'}
+                              tone="primary"
+                              size="sm"
+                            />
+                          </View>
                         </View>
-                      );
-                    })}
-                  </View>
-                </View>
+                      </View>
+                    );
+                  }}
+                />
               ))}
-            </View>
+            </ScheduleDayList>
           ) : (
             <EmptyState
               icon="albums-outline"
@@ -1232,7 +1244,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  sessionList: {},
   alertCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1273,18 +1284,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'center',
   },
-  dayList: {},
-  daySection: {},
-  dayHeading: {
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.8,
-  },
   sessionCard: {
+    alignSelf: 'stretch',
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
+    width: '100%',
   },
   sessionBar: {
     width: 6,
@@ -1294,6 +1300,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 6,
+    minWidth: 0,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -1301,14 +1308,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  sessionHeaderCompact: {
+    flexDirection: 'column',
+    gap: 4,
+  },
   sessionHeaderMain: {
     flex: 1,
     minWidth: 0,
+  },
+  sessionHeaderMainCompact: {
+    flex: 0,
+    width: '100%',
   },
   sessionTimeBlock: {
     alignItems: 'flex-end',
     gap: 0,
     minWidth: 88,
+  },
+  sessionTimeBlockCompact: {
+    alignItems: 'flex-start',
+    minWidth: 0,
+    width: '100%',
   },
   sessionTitle: {
     fontSize: 15,
@@ -1328,4 +1348,3 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
-

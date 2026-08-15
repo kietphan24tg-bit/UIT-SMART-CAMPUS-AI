@@ -97,11 +97,12 @@ describe('ServicesScreen', () => {
   });
 
   it('renders live and unavailable service groups', () => {
-    const { getByText } = render(<ServicesScreen />);
+    const { getByText, getByTestId } = render(<ServicesScreen />);
 
     expect(getByText('Nổi bật')).toBeTruthy();
     expect(getByText('Đang hỗ trợ')).toBeTruthy();
     expect(getByText('Chưa khả dụng')).toBeTruthy();
+    expect(getByTestId('service-tile-campus-map').props.android_ripple).toBeUndefined();
   });
 
   it('shows an unavailable message when admin presses a blocked service', () => {

@@ -2,13 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  ContentStack,
-  Screen,
-  SectionCard,
-  StatusBadge,
-  TopHero,
-} from '@/components/ui';
+import { ContentStack, Screen, SectionCard, StatusBadge, TopHero } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppTheme } from '@/theme';
 import { getRoleLabel, getServiceEntries, isAdminRole } from '@/utils/app';
@@ -81,7 +75,10 @@ export default function ServicesScreen() {
           >
             <View style={styles.gridRows}>
               {liveRows.map((row, rowIndex) => (
-                <View key={`live-row-${rowIndex}`} style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}>
+                <View
+                  key={`live-row-${rowIndex}`}
+                  style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}
+                >
                   {row.map((service) => (
                     <ServiceTile
                       key={service.id}
@@ -105,7 +102,10 @@ export default function ServicesScreen() {
           >
             <View style={styles.gridRows}>
               {upcomingRows.map((row, rowIndex) => (
-                <View key={`upcoming-row-${rowIndex}`} style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}>
+                <View
+                  key={`upcoming-row-${rowIndex}`}
+                  style={[styles.gridRow, { gap: SERVICE_CARD_GAP }]}
+                >
                   {row.map((service) => (
                     <ServiceTile
                       key={service.id}
@@ -147,8 +147,8 @@ function ServiceTile({
   return (
     <Pressable
       accessibilityRole="button"
+      testID={`service-tile-${service.id}`}
       onPress={onPress}
-      android_ripple={{ color: 'rgba(150, 150, 150, 0.15)' }}
       style={({ pressed }) => [
         styles.card,
         featured ? styles.cardFeatured : null,
@@ -230,8 +230,6 @@ function getFeaturedService(
 
   return services.find((service) => service.id === 'campus-map') ?? services[0];
 }
-
-
 
 function getSupportLabel(state: 'live' | 'partial' | 'unsupported') {
   switch (state) {
@@ -315,15 +313,13 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 8,
     minHeight: 150,
-    // @ts-ignore - Web only focus ring suppression
-    outlineWidth: 0,
+    outlineWidth: 0 as never,
   },
   cardFeatured: {
     borderRadius: 20,
     padding: 14,
     minHeight: 150,
-    // @ts-ignore - Web only focus ring suppression
-    outlineWidth: 0,
+    outlineWidth: 0 as never,
   },
   cardHeaderFeatured: {
     flexDirection: 'row',

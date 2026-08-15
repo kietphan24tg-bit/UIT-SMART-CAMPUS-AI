@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Dimensions, StyleSheet } from 'react-native';
 
 import SemesterScheduleDetailScreen from '../[id]';
 
+import { getScheduleDaySpacing } from '@/components/schedule/schedule-day-group';
 import { scheduleApi } from '@/services/api/schedule';
+import { lightTheme } from '@/theme';
 
 const mockRouter = {
   push: jest.fn(),
@@ -25,6 +28,11 @@ jest.mock('@/services/api/schedule', () => ({
 }));
 
 const mockGetScheduleBySemesterId = scheduleApi.getScheduleBySemesterId as jest.Mock;
+
+function setWindowWidth(width: number) {
+  const dimensions = { width, height: 800, scale: 2, fontScale: 1 };
+  Dimensions.set({ window: dimensions, screen: dimensions });
+}
 
 function renderScreen() {
   const queryClient = new QueryClient({
@@ -49,9 +57,11 @@ describe('SemesterScheduleDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRouteId = 'sem-1';
+    setWindowWidth(390);
   });
 
   it('should fetch and render semester detail grouped by day', async () => {
+    setWindowWidth(320);
     mockGetScheduleBySemesterId.mockResolvedValue({
       id: 'sem-1',
       name: 'HK2 2024-2025',
@@ -106,7 +116,7 @@ describe('SemesterScheduleDetailScreen', () => {
       ],
     });
 
-    const { getAllByText, getByText, queryByText, queryClient } = renderScreen();
+    const { getAllByText, getByText, getByTestId, queryByText, queryClient } = renderScreen();
 
     await waitFor(() => {
       expect(mockGetScheduleBySemesterId).toHaveBeenCalledWith('sem-1');
@@ -115,6 +125,7 @@ describe('SemesterScheduleDetailScreen', () => {
     await waitFor(() => {
       expect(getByText('HK2 2024-2025')).toBeTruthy();
     });
+    const spacing = getScheduleDaySpacing(lightTheme);
 
     expect(getAllByText('Lịch chính').length).toBeGreaterThan(0);
     expect(getByText('Hình thức 2')).toBeTruthy();
@@ -122,6 +133,52 @@ describe('SemesterScheduleDetailScreen', () => {
     expect(getByText('THỨ BA')).toBeTruthy();
     expect(getByText('Phát triển PM - Microsoft')).toBeTruthy();
     expect(queryByText('Giáo dục thể chất 1')).toBeNull();
+    expect(StyleSheet.flatten(getByTestId('semester-schedule-day-list').props.style).gap).toBe(
+      spacing.daySectionGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('semester-schedule-day-1').props.style).gap).toBe(
+      spacing.dayContentGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('semester-schedule-day-2').props.style).gap).toBe(
+      spacing.dayContentGap,
+    );
+    expect(StyleSheet.flatten(getByTestId('semester-schedule-day-header-1').props.style)).toEqual(
+      StyleSheet.flatten(getByTestId('semester-schedule-day-header-2').props.style),
+    );
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-session-list-1').props.style).gap,
+    ).toBe(spacing.scheduleItemGap);
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-session-list-2').props.style).gap,
+    ).toBe(spacing.scheduleItemGap);
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-day-1').props.style).paddingTop,
+    ).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-day-2').props.style).paddingTop,
+    ).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-day-1').props.style).marginTop,
+    ).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('semester-schedule-day-2').props.style).marginTop,
+    ).toBeUndefined();
+    expect(
+      StyleSheet.flatten(getByTestId('semester-session-header-session-1').props.style)
+        .flexDirection,
+    ).toBe('column');
+    expect(
+      StyleSheet.flatten(getByTestId('semester-session-time-session-1').props.style),
+    ).toMatchObject({ alignItems: 'flex-start', minWidth: 0, width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('semester-session-header-main-session-1').props.style),
+    ).toMatchObject({ flex: 0, minWidth: 0, width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('semester-session-card-session-1').props.style),
+    ).toMatchObject({ alignSelf: 'stretch', width: '100%' });
+    expect(
+      StyleSheet.flatten(getByTestId('semester-session-card-session-2').props.style),
+    ).toMatchObject({ alignSelf: 'stretch', width: '100%' });
     queryClient.clear();
   });
 
