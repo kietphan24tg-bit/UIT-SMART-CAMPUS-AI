@@ -6,8 +6,8 @@ import { getDayLabel } from '@/utils/app';
 
 export function getScheduleDaySpacing(theme: Pick<AppTheme, 'spacing'>) {
   return {
-    daySectionGap: theme.spacing.xl,
-    dayContentGap: theme.spacing.sm,
+    daySectionGap: theme.spacing.sm,
+    dayContentGap: 2,
     scheduleItemGap: theme.spacing.sm,
   } as const;
 }
@@ -97,9 +97,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   heading: {
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.8,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.6,
+    includeFontPadding: false,
   },
   sessionList: {
     alignSelf: 'stretch',
