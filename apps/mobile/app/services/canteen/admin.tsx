@@ -160,9 +160,9 @@ function resolveProductImageErrorMessage(error: unknown) {
 
   if (normalizedMessage === 'network error' || normalizedMessage.includes('network')) {
     return Platform.select({
-      ios: 'KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c backend upload. Náº¿u Ä‘ang dÃ¹ng iPhone/iPad vÃ  backend lÃ  http, hÃ£y kiá»ƒm tra ATS hoáº·c chuyá»ƒn sang https.',
+      ios: 'Không kết nối được backend upload. Nếu đang dùng iPhone/iPad và backend là http, hãy kiểm tra ATS hoặc chuyển sang https.',
       default:
-        'KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c backend upload. HÃ£y kiá»ƒm tra láº¡i IP API, restart Expo sau khi Ä‘á»•i .env, vÃ  xem log `[apiClient] request failed` Ä‘á»ƒ biáº¿t request Ä‘ang gá»i host nÃ o.',
+        'Không kết nối được backend upload. Hãy kiểm tra lại IP API, restart Expo sau khi đổi .env, và xem log `[apiClient] request failed` để biết request đang gọi host nào.',
     });
   }
 

@@ -112,11 +112,7 @@ export class PaymentsService {
       },
     });
 
-    const checkout = await this.createSandboxCheckout(
-      vehicle.plateNumber,
-      transaction,
-      momoConfig,
-    );
+    const checkout = await this.createSandboxCheckout(vehicle.plateNumber, transaction, momoConfig);
 
     await this.prisma.paymentTransaction.update({
       where: { id: transaction.id },
@@ -142,11 +138,11 @@ export class PaymentsService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y xe');
+      throw new NotFoundException('Không tìm thấy xe');
     }
 
     if (vehicle.userId !== userId) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n thanh toÃ¡n cho xe nÃ y');
+      throw new ForbiddenException('Bạn không có quyền thanh toán cho xe này');
     }
 
     const sepayConfig = this.getSepayConfigOrThrow();
@@ -269,21 +265,23 @@ export class PaymentsService {
     this.assertSepayWebhookAuthorization(authorization);
 
     const orderCode = this.resolveSepayOrderCode(payload);
-    const transferType = String(payload.transferType || '').trim().toLowerCase();
+    const transferType = String(payload.transferType || '')
+      .trim()
+      .toLowerCase();
     const transferAmount = Number(payload.transferAmount ?? 0);
     const eventId = this.resolveSepayWebhookEventId(payload);
 
     if (!orderCode) {
-      throw new BadRequestException('Webhook SePay thiáº¿u mÃ£ giao dá»‹ch');
+      throw new BadRequestException('Webhook SePay thiếu mã giao dịch');
     }
     if (!eventId) {
-      throw new BadRequestException('Webhook SePay thiáº¿u mÃ£ idempotency');
+      throw new BadRequestException('Webhook SePay thiếu mã idempotency');
     }
     if (transferType !== 'in') {
       return { success: true, ignored: true };
     }
     if (!Number.isFinite(transferAmount) || transferAmount <= 0) {
-      throw new BadRequestException('Webhook SePay cÃ³ sá»‘ tiá»n khÃ´ng há»£p lá»‡');
+      throw new BadRequestException('Webhook SePay có số tiền không hợp lệ');
     }
 
     const isNewEvent = await this.recordSepayWebhookEvent(eventId, orderCode, payload);
@@ -298,7 +296,7 @@ export class PaymentsService {
       return this.handleSepayCanteenWebhook(orderCode, transferAmount, payload);
     }
 
-    throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay');
+    throw new NotFoundException('Không tìm thấy giao dịch SePay');
   }
 
   private async createSandboxCheckout(
@@ -437,7 +435,7 @@ export class PaymentsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay parking');
+      throw new NotFoundException('Không tìm thấy giao dịch SePay parking');
     }
 
     if (transaction.status === 'paid') {
@@ -469,7 +467,7 @@ export class PaymentsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch SePay canteen');
+      throw new NotFoundException('Không tìm thấy giao dịch SePay canteen');
     }
 
     if (transaction.status === 'paid') {
@@ -517,8 +515,8 @@ export class PaymentsService {
     await this.notifyCanteenOrder(
       [updated.paidOrder.createdBy.id, ...(await this.getCanteenAdminUserIds())],
       'canteen',
-      'ÄÆ¡n canteen Ä‘Ã£ thanh toÃ¡n',
-      'Thanh toÃ¡n Ä‘Æ¡n hÃ ng canteen thÃ nh cÃ´ng.',
+      'Đơn canteen đã thanh toán',
+      'Thanh toán đơn hàng canteen thành công.',
       { orderId: updated.paidOrder.id, status: CanteenOrderStatus.paid },
     );
 
@@ -580,11 +578,7 @@ export class PaymentsService {
     };
   }
 
-  private buildSepayCheckoutUrl(
-    config: SepayConfig,
-    amount: number,
-    transferDescription: string,
-  ) {
+  private buildSepayCheckoutUrl(config: SepayConfig, amount: number, transferDescription: string) {
     const params = new URLSearchParams({
       acc: config.accountNumber,
       bank: config.bankName,
@@ -630,7 +624,7 @@ export class PaymentsService {
     if (!response.ok || responseData.status !== 'success' || !checkoutUrl) {
       await markFailed(responseData);
       throw new InternalServerErrorException(
-        String(responseData.message || 'KhÃ´ng táº¡o Ä‘Æ°á»£c QR SePay'),
+        String(responseData.message || 'Không tạo được QR SePay'),
       );
     }
 
@@ -648,7 +642,7 @@ export class PaymentsService {
     const expectedKey = this.getSepayConfigOrThrow().webhookApiKey;
     const expectedAuthorization = `Apikey ${expectedKey}`;
     if (!authorization || authorization.trim() !== expectedAuthorization) {
-      throw new UnauthorizedException('Webhook SePay khÃ´ng há»£p lá»‡');
+      throw new UnauthorizedException('Webhook SePay không hợp lệ');
     }
   }
 

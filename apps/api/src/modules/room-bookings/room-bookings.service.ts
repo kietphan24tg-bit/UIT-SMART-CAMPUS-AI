@@ -10,6 +10,7 @@ import type { Prisma, RoomBookingStatus, RoomStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+
 import type {
   ClassMeetingOverrideDto,
   CreateRoomScheduleOverrideDto,
@@ -61,7 +62,6 @@ const ACTIVE_ROOM_STATUS: RoomStatus = 'active';
 const OCCUPYING_BOOKING_STATUSES: RoomBookingStatus[] = ['approved', 'booked', 'maintenance'];
 const INACTIVE_BOOKING_STATUSES: RoomBookingStatus[] = ['rejected', 'cancelled'];
 const CREATED_BOOKING_STATUS: RoomBookingStatus = 'pending';
-const EMPTY_ROOM_SCHEDULE_TEXT = 'Trống';
 const ROOM_AVAILABLE_STATUS: RoomAvailabilityStatus = 'Trống hiện tại';
 const ROOM_OCCUPIED_STATUS: RoomAvailabilityStatus = 'Đang được sử dụng';
 const APPROVAL_REJECT_NOTE = 'Slot đã được duyệt cho yêu cầu khác';
@@ -226,10 +226,7 @@ function getFirstBookableWeekMonday(now = new Date()) {
 }
 
 function getLastAllowedWeekMonday(now = new Date()) {
-  return addUtcDays(
-    getFirstBookableWeekMonday(now),
-    (ROOM_BOOKING_MAX_WEEKS_AHEAD - 1) * 7,
-  );
+  return addUtcDays(getFirstBookableWeekMonday(now), (ROOM_BOOKING_MAX_WEEKS_AHEAD - 1) * 7);
 }
 
 function assertBookingDateAllowedForRoomBooking(bookingDate: Date, now = new Date()) {
@@ -243,9 +240,7 @@ function assertBookingDateAllowedForRoomBooking(bookingDate: Date, now = new Dat
   const lastAllowed = getLastAllowedWeekMonday(now);
 
   if (weekMonday.getTime() < firstAllowed.getTime()) {
-    throw new BadRequestException(
-      'Đặt phòng phải cách ít nhất một tuần (từ tuần kế tiếp trở đi)',
-    );
+    throw new BadRequestException('Đặt phòng phải cách ít nhất một tuần (từ tuần kế tiếp trở đi)');
   }
 
   if (weekMonday.getTime() > lastAllowed.getTime()) {
@@ -290,7 +285,9 @@ function buildFullName(firstName?: string | null, lastName?: string | null) {
 }
 
 function normalizeRoomText(value?: string | null) {
-  return String(value || '').trim().toUpperCase();
+  return String(value || '')
+    .trim()
+    .toUpperCase();
 }
 
 function isDateWithinRange(date: Date, startDate: Date, endDate: Date) {
@@ -305,7 +302,9 @@ export class RoomBookingsService {
   ) {}
 
   async createRoomBooking(userId: string, dto: CreateRoomBookingDto) {
-    const roomCode = String(dto.roomCode || '').trim().toUpperCase();
+    const roomCode = String(dto.roomCode || '')
+      .trim()
+      .toUpperCase();
     const bookingDate = parseBookingDate(dto.bookingDate);
     assertBookingDateAllowedForRoomBooking(bookingDate);
 
@@ -336,9 +335,7 @@ export class RoomBookingsService {
     );
 
     if (conflictingSlot) {
-      throw new ConflictException(
-        this.buildCreateConflictMessage(conflictingSlot.timeSlot?.label),
-      );
+      throw new ConflictException(this.buildCreateConflictMessage(conflictingSlot.timeSlot?.label));
     }
 
     let booking: { id: string } | null = null;
@@ -399,7 +396,9 @@ export class RoomBookingsService {
   }
 
   async getBuildingRooms(buildingCode: string, filters: RoomListFilters = {}) {
-    const normalizedBuildingCode = String(buildingCode || '').trim().toUpperCase();
+    const normalizedBuildingCode = String(buildingCode || '')
+      .trim()
+      .toUpperCase();
     if (!normalizedBuildingCode) {
       return [];
     }
@@ -458,7 +457,9 @@ export class RoomBookingsService {
   }
 
   async getRoomSchedule(roomCode: string, weekStart?: string) {
-    const normalizedRoomCode = String(roomCode || '').trim().toUpperCase();
+    const normalizedRoomCode = String(roomCode || '')
+      .trim()
+      .toUpperCase();
     if (!normalizedRoomCode) {
       throw new NotFoundException('Không tìm thấy phòng');
     }
@@ -678,8 +679,7 @@ export class RoomBookingsService {
       const matchingTimeSlots = timeSlots.filter((timeSlot) => {
         if (meeting.startPeriod != null && meeting.endPeriod != null) {
           return (
-            timeSlot.slotNumber >= meeting.startPeriod &&
-            timeSlot.slotNumber <= meeting.endPeriod
+            timeSlot.slotNumber >= meeting.startPeriod && timeSlot.slotNumber <= meeting.endPeriod
           );
         }
 
@@ -908,15 +908,13 @@ export class RoomBookingsService {
 
     for (const booking of bookings) {
       const roomCode = booking.room.roomCode;
-      const existing =
-        grouped.get(roomCode) ??
-        {
-          roomCode,
-          buildingCode: booking.room.floor.building.code,
-          buildingName: booking.room.floor.building.name,
-          requestIds: new Set<string>(),
-          slotKeys: new Set<string>(),
-        };
+      const existing = grouped.get(roomCode) ?? {
+        roomCode,
+        buildingCode: booking.room.floor.building.code,
+        buildingName: booking.room.floor.building.name,
+        requestIds: new Set<string>(),
+        slotKeys: new Set<string>(),
+      };
 
       existing.requestIds.add(booking.id);
       for (const slot of booking.bookingSlots) {
@@ -948,7 +946,7 @@ export class RoomBookingsService {
     });
 
     if (!room) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+      throw new NotFoundException('Không tìm thấy phòng');
     }
 
     const slots = await this.prisma.roomBookingSlot.findMany({
@@ -987,15 +985,13 @@ export class RoomBookingsService {
     for (const slot of slots) {
       const bookingDate = toDateKey(slot.bookingDate);
       const key = `${bookingDate}:${slot.timeSlotId}`;
-      const existing =
-        grouped.get(key) ??
-        {
-          bookingDate,
-          startTime: slot.timeSlot.startTime,
-          endTime: slot.timeSlot.endTime,
-          timeSlotIds: [slot.timeSlotId],
-          requestIds: new Set<string>(),
-        };
+      const existing = grouped.get(key) ?? {
+        bookingDate,
+        startTime: slot.timeSlot.startTime,
+        endTime: slot.timeSlot.endTime,
+        timeSlotIds: [slot.timeSlotId],
+        requestIds: new Set<string>(),
+      };
       existing.requestIds.add(slot.booking.id);
       grouped.set(key, existing);
     }
@@ -1023,7 +1019,7 @@ export class RoomBookingsService {
     });
 
     if (!room) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+      throw new NotFoundException('Không tìm thấy phòng');
     }
 
     const timeSlot = await this.prisma.timeSlot.findUnique({
@@ -1036,7 +1032,7 @@ export class RoomBookingsService {
     });
 
     if (!timeSlot) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+      throw new NotFoundException('Không tìm thấy khung giờ');
     }
 
     const bookings = await this.prisma.roomBooking.findMany({
@@ -1086,7 +1082,7 @@ export class RoomBookingsService {
     });
 
     if (!room) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+      throw new NotFoundException('Không tìm thấy phòng');
     }
 
     const bookingDate = parseBookingDate(dto.bookingDate);
@@ -1127,10 +1123,10 @@ export class RoomBookingsService {
     ]);
 
     if (!room) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+      throw new NotFoundException('Không tìm thấy phòng');
     }
     if (!timeSlot) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+      throw new NotFoundException('Không tìm thấy khung giờ');
     }
 
     const override = await this.prisma.roomScheduleOverride.create({
@@ -1177,7 +1173,7 @@ export class RoomBookingsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch admin');
+      throw new NotFoundException('Không tìm thấy lịch admin');
     }
 
     const updated = await this.prisma.roomScheduleOverride.update({
@@ -1200,7 +1196,7 @@ export class RoomBookingsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch admin');
+      throw new NotFoundException('Không tìm thấy lịch admin');
     }
 
     await this.prisma.roomScheduleOverride.delete({ where: { id: overrideId } });
@@ -1216,7 +1212,7 @@ export class RoomBookingsService {
     const overrideDate = parseBookingDate(dto.overrideDate);
     const dayOfWeek = getRoomBookingDayOfWeek(overrideDate);
     if (dayOfWeek !== meeting.dayOfWeek) {
-      throw new BadRequestException('NgÃ y há»§y khÃ´ng khá»›p thá»© cá»§a lá»‹ch há»c');
+      throw new BadRequestException('Ngày hủy không khớp thứ của lịch học');
     }
 
     const timeSlot = await this.resolveClassMeetingFirstTimeSlot(meeting);
@@ -1254,7 +1250,7 @@ export class RoomBookingsService {
     const overrideDate = parseBookingDate(dto.overrideDate);
     const dayOfWeek = getRoomBookingDayOfWeek(overrideDate);
     if (dayOfWeek !== meeting.dayOfWeek) {
-      throw new BadRequestException('NgÃ y Ä‘iá»u chá»‰nh khÃ´ng khá»›p thá»© cá»§a lá»‹ch há»c');
+      throw new BadRequestException('Ngày điều chỉnh không khớp thứ của lịch học');
     }
 
     const [room, timeSlot] = await Promise.all([
@@ -1266,7 +1262,7 @@ export class RoomBookingsService {
     ]);
 
     if (!timeSlot) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá»');
+      throw new NotFoundException('Không tìm thấy khung giờ');
     }
 
     const override = await this.prisma.roomScheduleOverride.create({
@@ -1360,16 +1356,16 @@ export class RoomBookingsService {
     });
 
     if (!booking) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
     }
 
     if (booking.status !== 'pending') {
-      throw new BadRequestException('Chá»‰ cÃ³ thá»ƒ duyá»‡t yÃªu cáº§u Ä‘ang chá»');
+      throw new BadRequestException('Chỉ có thể duyệt yêu cầu đang chờ');
     }
 
     const selectedTimeSlotIds = booking.bookingSlots.map((slot) => slot.timeSlotId);
     if (selectedTimeSlotIds.length === 0) {
-      throw new BadRequestException('YÃªu cáº§u Ä‘áº·t phÃ²ng chÆ°a cÃ³ khung giá» há»£p lá»‡');
+      throw new BadRequestException('Yêu cầu đặt phòng chưa có khung giờ hợp lệ');
     }
 
     const roomCode = booking.room.roomCode;
@@ -1383,11 +1379,11 @@ export class RoomBookingsService {
       });
 
       if (!latestBooking) {
-        throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+        throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
       }
 
       if (latestBooking.status !== 'pending') {
-        throw new BadRequestException('YÃªu cáº§u nÃ y khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i chá» duyá»‡t');
+        throw new BadRequestException('Yêu cầu này không còn ở trạng thái chờ duyệt');
       }
 
       const latestTimeSlotIds = latestBooking.bookingSlots.map((slot) => slot.timeSlotId);
@@ -1523,11 +1519,11 @@ export class RoomBookingsService {
     });
 
     if (!booking) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u Ä‘áº·t phÃ²ng');
+      throw new NotFoundException('Không tìm thấy yêu cầu đặt phòng');
     }
 
     if (booking.userId !== userId) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a yÃªu cáº§u nÃ y');
+      throw new ForbiddenException('Bạn không có quyền xóa yêu cầu này');
     }
 
     await this.prisma.$transaction([
@@ -1754,7 +1750,7 @@ export class RoomBookingsService {
   private async getRoomByCodeOrThrow(roomCode?: string | null) {
     const normalizedRoomCode = normalizeRoomText(roomCode);
     if (!normalizedRoomCode) {
-      throw new BadRequestException('Lá»‹ch há»c chÆ°a cÃ³ phÃ²ng há»£p lá»‡');
+      throw new BadRequestException('Lịch học chưa có phòng hợp lệ');
     }
 
     const room = await this.prisma.room.findFirst({
@@ -1769,7 +1765,7 @@ export class RoomBookingsService {
     });
 
     if (!room) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y phÃ²ng');
+      throw new NotFoundException('Không tìm thấy phòng');
     }
 
     return room;
@@ -1802,7 +1798,7 @@ export class RoomBookingsService {
     });
 
     if (!meeting) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y lá»‹ch há»c');
+      throw new NotFoundException('Không tìm thấy lịch học');
     }
 
     return meeting;
@@ -1830,7 +1826,7 @@ export class RoomBookingsService {
     });
 
     if (!timeSlot) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y khung giá» cá»§a lá»‹ch há»c');
+      throw new NotFoundException('Không tìm thấy khung giờ của lịch học');
     }
 
     return timeSlot;
@@ -1985,8 +1981,8 @@ export class RoomBookingsService {
 
   private buildApproveConflictMessage(timeSlotLabel?: string | null) {
     return timeSlotLabel
-      ? `Khung giá» ${timeSlotLabel} Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.`
-      : 'Má»™t hoáº·c nhiá»u khung giá» Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.';
+      ? `Khung giờ ${timeSlotLabel} đã được sử dụng.`
+      : 'Một hoặc nhiều khung giờ đã được sử dụng.';
   }
 
   private mapScheduleOverride(override: {
@@ -2124,7 +2120,7 @@ export class RoomBookingsService {
 
       return {
         timeSlot: {
-          label: fixedScheduleConflict.classSection.classCode || 'Lá»‹ch cá»‘ Ä‘á»‹nh',
+          label: fixedScheduleConflict.classSection.classCode || 'Lịch cố định',
         },
       };
     }
@@ -2253,9 +2249,9 @@ export class RoomBookingsService {
   private isUniqueConstraintError(error: unknown): boolean {
     return Boolean(
       error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error as { code?: unknown }).code === 'P2002',
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002',
     );
   }
 }

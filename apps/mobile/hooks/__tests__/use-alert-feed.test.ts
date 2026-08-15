@@ -1,7 +1,4 @@
-import {
-  getAlertCategoryFromType,
-  toNotificationFeed,
-} from '@/hooks/use-alert-feed';
+import { getAlertCategoryFromType, toNotificationFeed } from '@/hooks/use-alert-feed';
 
 describe('useAlertFeed helpers', () => {
   it('maps notification types to alert categories', () => {
@@ -34,11 +31,8 @@ describe('useAlertFeed helpers', () => {
   });
 
   it('repairs mojibake notification copy from the API', () => {
-    const mojibakeTitle = Buffer.from('Đơn canteen đã thanh toán', 'utf8').toString('latin1');
-    const mojibakeBody = Buffer.from(
-      'Thanh toán đơn hàng canteen thành công.',
-      'utf8',
-    ).toString('latin1');
+    const mojibakeTitle = 'ÄÆ¡n canteen Ä‘Ã£ thanh toÃ¡n';
+    const mojibakeBody = 'Thanh toÃ¡n Ä‘Æ¡n hÃ ng canteen thÃ nh cÃ´ng.';
 
     const feed = toNotificationFeed({
       id: 'notif-2',

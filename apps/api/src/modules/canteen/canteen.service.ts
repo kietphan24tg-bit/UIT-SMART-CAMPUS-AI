@@ -373,10 +373,10 @@ export class CanteenService {
     });
 
     if (!order) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+      throw new NotFoundException('Không tìm thấy đơn hàng');
     }
     if (order.createdById !== userId) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a Ä‘Æ¡n hÃ ng nÃ y');
+      throw new ForbiddenException('Bạn không có quyền xóa đơn hàng này');
     }
 
     const deletableStatuses: CanteenOrderStatus[] = [
@@ -384,9 +384,7 @@ export class CanteenService {
       CanteenOrderStatus.payment_failed,
     ];
     if (!deletableStatuses.includes(order.status)) {
-      throw new BadRequestException(
-        'Chá»‰ cÃ³ thá»ƒ xÃ³a Ä‘Æ¡n chÆ°a thanh toÃ¡n hoáº·c thanh toÃ¡n lá»—i',
-      );
+      throw new BadRequestException('Chỉ có thể xóa đơn chưa thanh toán hoặc thanh toán lỗi');
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -554,19 +552,17 @@ export class CanteenService {
       },
     });
     if (!order) {
-      throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+      throw new NotFoundException('Không tìm thấy đơn hàng');
     }
     if (order.createdById !== userId) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n thanh toÃ¡n Ä‘Æ¡n hÃ ng nÃ y');
+      throw new ForbiddenException('Bạn không có quyền thanh toán đơn hàng này');
     }
     const payableStatuses: CanteenOrderStatus[] = [
       CanteenOrderStatus.pending_payment,
       CanteenOrderStatus.payment_failed,
     ];
     if (!payableStatuses.includes(order.status)) {
-      throw new BadRequestException(
-        'ÄÆ¡n hÃ ng khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i cho phÃ©p thanh toÃ¡n',
-      );
+      throw new BadRequestException('Đơn hàng không còn ở trạng thái cho phép thanh toán');
     }
 
     const sepayConfig = this.getSepayConfigOrThrow();

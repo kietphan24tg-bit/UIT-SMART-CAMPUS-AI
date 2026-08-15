@@ -1,8 +1,9 @@
+import { createHmac } from 'node:crypto';
+
 import { ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
-import { createHmac } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 
@@ -20,6 +21,10 @@ describe('PaymentsService', () => {
       findFirst: jest.Mock;
     };
     paymentWebhookEvent: { create: jest.Mock };
+    canteenPaymentTransaction: { findUnique: jest.Mock; update: jest.Mock };
+    canteenOrder: { update: jest.Mock };
+    user: { findMany: jest.Mock };
+    notification: { createMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let configService: { get: jest.Mock };
@@ -60,7 +65,22 @@ describe('PaymentsService', () => {
       paymentWebhookEvent: {
         create: jest.fn(),
       },
-      $transaction: jest.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+      canteenPaymentTransaction: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      canteenOrder: {
+        update: jest.fn(),
+      },
+      user: {
+        findMany: jest.fn(),
+      },
+      notification: {
+        createMany: jest.fn(),
+      },
+      $transaction: jest.fn(async (operation: Promise<unknown>[] | ((tx: unknown) => unknown)) =>
+        typeof operation === 'function' ? operation(prisma) : Promise.all(operation),
+      ),
     };
 
     configService = {
@@ -473,6 +493,58 @@ describe('PaymentsService', () => {
           transferAmount: 50000,
         },
       },
+    });
+  });
+
+  it('creates correctly encoded notifications after a SePay canteen payment', async () => {
+    prisma.paymentWebhookEvent.create.mockResolvedValue({});
+    prisma.canteenPaymentTransaction.findUnique.mockResolvedValue({
+      id: 'canteen-payment-1',
+      status: 'pending',
+      providerOrderId: 'SEPAYCANTEENORDER123',
+      amount: 45000,
+      orderId: 'canteen-order-1',
+    });
+    prisma.canteenPaymentTransaction.update.mockResolvedValue({ id: 'canteen-payment-1' });
+    prisma.canteenOrder.update.mockResolvedValue({
+      id: 'canteen-order-1',
+      createdBy: { id: 'student-1' },
+    });
+    prisma.user.findMany.mockResolvedValue([{ id: 'canteen-admin-1' }, { id: 'student-1' }]);
+    prisma.notification.createMany.mockResolvedValue({ count: 2 });
+
+    const result = await service.handleSepayWebhook(
+      {
+        id: 92706,
+        code: 'SEPAYCANTEENORDER123',
+        transferType: 'in',
+        transferAmount: 45000,
+      },
+      'Apikey sepay-secret',
+    );
+
+    expect(result).toEqual({
+      success: true,
+      status: 'paid',
+      transactionId: 'canteen-payment-1',
+    });
+    expect(prisma.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          userId: 'student-1',
+          title: 'Đơn canteen đã thanh toán',
+          body: 'Thanh toán đơn hàng canteen thành công.',
+          type: 'canteen',
+          data: { orderId: 'canteen-order-1', status: 'paid' },
+        },
+        {
+          userId: 'canteen-admin-1',
+          title: 'Đơn canteen đã thanh toán',
+          body: 'Thanh toán đơn hàng canteen thành công.',
+          type: 'canteen',
+          data: { orderId: 'canteen-order-1', status: 'paid' },
+        },
+      ],
     });
   });
 

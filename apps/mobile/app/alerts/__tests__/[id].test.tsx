@@ -66,8 +66,8 @@ describe('AlertDetailScreen', () => {
     });
     (notificationsApi.getNotification as jest.Mock).mockResolvedValue({
       id: 'notif-1',
-      title: 'ThÃ´ng bÃ¡o lá»›p',
-      body: 'NgÃ y mai há»c táº¡i B201',
+      title: 'Thông báo lớp',
+      body: 'Ngày mai học tại B201',
       type: 'academic',
       isRead: false,
       data: null,
@@ -83,8 +83,8 @@ describe('AlertDetailScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('ThÃ´ng bÃ¡o lá»›p')).toBeTruthy();
-      expect(screen.getByText('NgÃ y mai há»c táº¡i B201')).toBeTruthy();
+      expect(screen.getByText('Thông báo lớp')).toBeTruthy();
+      expect(screen.getByText('Ngày mai học tại B201')).toBeTruthy();
     });
     expect(notificationsApi.getNotification).toHaveBeenCalledWith('notif-1');
     await waitFor(() => {
@@ -99,8 +99,8 @@ describe('AlertDetailScreen', () => {
         {
           id: 'notif-1',
           kind: 'notification',
-          title: 'ThÃ´ng bÃ¡o lá»›p',
-          body: 'NgÃ y mai há»c táº¡i B201',
+          title: 'Thông báo lớp',
+          body: 'Ngày mai học tại B201',
           timestamp: '2026-04-30T10:00:00.000Z',
           severity: 'warning',
           category: 'academic',
@@ -133,8 +133,8 @@ describe('AlertDetailScreen', () => {
         {
           id: 'fire-1',
           kind: 'fire_alert',
-          title: 'Cáº£nh bÃ¡o chÃ¡y bÃ£i xe',
-          body: 'PhÃ¡t hiá»‡n khÃ³i',
+          title: 'Cảnh báo cháy bãi xe',
+          body: 'Phát hiện khói',
           timestamp: '2026-08-10T16:00:00.000Z',
           severity: 'critical',
           category: 'emergency',

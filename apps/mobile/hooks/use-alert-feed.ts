@@ -18,18 +18,7 @@ import type {
   OperationsSummaryState,
 } from '@/types/app-data';
 import { isAdminRole } from '@/utils/app';
-
-function repairMojibakeText(value?: string | null) {
-  if (!value || !/[ÃÂÄÆ]/.test(value)) {
-    return value ?? '';
-  }
-
-  try {
-    return Buffer.from(value, 'latin1').toString('utf8');
-  } catch {
-    return value;
-  }
-}
+import { repairMojibakeText } from '@/utils/text-encoding';
 
 export function getAlertCategoryFromType(type?: string | null): AlertCategory {
   return getNotificationAlertCategory(repairMojibakeText(type));
@@ -211,13 +200,15 @@ export function useAlertFeed(role?: string | null) {
               }
             : current,
         );
-        queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
-          current
-            ? {
-                ...current,
-                unreadCount: decrementUnreadCount(current.unreadCount),
-              }
-            : current,
+        queryClient.setQueryData<OperationsSummaryState | undefined>(
+          operationsQueryKey,
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  unreadCount: decrementUnreadCount(current.unreadCount),
+                }
+              : current,
         );
       }
 
@@ -340,13 +331,15 @@ export function useAlertFeed(role?: string | null) {
               }
             : current,
         );
-        queryClient.setQueryData<OperationsSummaryState | undefined>(operationsQueryKey, (current) =>
-          current
-            ? {
-                ...current,
-                unreadCount: decrementUnreadCount(current.unreadCount),
-              }
-            : current,
+        queryClient.setQueryData<OperationsSummaryState | undefined>(
+          operationsQueryKey,
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  unreadCount: decrementUnreadCount(current.unreadCount),
+                }
+              : current,
         );
       }
 
