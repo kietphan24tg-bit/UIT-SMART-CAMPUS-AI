@@ -9,6 +9,15 @@ class FakeEmbedder:
         return [[0.1, 0.2, 0.3] for _ in texts]
 
 
+class FakeQueryEmbedder(FakeEmbedder):
+    def __init__(self):
+        self.query_calls = []
+
+    def embed_query(self, text):
+        self.query_calls.append(text)
+        return [0.4, 0.5, 0.6]
+
+
 class FakeStore:
     def __init__(self):
         self.calls = []
@@ -39,6 +48,17 @@ def test_retriever_embeds_question_and_filters_by_score():
     assert results[0].score == 0.75
     assert store.calls[0]["limit"] == 5
     assert store.calls[0]["filters"] == {"category": "exam"}
+
+
+def test_retriever_prefers_embed_query_when_available():
+    store = FakeStore()
+    embedder = FakeQueryEmbedder()
+    retriever = Retriever(embedder=embedder, vector_store=store)
+
+    retriever.retrieve("điều kiện dự thi", top_k=5, min_score=0.2)
+
+    assert embedder.query_calls == ["điều kiện dự thi"]
+    assert store.calls[0]["query_vector"] == [0.4, 0.5, 0.6]
 
 
 def test_format_citations_deduplicates_sources():

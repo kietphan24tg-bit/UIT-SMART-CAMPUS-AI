@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from src.core.config import Settings, settings
-from src.embeddings.provider import EmbeddingProvider, GeminiEmbeddingProvider
+from src.embeddings.provider import EmbeddingProvider, create_embedding_provider
 from src.retrieval.citations import score_from_distance
 from src.vectorstores.pgvector import PgVectorStore
 
@@ -23,14 +23,7 @@ class Retriever:
         vector_store: PgVectorStore | None = None,
     ) -> None:
         self.config = config
-        self.embedder = embedder or GeminiEmbeddingProvider(
-            api_key=config.gemini_key or "",
-            model=config.embedding_model,
-            dimensions=config.embedding_dimensions,
-            batch_size=1,
-            max_retries=config.gemini_max_retries,
-            request_delay_seconds=config.embedding_request_delay_seconds,
-        )
+        self.embedder = embedder or create_embedding_provider(config, batch_size=1)
         self.vector_store = vector_store or PgVectorStore(
             database_url=config.database_url or "",
             schema=config.rag_db_schema,
@@ -44,7 +37,8 @@ class Retriever:
         top_k: int = 8,
         min_score: float = 0.15,
     ) -> list[RetrievalResult]:
-        query_vector = self.embedder.embed([question])[0]
+        embed_query = getattr(self.embedder, "embed_query", None)
+        query_vector = embed_query(question) if callable(embed_query) else self.embedder.embed([question])[0]
         rows = self.vector_store.search(query_vector, filters=filters, limit=top_k)
         results: list[RetrievalResult] = []
         for row in rows:
