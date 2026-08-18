@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class RagQueryRequest(BaseModel):
     question: str = Field(min_length=1)
     filters: dict[str, str | bool | int | float] = Field(default_factory=dict)
-    top_k: int = Field(default=8, ge=1, le=20)
+    top_k: int = Field(default=6, ge=1, le=30)
     min_score: float = Field(default=0.15, ge=0.0, le=1.0)
     include_context: bool = False
 

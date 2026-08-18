@@ -85,6 +85,43 @@ def test_rag_service_calls_llm_and_formats_citations():
     assert retriever.calls[0]["top_k"] == 3
 
 
+def test_rag_service_falls_back_when_context_has_no_support_overlap():
+    llm = FakeLlm()
+    raw = {
+        "content": "Quy trinh cap the sinh vien duoc thuc hien tai phong cong tac sinh vien.",
+        "metadata": {
+            "source_file": "cam-nang.pdf",
+            "source_unit": "CTSV",
+            "category": "handbook",
+            "heading_path": "Thu tuc sinh vien",
+            "page_start": 7,
+            "page_end": 7,
+        },
+        "source_file": "cam-nang.pdf",
+        "source_unit": "CTSV",
+        "category": "handbook",
+        "heading_path": "Thu tuc sinh vien",
+        "parent_heading_path": "Cam nang",
+        "page_start": 7,
+        "page_end": 7,
+        "distance": 0.2,
+    }
+    result = RetrievalResult(
+        content=raw["content"],
+        metadata=raw["metadata"],
+        distance=0.2,
+        score=0.8,
+        raw=raw,
+    )
+    service = RagService(retriever=FakeRetriever([result]), llm_client=llm)
+
+    response = service.answer("Thoi tiet hom nay the nao?")
+
+    assert response.answer_type == "fallback"
+    assert response.citations == []
+    assert llm.calls == []
+
+
 def test_prompt_builder_includes_source_number_and_question():
     prompt = build_user_prompt("Hỏi gì?", [_result()])
 

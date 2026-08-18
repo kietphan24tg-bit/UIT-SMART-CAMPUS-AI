@@ -6,7 +6,7 @@ from src.chunking.structure_chunker import StructureChunker
 from src.core.config import Settings, settings
 from src.documents.loader import iter_manifest_markdown_files, load_markdown_document, sha256_text
 from src.documents.metadata import MarkdownDocument
-from src.embeddings.provider import EmbeddingProvider, GeminiEmbeddingProvider
+from src.embeddings.provider import EmbeddingProvider, create_embedding_provider
 from src.vectorstores.pgvector import PgVectorStore
 
 
@@ -30,14 +30,7 @@ class IngestionPipeline:
         vector_store: PgVectorStore | None = None,
     ) -> None:
         self.config = config
-        self.embedder = embedder or GeminiEmbeddingProvider(
-            api_key=config.gemini_key or "",
-            model=config.embedding_model,
-            dimensions=config.embedding_dimensions,
-            batch_size=config.embedding_batch_size,
-            max_retries=config.gemini_max_retries,
-            request_delay_seconds=config.embedding_request_delay_seconds,
-        )
+        self.embedder = embedder or create_embedding_provider(config)
         self.vector_store = vector_store or PgVectorStore(
             database_url=config.database_url or "",
             schema=config.rag_db_schema,
