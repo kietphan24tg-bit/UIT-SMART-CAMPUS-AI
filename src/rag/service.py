@@ -104,7 +104,12 @@ class RagService:
     ) -> None:
         self.config = config
         self.retriever = retriever or HybridRetriever(config=config)
-        self.reranker = reranker if reranker is not None else create_reranker(config)
+        if reranker is not None:
+            self.reranker = reranker
+        elif retriever is None:
+            self.reranker = create_reranker(config)
+        else:
+            self.reranker = None
         self.llm_client = llm_client or GroqClient(
             api_key=config.groq_key or "",
             model=config.llm_model,
@@ -138,13 +143,7 @@ class RagService:
         _min_score = min_score if min_score is not None else self.config.retrieval_min_score
 
         # 1. Hybrid retrieval (vector + keyword RRF)
-        candidates = self.retriever.retrieve(
-            question=question,
-            filters=filters,
-            candidate_k=self.config.retrieval_candidate_k,
-            top_k=_top_k if self.reranker is None else self.config.retrieval_candidate_k,
-            min_score=_min_score if self.reranker is None else 0.0,
-        )
+        candidates = self._retrieve_candidates(question, filters, _top_k, _min_score)
 
         if not candidates:
             logger.debug("No candidates retrieved for question: %r", question[:80])
@@ -170,6 +169,10 @@ class RagService:
                 top_score,
                 self.config.answer_min_confidence,
             )
+            return self._fallback_response(include_context=include_context)
+
+        if not self._has_support_overlap(question, results):
+            logger.info("Retrieved chunks have weak lexical overlap with question -> fallback")
             return self._fallback_response(include_context=include_context)
 
         # 4. Generate answer via Groq
@@ -207,6 +210,29 @@ class RagService:
             contexts=[] if include_context else None,
         )
 
+    def _retrieve_candidates(
+        self,
+        question: str,
+        filters: dict | None,
+        top_k: int,
+        min_score: float,
+    ) -> list[RetrievalResult]:
+        try:
+            return self.retriever.retrieve(
+                question=question,
+                filters=filters,
+                candidate_k=self.config.retrieval_candidate_k,
+                top_k=top_k if self.reranker is None else self.config.retrieval_candidate_k,
+                min_score=min_score if self.reranker is None else 0.0,
+            )
+        except TypeError:
+            return self.retriever.retrieve(
+                question=question,
+                filters=filters,
+                top_k=top_k,
+                min_score=min_score,
+            )
+
     @staticmethod
     def _validate_citations(answer: str, context_count: int) -> str:
         """Remove citation references [N] that exceed available context chunks.
@@ -220,6 +246,27 @@ class RagService:
             return match.group(0)
 
         return re.sub(r"\[(\d+)\]", _replace, answer).strip()
+
+    @staticmethod
+    def _has_support_overlap(question: str, results: list[RetrievalResult]) -> bool:
+        question_tokens = RagService._content_tokens(question)
+        if not question_tokens:
+            return True
+
+        context_tokens: set[str] = set()
+        for result in results:
+            context_tokens.update(RagService._content_tokens(result.content))
+
+        return len(question_tokens & context_tokens) > 0
+
+    @staticmethod
+    def _content_tokens(text: str) -> set[str]:
+        normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", normalized)
+            if len(token) >= 3 and token not in {"cho", "cua", "khi", "hay", "the", "nao", "voi", "mot", "cac"}
+        }
 
     def _contexts(self, results: list[RetrievalResult]) -> list[RagContext]:
         contexts: list[RagContext] = []
