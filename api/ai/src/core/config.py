@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     ai_service_host: str = "0.0.0.0"
     ai_service_port: int = 8000
     ai_root_path: str = ""
+    ai_service_token: str | None = None
+    ai_admin_token: str | None = None
+    ai_internal_secret: str | None = None
+    nestjs_base_url: str = "http://localhost:3000"
+    nestjs_api_prefix: str = "/api/v1"
+    redis_url: str | None = None
 
     documents_dir: str = "D:/Workspace/UIT-document-normalized"
     database_url: str | None = None
@@ -28,6 +34,30 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"
     llm_model: str = "llama-3.1-8b-instant"
     groq_key: str | None = Field(default=None, validation_alias="GROQ_KEY")
+    agent_model: str = "gemini-2.5-flash"
+    agent_db_schema: str = "agent"
+    agent_actions_enabled: bool = False
+    agent_confirmation_ttl_seconds: int = 300
+    agent_max_tool_steps: int = 5
+    agent_max_read_tool_calls: int = 4
+    agent_max_message_chars: int = 4000
+    agent_max_session_id_chars: int = 128
+    agent_max_argument_bytes: int = 16_384
+    agent_max_tool_result_bytes: int = 32_768
+    agent_max_answer_chars: int = 8000
+    agent_max_list_items: int = 50
+    agent_llm_timeout_seconds: float = 15.0
+    agent_total_timeout_seconds: float = 30.0
+    agent_query_rate_limit_per_minute: int = 20
+    agent_confirm_rate_limit_per_minute: int = 10
+    agent_rag_rate_limit_per_minute: int = 60
+    agent_ingest_rate_limit_per_hour: int = 2
+    agent_max_concurrent_requests_per_user: int = 3
+    agent_argument_retention_hours: int = 24
+    agent_proposal_retention_days: int = 30
+    agent_audit_retention_days: int = 90
+    agent_enabled_action_risk_levels: str = ""
+    agent_enabled_action_tools: str = ""
 
     chunk_max_tokens: int = 700
     chunk_overlap_tokens: int = 100
