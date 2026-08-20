@@ -2,9 +2,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.core.config import settings
+
 
 class RagQueryRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=settings.agent_max_message_chars)
     filters: dict[str, str | bool | int | float] = Field(default_factory=dict)
     top_k: int = Field(default=6, ge=1, le=30)
     min_score: float = Field(default=0.15, ge=0.0, le=1.0)
@@ -47,7 +49,7 @@ class IngestRebuildResponse(BaseModel):
 
 
 class IngestFileRequest(BaseModel):
-    path: str = Field(min_length=1)
+    path: str = Field(min_length=1, max_length=1024)
 
 
 class IngestFileResponse(BaseModel):
