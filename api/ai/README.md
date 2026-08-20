@@ -1,4 +1,10 @@
 # Smart Campus AI Service
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Docker-Staging-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/RAG-Architecture-FF6F00?style=for-the-badge&logo=databricks&logoColor=white" alt="RAG">
+</p>
 
 ## Structure
 
