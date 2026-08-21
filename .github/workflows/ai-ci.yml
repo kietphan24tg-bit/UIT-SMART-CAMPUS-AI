@@ -41,7 +41,7 @@ jobs:
     steps:
       - name: Trigger Coolify deploy
         env:
-          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_AI_DEPLOY_WEBHOOK }}
+          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
           if [ -z "$COOLIFY_DEPLOY_WEBHOOK" ]; then
