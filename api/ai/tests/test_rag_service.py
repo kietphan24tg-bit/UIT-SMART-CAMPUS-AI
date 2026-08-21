@@ -83,6 +83,21 @@ def test_rag_service_calls_llm_and_formats_citations():
     assert response.contexts and response.contexts[0].index == 1
     assert "[1]" in llm.calls[0]["user"]
     assert retriever.calls[0]["top_k"] == 3
+    assert response.citations[0].index is None
+
+
+def test_retrieve_evidence_returns_contexts_without_calling_llm():
+    llm = FakeLlm()
+    service = RagService(retriever=FakeRetriever([_result()]), llm_client=llm)
+
+    evidence = service.retrieve_evidence("Dieu kien du thi la gi?", top_k=2)
+    response = evidence.to_response()
+
+    assert evidence.found is True
+    assert response.retrieved_count == 1
+    assert response.contexts[0].index == 1
+    assert response.citations[0].index == 1
+    assert llm.calls == []
 
 
 def test_rag_service_falls_back_when_context_has_no_support_overlap():

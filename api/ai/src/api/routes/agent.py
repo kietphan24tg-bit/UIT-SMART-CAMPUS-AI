@@ -15,6 +15,7 @@ from src.agent.executor import (
     agent,
 )
 from src.agent.proposals import ToolProposal
+from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser, CurrentUser
 from src.core.config import settings
 from src.core.limits import RateLimitPolicy, guardrail_store
@@ -43,6 +44,7 @@ class AgentQueryResponse(BaseModel):
     answer_type: str
     answer: str
     proposal: AgentProposalResponse | None = None
+    citations: list[Citation] = Field(default_factory=list)
     trace: list["AgentTraceStepResponse"] = Field(default_factory=list)
 
 
@@ -114,6 +116,7 @@ def query_agent(
         answer_type=result.answer_type,
         answer=result.answer,
         proposal=proposal,
+        citations=result.citations or [],
         trace=trace,
     )
 

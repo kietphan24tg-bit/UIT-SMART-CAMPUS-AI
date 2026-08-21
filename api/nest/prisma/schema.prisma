@@ -1,0 +1,1120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  student
+  lecturer
+  canteen_admin
+  admin
+  super_admin
+}
+
+enum SubscriptionStatus {
+  inactive
+  pending
+  active
+  expired
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  cancelled
+  expired
+}
+
+enum ParkingSessionStatus {
+  active
+  completed
+}
+
+enum ScheduleSessionType {
+  daytime
+  evening
+}
+
+enum AttendanceSessionStatus {
+  active
+  closed
+  expired
+}
+
+enum RoomType {
+  classroom
+  lab
+  meeting
+}
+
+enum RoomStatus {
+  active
+  maintenance
+}
+
+enum RoomBookingStatus {
+  pending
+  approved
+  booked
+  maintenance
+  rejected
+  cancelled
+}
+
+enum RoomScheduleOverrideType {
+  manual
+  maintenance
+  cancel_class
+  move_class
+}
+
+enum EnrollmentStatus {
+  active
+  dropped
+}
+
+enum EventStatus {
+  planned
+  open
+  closed
+}
+
+enum EventCategory {
+  workshop
+  seminar
+  community
+  club
+}
+
+enum LibraryBookCopyStatus {
+  available
+  reserved
+  borrowed
+  maintenance
+  lost
+}
+
+enum LibraryLoanStatus {
+  borrowed
+  returned
+  overdue
+}
+
+enum LibraryLoanRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum LibraryReservationStatus {
+  active
+  fulfilled
+  cancelled
+  expired
+}
+
+enum CanteenOrderStatus {
+  pending_payment
+  paid
+  completed
+  cancelled
+  payment_failed
+}
+
+enum CanteenPaymentStatus {
+  pending
+  paid
+  failed
+  cancelled
+  expired
+}
+
+enum SosRequestStatus {
+  active
+  cancelled
+  resolved
+  expired
+}
+
+enum KnowledgeDocumentSource {
+  manual
+  faq
+  policy
+  service
+}
+
+enum StudyMaterialCategory {
+  exam
+  textbook
+  other
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  studentId       String?   @unique @map("student_id")
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  avatarUrl       String?   @map("avatar_url")
+  role            Role      @default(student)
+  faculty         String?
+  major           String?
+  yearOfAdmission Int?      @map("year_of_admission")
+  phone           String?
+  dateOfBirth     DateTime? @map("date_of_birth")
+  address         String?
+  isActive        Boolean   @default(true) @map("is_active")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens         RefreshToken[]
+  passwordResetOtps     PasswordResetOtp[]
+  scheduleItems         ScheduleItem[]
+  grades                Grade[]
+  notifications         Notification[]
+  pushTokens            UserDevicePushToken[]
+  attendanceSessions    AttendanceSession[]
+  attendanceRecords     AttendanceRecord[]
+  vehicles              Vehicle[]
+  roomBookings          RoomBooking[]         @relation("RoomBookingsCreatedBy")
+  approvedRoomBookings  RoomBooking[]         @relation("RoomBookingsApprovedBy")
+  createdRoomScheduleOverrides RoomScheduleOverride[] @relation("RoomScheduleOverrideCreator")
+  lecturedClassSections ClassSection[]
+  classEnrollments      ClassEnrollment[]     @relation("ClassEnrollmentStudent")
+  createdEvents         Event[]               @relation("EventOwner")
+  eventRegistrations    EventRegistration[]
+  libraryLoans          LibraryLoan[]
+  libraryLoanRequests   LibraryLoanRequest[] @relation("LibraryLoanRequestRequester")
+  approvedLoanRequests  LibraryLoanRequest[] @relation("LibraryLoanRequestApprover")
+  libraryReservations   LibraryReservation[]
+  createdCanteenOrders  CanteenOrder[]        @relation("CanteenOrderCreatedBy")
+  managedCanteenOrders  CanteenOrder[]        @relation("CanteenOrderCompletedBy")
+  sosRequests           SosRequest[]          @relation("SosRequestRequester")
+  resolvedSosRequests   SosRequest[]          @relation("SosRequestResolver")
+  chatbotSessions       ChatSession[]
+  chatbotMessages       ChatMessage[]
+  uploadedStudyMaterials StudyMaterial[]
+
+  @@map("users")
+}
+
+model Building {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  floors Floor[]
+
+  @@map("buildings")
+}
+
+model Floor {
+  id          String   @id @default(uuid())
+  buildingId  String   @map("building_id")
+  floorNumber Int      @map("floor_number")
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms    Room[]
+
+  @@unique([buildingId, floorNumber])
+  @@map("floors")
+}
+
+model Room {
+  id        String     @id @default(uuid())
+  floorId   String     @map("floor_id")
+  roomCode  String     @unique @map("room_code")
+  name      String?
+  capacity  Int
+  type      RoomType
+  status    RoomStatus @default(active)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  floor            Floor              @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  roomBookings     RoomBooking[]
+  roomBookingSlots RoomBookingSlot[]
+  scheduleOverrides RoomScheduleOverride[]
+
+  @@index([floorId, status])
+  @@map("rooms")
+}
+
+model TimeSlot {
+  id         String   @id @default(uuid())
+  slotNumber Int      @unique @map("slot_number")
+  label      String
+  startTime  String   @map("start_time")
+  endTime    String   @map("end_time")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  roomBookings     RoomBooking[]
+  roomBookingSlots RoomBookingSlot[]
+  scheduleOverrides RoomScheduleOverride[]
+
+  @@map("time_slots")
+}
+
+model RoomBooking {
+  id             String            @id @default(uuid())
+  roomId         String            @map("room_id")
+  userId         String            @map("user_id")
+  bookingDate    DateTime          @map("booking_date") @db.Date
+  timeSlotId     String?           @map("time_slot_id")
+  startTime      String?           @map("start_time")
+  endTime        String?           @map("end_time")
+  title          String?
+  purpose        String
+  attendeeCount  Int?              @map("attendee_count")
+  contactName    String?           @map("contact_name")
+  contactPhone   String?           @map("contact_phone")
+  departmentName String?           @map("department_name")
+  status         RoomBookingStatus @default(pending)
+  approvedById   String?           @map("approved_by_id")
+  approvedAt     DateTime?         @map("approved_at")
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  room       Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User      @relation("RoomBookingsCreatedBy", fields: [userId], references: [id], onDelete: Cascade)
+  timeSlot   TimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
+  approvedBy User?     @relation("RoomBookingsApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  bookingSlots RoomBookingSlot[]
+
+  @@unique([roomId, bookingDate, timeSlotId])
+  @@index([roomId, bookingDate, status])
+  @@index([userId, bookingDate])
+  @@index([timeSlotId])
+  @@map("room_bookings")
+}
+
+model RoomBookingSlot {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  roomId      String   @map("room_id")
+  bookingDate DateTime @map("booking_date") @db.Date
+  timeSlotId  String   @map("time_slot_id")
+  slotOrder   Int      @map("slot_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  booking  RoomBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timeSlot TimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, timeSlotId])
+  @@unique([bookingId, slotOrder])
+  @@unique([roomId, bookingDate, timeSlotId])
+  @@index([timeSlotId])
+  @@map("room_booking_slots")
+}
+
+model PasswordResetOtp {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt, expiresAt])
+  @@map("password_reset_otps")
+}
+
+model RegistrationChallenge {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  studentId         String    @map("student_id")
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  otpHash           String    @map("otp_hash")
+  expiresAt         DateTime  @map("expires_at")
+  resendAvailableAt DateTime  @map("resend_available_at")
+  failedAttempts    Int       @default(0) @map("failed_attempts")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  lastSentAt        DateTime  @map("last_sent_at")
+  consumedAt        DateTime? @map("consumed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([studentId, consumedAt, expiresAt])
+  @@index([expiresAt])
+  @@map("registration_challenges")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Semester {
+  id           String   @id @default(uuid())
+  name         String
+  academicYear String   @map("academic_year")
+  term         Int      @map("term")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  isCurrent    Boolean  @default(false) @map("is_current")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  classSections ClassSection[]
+  grades        Grade[]
+
+  @@map("semesters")
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  credits     Int
+  description String?
+  faculty     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  classSections ClassSection[]
+  grades        Grade[]
+
+  @@map("courses")
+}
+
+model ClassSection {
+  id               String   @id @default(uuid())
+  semesterId       String   @map("semester_id")
+  courseId         String   @map("course_id")
+  lecturerId       String?  @map("lecturer_id")
+  classCode        String   @unique @map("class_code")
+  sectionCode      String   @map("section_code")
+  note             String?
+  capacity         Int      @default(40)
+  processWeight    Float?   @default(20) @map("process_weight")
+  practiceWeight   Float?   @default(20) @map("practice_weight")
+  midtermWeight    Float?   @default(20) @map("midterm_weight")
+  finalWeight      Float?   @default(40) @map("final_weight")
+  registrationOpen Boolean  @default(true) @map("registration_open")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  semester           Semester            @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturer           User?               @relation(fields: [lecturerId], references: [id], onDelete: SetNull)
+  meetings           ClassMeeting[]
+  enrollments        ClassEnrollment[]
+  scheduleItems      ScheduleItem[]
+  attendanceSessions AttendanceSession[]
+
+  @@unique([semesterId, courseId, sectionCode])
+  @@index([lecturerId, semesterId])
+  @@map("class_sections")
+}
+
+model ClassMeeting {
+  id             String              @id @default(uuid())
+  classSectionId String              @map("class_section_id")
+  dayOfWeek      Int                 @map("day_of_week")
+  room           String?
+  startTime      String              @map("start_time")
+  endTime        String              @map("end_time")
+  startPeriod    Int?                @map("start_period")
+  endPeriod      Int?                @map("end_period")
+  sessionType    ScheduleSessionType @default(daytime) @map("session_type")
+  note           String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  scheduleOverrides RoomScheduleOverride[] @relation("RoomScheduleOverrideClassMeeting")
+
+  @@index([classSectionId, dayOfWeek, startTime])
+  @@map("class_meetings")
+}
+
+model ClassEnrollment {
+  id             String           @id @default(uuid())
+  studentId      String           @map("student_id")
+  classSectionId String           @map("class_section_id")
+  status         EnrollmentStatus @default(active)
+  registeredAt   DateTime         @default(now()) @map("registered_at")
+  droppedAt      DateTime?        @map("dropped_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  student      User         @relation("ClassEnrollmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classSectionId])
+  @@index([classSectionId, status])
+  @@map("class_enrollments")
+}
+
+model AttendanceSession {
+  id             String                  @id @default(uuid())
+  classSectionId String                  @map("class_section_id")
+  lecturerId     String                  @map("lecturer_id")
+  status         AttendanceSessionStatus @default(active)
+  startedAt      DateTime                @default(now()) @map("started_at")
+  expiresAt      DateTime                @map("expires_at")
+  closedAt       DateTime?               @map("closed_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  classSection ClassSection       @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  lecturer     User               @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  records      AttendanceRecord[]
+
+  @@index([classSectionId, startedAt])
+  @@index([lecturerId, status])
+  @@index([status, expiresAt])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  studentId   String   @map("student_id")
+  checkinTime DateTime @default(now()) @map("checkin_time")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId, checkinTime])
+  @@map("attendance_records")
+}
+
+model ScheduleItem {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  classSectionId String              @map("class_section_id")
+  instructor     String?
+  room           String?
+  dayOfWeek      Int                 @map("day_of_week")
+  startTime      String              @map("start_time")
+  endTime        String              @map("end_time")
+  startPeriod    Int?                @map("start_period")
+  endPeriod      Int?                @map("end_period")
+  sessionType    ScheduleSessionType @default(daytime) @map("session_type")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayOfWeek, startTime])
+  @@map("schedule_items")
+}
+
+model Grade {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  courseId      String   @map("course_id")
+  semesterId    String   @map("semester_id")
+  midterm       Float?
+  finalExam     Float?   @map("final_exam")
+  assignment    Float?
+  processScore  Float?   @map("process_score")
+  practiceScore Float?   @map("practice_score")
+  midtermScore  Float?   @map("midterm_score")
+  finalScore    Float?   @map("final_score")
+  totalScore    Float?   @map("total_score")
+  letterGrade   String?  @map("letter_grade")
+  gradePoint    Float?   @map("grade_point")
+  isExempt      Boolean  @default(false) @map("is_exempt")
+  earnedCredits Int      @default(0) @map("earned_credits")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseId], references: [id])
+  semester Semester @relation(fields: [semesterId], references: [id])
+
+  @@unique([userId, courseId, semesterId])
+  @@map("grades")
+}
+
+model RoomScheduleOverride {
+  id                   String                   @id @default(uuid())
+  roomId               String                   @map("room_id")
+  overrideDate         DateTime                 @map("override_date") @db.Date
+  timeSlotId           String                   @map("time_slot_id")
+  type                 RoomScheduleOverrideType
+  title                String
+  note                 String?
+  sourceClassMeetingId String?                  @map("source_class_meeting_id")
+  createdById          String                   @map("created_by_id")
+  createdAt            DateTime                 @default(now()) @map("created_at")
+  updatedAt            DateTime                 @updatedAt @map("updated_at")
+
+  room               Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  timeSlot           TimeSlot     @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  sourceClassMeeting ClassMeeting? @relation("RoomScheduleOverrideClassMeeting", fields: [sourceClassMeetingId], references: [id], onDelete: SetNull)
+  createdBy          User         @relation("RoomScheduleOverrideCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([roomId, overrideDate, timeSlotId])
+  @@index([sourceClassMeetingId, overrideDate])
+  @@index([createdById, createdAt])
+  @@map("room_schedule_overrides")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  body      String
+  type      String   @default("general")
+  isRead    Boolean  @default(false) @map("is_read")
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model LibraryBook {
+  id          String   @id @default(uuid())
+  openLibraryId String? @unique @map("open_library_id")
+  isbn13      String?  @unique @map("isbn_13")
+  title       String
+  subtitle    String?
+  authors     String
+  subjects    String[]
+  publisher   String?
+  publishedAt String?  @map("published_at")
+  language    String?
+  coverUrl    String?  @map("cover_url")
+  description String?
+  shelfCode   String?  @map("shelf_code")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  copies        LibraryBookCopy[]
+  loanRequests  LibraryLoanRequest[]
+  reservations  LibraryReservation[]
+
+  @@index([title])
+  @@index([isActive])
+  @@map("library_books")
+}
+
+model LibraryBookCopy {
+  id           String                @id @default(uuid())
+  bookId       String                @map("book_id")
+  copyCode     String                @unique @map("copy_code")
+  status       LibraryBookCopyStatus @default(available)
+  acquiredAt   DateTime?             @map("acquired_at")
+  conditionNote String?              @map("condition_note")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  book         LibraryBook          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  loans        LibraryLoan[]
+  loanRequests LibraryLoanRequest[]
+
+  @@index([bookId, status])
+  @@map("library_book_copies")
+}
+
+model LibraryLoan {
+  id             String            @id @default(uuid())
+  copyId         String            @map("copy_id")
+  borrowerId     String            @map("borrower_id")
+  status         LibraryLoanStatus @default(borrowed)
+  borrowedAt     DateTime          @default(now()) @map("borrowed_at")
+  dueAt          DateTime          @map("due_at")
+  returnedAt     DateTime?         @map("returned_at")
+  renewedCount   Int               @default(0) @map("renewed_count")
+  borrowNote     String?           @map("borrow_note")
+  returnNote     String?           @map("return_note")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  copy     LibraryBookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  borrower User            @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  @@index([borrowerId, status])
+  @@index([copyId, status])
+  @@map("library_loans")
+}
+
+model LibraryLoanRequest {
+  id          String                   @id @default(uuid())
+  requesterId String                   @map("requester_id")
+  approvedById String?                 @map("approved_by_id")
+  bookId      String                   @map("book_id")
+  copyId      String                   @map("copy_id")
+  status      LibraryLoanRequestStatus @default(pending)
+  note        String?
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  approvedAt  DateTime?                @map("approved_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  requester User            @relation("LibraryLoanRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  approvedBy User?          @relation("LibraryLoanRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  book       LibraryBook    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  copy       LibraryBookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, status])
+  @@index([approvedById, status])
+  @@index([bookId, status])
+  @@index([copyId, status])
+  @@map("library_loan_requests")
+}
+
+model LibraryReservation {
+  id          String                   @id @default(uuid())
+  bookId      String                   @map("book_id")
+  requesterId String                   @map("requester_id")
+  status      LibraryReservationStatus @default(active)
+  note        String?
+  expiresAt   DateTime                 @map("expires_at")
+  fulfilledAt DateTime?                @map("fulfilled_at")
+  cancelledAt DateTime?                @map("cancelled_at")
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  book      LibraryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  requester User        @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, status])
+  @@index([bookId, status])
+  @@map("library_reservations")
+}
+
+model CanteenCategory {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  products CanteenProduct[]
+
+  @@index([isActive, sortOrder])
+  @@map("canteen_categories")
+}
+
+model CanteenProduct {
+  id          String   @id @default(uuid())
+  categoryId  String   @map("category_id")
+  name        String
+  slug        String   @unique
+  description String?
+  imageUrl    String?  @map("image_url")
+  price       Int
+  stock       Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category   CanteenCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems CanteenOrderItem[]
+
+  @@index([categoryId, isActive, sortOrder])
+  @@map("canteen_products")
+}
+
+model CanteenOrder {
+  id             String            @id @default(uuid())
+  orderCode      String            @unique @map("order_code")
+  createdById    String            @map("created_by_id")
+  completedById  String?           @map("completed_by_id")
+  status         CanteenOrderStatus @default(pending_payment)
+  totalAmount    Int               @map("total_amount")
+  note           String?
+  completedAt    DateTime?         @map("completed_at")
+  cancelledAt    DateTime?         @map("cancelled_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  createdBy  User                       @relation("CanteenOrderCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  completedBy User?                     @relation("CanteenOrderCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  items      CanteenOrderItem[]
+  payments   CanteenPaymentTransaction[]
+
+  @@index([createdById, status])
+  @@index([status, createdAt])
+  @@map("canteen_orders")
+}
+
+model CanteenOrderItem {
+  id         String   @id @default(uuid())
+  orderId    String   @map("order_id")
+  productId  String   @map("product_id")
+  productName String  @map("product_name")
+  unitPrice  Int      @map("unit_price")
+  quantity   Int
+  lineTotal  Int      @map("line_total")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  order   CanteenOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product CanteenProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("canteen_order_items")
+}
+
+model CanteenPaymentTransaction {
+  id               String               @id @default(uuid())
+  orderId          String               @map("order_id")
+  provider         String
+  providerOrderId  String               @unique @map("provider_order_id")
+  requestId        String?              @unique @map("request_id")
+  amount           Int
+  status           CanteenPaymentStatus @default(pending)
+  checkoutUrl      String?              @map("checkout_url")
+  requestPayload   Json?                @map("request_payload")
+  responsePayload  Json?                @map("response_payload")
+  paidAt           DateTime?            @map("paid_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  order CanteenOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, status])
+  @@map("canteen_payment_transactions")
+}
+
+model SosRequest {
+  id              String           @id @default(uuid())
+  requesterId     String           @map("requester_id")
+  resolverId      String?          @map("resolver_id")
+  status          SosRequestStatus @default(active)
+  latitude        Float
+  longitude       Float
+  accuracyMeters  Float?           @map("accuracy_meters")
+  addressSnapshot String?          @map("address_snapshot")
+  contactSnapshot Json?            @map("contact_snapshot")
+  note            String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  resolvedAt      DateTime?        @map("resolved_at")
+  expiresAt       DateTime         @map("expires_at")
+
+  requester User  @relation("SosRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  resolver  User? @relation("SosRequestResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requesterId, status])
+  @@map("sos_requests")
+}
+
+model KnowledgeDocument {
+  id          String                  @id @default(uuid())
+  slug        String                  @unique
+  title       String
+  source      KnowledgeDocumentSource @default(manual)
+  sourceUrl   String?                 @map("source_url")
+  contentText String                  @map("content_text")
+  isActive    Boolean                 @default(true) @map("is_active")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  chunks KnowledgeChunk[]
+
+  @@index([isActive])
+  @@map("knowledge_documents")
+}
+
+model StudyMaterial {
+  id            String                @id @default(uuid())
+  title         String
+  description   String?
+  category      StudyMaterialCategory
+  fileUrl       String                @map("file_url")
+  storageKey    String                @map("storage_key")
+  fileName      String                @map("file_name")
+  mimeType      String                @map("mime_type")
+  fileSizeBytes Int                   @map("file_size_bytes")
+  uploaderId    String                @map("uploader_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  uploader User @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([uploaderId, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
+  @@map("study_materials")
+}
+
+model KnowledgeChunk {
+  id            String   @id @default(uuid())
+  documentId    String   @map("document_id")
+  chunkIndex    Int      @map("chunk_index")
+  contentText   String   @map("content_text")
+  keywordTokens String[] @map("keyword_tokens")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([keywordTokens], type: Gin)
+  @@map("knowledge_chunks")
+}
+
+model ChatSession {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  title      String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  sessionId  String   @map("session_id")
+  userId     String   @map("user_id")
+  role       String
+  content    String
+  intent     String?
+  confidence Float?
+  citations  Json?
+  deepLinks  Json?    @map("deep_links")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
+model Event {
+  id            String        @id @default(uuid())
+  ownerId       String        @map("owner_id")
+  slug          String        @unique
+  title         String
+  excerpt       String
+  location      String
+  contentHtml   String        @map("content_html")
+  coverImageUrl String?       @map("cover_image_url")
+  status        EventStatus   @default(planned)
+  category      EventCategory @default(workshop)
+  startAt       DateTime      @map("start_at")
+  endAt         DateTime      @map("end_at")
+  maxAttendees  Int?          @map("max_attendees")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  owner         User                @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  registrations EventRegistration[]
+
+  @@index([status, startAt])
+  @@map("events")
+}
+
+model EventRegistration {
+  id           String    @id @default(uuid())
+  eventId      String    @map("event_id")
+  userId       String    @map("user_id")
+  registeredAt DateTime  @default(now()) @map("registered_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  checkedInAt  DateTime? @map("checked_in_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId, registeredAt])
+  @@map("event_registrations")
+}
+
+model UserDevicePushToken {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  expoPushToken String   @map("expo_push_token")
+  platform      String
+  deviceId      String?  @map("device_id")
+  isActive      Boolean  @default(true) @map("is_active")
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, expoPushToken])
+  @@index([userId])
+  @@map("user_device_push_tokens")
+}
+
+model Vehicle {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  plateNumber String   @unique @map("plate_number")
+  rfidTag     String   @unique @map("rfid_tag")
+  label       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription        ParkingSubscription?
+  parkingSessions     ParkingSession[]
+  paymentTransactions PaymentTransaction[]
+
+  @@index([userId])
+  @@map("vehicles")
+}
+
+model ParkingSubscription {
+  id            String             @id @default(uuid())
+  vehicleId     String             @unique @map("vehicle_id")
+  monthlyFee    Int                @default(40000) @map("monthly_fee")
+  status        SubscriptionStatus @default(inactive)
+  startDate     DateTime?          @map("start_date")
+  endDate       DateTime?          @map("end_date")
+  lastPaymentAt DateTime?          @map("last_payment_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  vehicle  Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  payments PaymentTransaction[]
+
+  @@map("parking_subscriptions")
+}
+
+model PaymentTransaction {
+  id              String        @id @default(uuid())
+  vehicleId       String        @map("vehicle_id")
+  subscriptionId  String?       @map("subscription_id")
+  provider        String
+  providerOrderId String        @unique @map("provider_order_id")
+  requestId       String?       @unique @map("request_id")
+  amount          Int
+  status          PaymentStatus @default(pending)
+  checkoutUrl     String?       @map("checkout_url")
+  requestPayload  Json?         @map("request_payload")
+  responsePayload Json?         @map("response_payload")
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  vehicle      Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  subscription ParkingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, status])
+  @@map("payment_transactions")
+}
+
+model PaymentWebhookEvent {
+  id              String   @id @default(uuid())
+  provider        String
+  providerEventId String   @map("provider_event_id")
+  providerOrderId String   @map("provider_order_id")
+  payload         Json
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, providerEventId])
+  @@index([providerOrderId])
+  @@map("payment_webhook_events")
+}
+
+model ParkingSession {
+  id                   String               @id @default(uuid())
+  vehicleId            String               @map("vehicle_id")
+  gateId               String               @map("gate_id")
+  status               ParkingSessionStatus @default(active)
+  recognizedEntryPlate String               @map("recognized_entry_plate")
+  recognizedExitPlate  String?              @map("recognized_exit_plate")
+  entryTime            DateTime             @default(now()) @map("entry_time")
+  exitTime             DateTime?            @map("exit_time")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, status])
+  @@index([gateId, status])
+  @@map("parking_sessions")
+}
+
+model ParkingSlot {
+  id           String   @id @default(uuid())
+  gateId       String   @map("gate_id")
+  zone         String   @default("Main")
+  slotNumber   String   @map("slot_number")
+  isOccupied   Boolean  @default(false) @map("is_occupied")
+  vehiclePlate String?  @map("vehicle_plate")
+  lastUpdated  DateTime @default(now()) @map("last_updated")
+
+  @@unique([gateId, slotNumber])
+  @@index([gateId, isOccupied])
+  @@map("parking_slots")
+}
+
+model TelemetrySnapshot {
+  id           String   @id @default(uuid())
+  gateId       String   @map("gate_id")
+  deviceIp     String?  @map("device_ip")
+  slotBitmap   String?  @map("slot_bitmap")
+  slots        Json
+  temperature  Float?
+  humidity     Float?
+  rainDetected Boolean  @default(false) @map("rain_detected")
+  fireDetected Boolean  @default(false) @map("fire_detected")
+  reportedAt   DateTime @map("reported_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  fireAlerts FireAlert[]
+
+  @@index([gateId, reportedAt])
+  @@map("telemetry_snapshots")
+}
+
+model FireAlert {
+  id                  String    @id @default(uuid())
+  gateId              String    @map("gate_id")
+  telemetrySnapshotId String?   @map("telemetry_snapshot_id")
+  message             String
+  isResolved          Boolean   @default(false) @map("is_resolved")
+  reportedAt          DateTime  @map("reported_at")
+  resolvedAt          DateTime? @map("resolved_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  telemetrySnapshot TelemetrySnapshot? @relation(fields: [telemetrySnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([gateId, reportedAt])
+  @@map("fire_alerts")
+}

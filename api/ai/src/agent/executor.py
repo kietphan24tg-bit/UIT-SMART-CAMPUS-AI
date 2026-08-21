@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from uuid import uuid4
 
@@ -21,6 +22,7 @@ from src.agent.proposals import (
 from src.agent.tools import ToolContext, ToolRegistry, build_tool_registry
 from src.agent.tools.base import AgentTool
 from src.agent.tools.results import ToolError, ToolResult
+from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser
 from src.core.config import settings
 from src.core.safety import fit_public_payload, limit_text
@@ -54,12 +56,12 @@ class SmartCampusAgent:
         normalized_message = message.strip()
         if len(normalized_message) > settings.agent_max_message_chars:
             return self._simple_answer(
-                "Cau hoi dang qua dai. Ban vui long chia nho noi dung hoac hoi cu the hon.",
+                "Câu hỏi đang quá dài. Bạn vui lòng chia nhỏ nội dung hoặc hỏi cụ thể hơn.",
                 request_id=request_id,
             )
         if session_id and len(session_id) > settings.agent_max_session_id_chars:
             return self._simple_answer(
-                "Session hien tai khong hop le. Ban vui long bat dau lai cuoc hoi thoai.",
+                "Session hiện tại không hợp lệ. Bạn vui lòng bắt đầu lại cuộc hội thoại.",
                 request_id=request_id,
             )
 
@@ -78,11 +80,13 @@ class SmartCampusAgent:
         trace = [
             AgentTraceStep(
                 type="analysis",
-                label="Da phan tich yeu cau",
+                label="Đã phân tích yêu cầu",
                 status="completed",
             )
         ]
         read_calls = 0
+        rag_calls = 0
+        rag_citations: list[Citation] = []
         seen_fingerprints: set[str] = set()
 
         for _ in range(settings.agent_max_tool_steps):
@@ -98,14 +102,19 @@ class SmartCampusAgent:
             except Exception:
                 logger.exception("Agent generation failed")
                 return self._simple_answer(
-                    "Toi chua the xu ly yeu cau nay on dinh luc nay. Ban vui long thu lai sau.",
+                    "Tôi chưa thể xử lý yêu cầu này ổn định lúc này. Bạn vui lòng thử lại sau.",
                     trace=trace,
                     request_id=request_id,
                 )
 
             function_calls = list(response.function_calls or [])
             if not function_calls:
-                text = limit_text((response.text or "").strip() or self._fallback_answer(), settings.agent_max_answer_chars)
+                raw_text = (response.text or "").strip() or self._fallback_answer()
+                text = limit_text(
+                    self._validate_citations(raw_text, len(rag_citations)),
+                    settings.agent_max_answer_chars,
+                )
+                citations = self._used_citations(text, rag_citations)
                 self._audit(
                     event_type="agent_answer",
                     request_id=request_id,
@@ -116,13 +125,14 @@ class SmartCampusAgent:
                 return AgentQueryResult(
                     answer_type="answer",
                     answer=text,
-                    trace=[*trace, AgentTraceStep(type="answer", label="Da tong hop cau tra loi", status="completed")],
+                    citations=citations,
+                    trace=[*trace, AgentTraceStep(type="answer", label="Đã tổng hợp câu trả lời", status="completed")],
                 )
 
             if len(function_calls) != 1:
                 return self._simple_answer(
-                    "Toi can xu ly tung thao tac mot de tranh nham lan. Ban vui long yeu cau tung viec rieng.",
-                    trace=[*trace, AgentTraceStep(type="analysis", label="Khong the xu ly nhieu thao tac cung luc", status="failed")],
+                    "Tôi cần xử lý từng thao tác một để tránh nhầm lẫn. Bạn vui lòng yêu cầu từng việc riêng.",
+                    trace=[*trace, AgentTraceStep(type="analysis", label="Không thể xử lý nhiều thao tác cùng lúc", status="failed")],
                     request_id=request_id,
                 )
 
@@ -130,8 +140,8 @@ class SmartCampusAgent:
             tool = self._get_tool(call.name)
             if tool is None:
                 return self._simple_answer(
-                    "Toi chua the xu ly yeu cau nay mot cach an toan trong luc nay.",
-                    trace=[*trace, AgentTraceStep(type="analysis", label="Khong tim thay cong cu phu hop", status="failed")],
+                    "Tôi chưa thể xử lý yêu cầu này một cách an toàn trong lúc này.",
+                    trace=[*trace, AgentTraceStep(type="analysis", label="Không tìm thấy công cụ phù hợp", status="failed")],
                     request_id=request_id,
                 )
 
@@ -139,36 +149,58 @@ class SmartCampusAgent:
                 validated = tool.validate_arguments(dict(call.args or {}))
             except (ValidationError, ValueError):
                 return self._simple_answer(
-                    "Toi chua du thong tin de thuc hien yeu cau nay. Ban vui long noi ro hon giup toi.",
-                    trace=[*trace, AgentTraceStep(type="analysis", label="Thieu thong tin can thiet", status="failed")],
+                    "Tôi chưa đủ thông tin để thực hiện yêu cầu này. Bạn vui lòng nói rõ hơn giúp tôi.",
+                    trace=[*trace, AgentTraceStep(type="analysis", label="Thiếu thông tin cần thiết", status="failed")],
                     request_id=request_id,
                 )
 
             if context.role not in tool.allowed_roles:
                 return self._simple_answer(
-                    "Tai khoan hien tai khong co quyen thuc hien yeu cau nay.",
-                    trace=[*trace, AgentTraceStep(type="analysis", label="Khong du quyen su dung cong cu", status="failed")],
+                    "Tài khoản hiện tại không có quyền thực hiện yêu cầu này.",
+                    trace=[*trace, AgentTraceStep(type="analysis", label="Không đủ quyền sử dụng công cụ", status="failed")],
                     request_id=request_id,
                 )
 
             fingerprint = self._tool_fingerprint(tool, validated)
             if tool.operation_type.value == "read":
+                if tool.name == "search_university_policies":
+                    rag_calls += 1
+                    if rag_calls > 1:
+                        return self._simple_answer(
+                            "Tôi chỉ nên tra cứu tài liệu quy chế một lần trong mỗi lượt để tránh lặp nguồn và tăng nhiễu.",
+                            trace=[*trace, AgentTraceStep(type="analysis", label="Đã dừng lặp lại tra cứu quy chế", status="failed")],
+                            request_id=request_id,
+                        )
                 if fingerprint in seen_fingerprints:
                     return self._simple_answer(
-                        "Toi dang lap lai cung mot tra cuu ma van khong co them thong tin chac chan. Ban vui long doi cau hoi cu the hon.",
-                        trace=[*trace, AgentTraceStep(type="analysis", label="Da dung vong lap tra cuu lap", status="failed")],
+                        "Tôi đang lặp lại cùng một tra cứu mà vẫn không có thêm thông tin chắc chắn. Bạn vui lòng đổi câu hỏi cụ thể hơn.",
+                        trace=[*trace, AgentTraceStep(type="analysis", label="Đã dừng vòng lặp tra cứu lặp", status="failed")],
                         request_id=request_id,
                     )
                 seen_fingerprints.add(fingerprint)
                 read_calls += 1
                 if read_calls > settings.agent_max_read_tool_calls:
                     return self._simple_answer(
-                        "Toi can dung lai de tranh goi qua nhieu cong cu trong mot luot. Ban vui long hoi cu the hon.",
-                        trace=[*trace, AgentTraceStep(type="analysis", label="Da dat gioi han tra cuu", status="failed")],
+                        "Tôi cần dừng lại để tránh gọi quá nhiều công cụ trong một lượt. Bạn vui lòng hỏi cụ thể hơn.",
+                        trace=[*trace, AgentTraceStep(type="analysis", label="Đã đạt giới hạn tra cứu", status="failed")],
                         request_id=request_id,
                     )
 
                 result = self._execute_read_tool(tool, context, validated, deadline)
+                if tool.name == "search_university_policies":
+                    if not result.ok:
+                        return self._simple_answer(
+                            "Tôi chưa thể tra cứu tài liệu quy chế ổn định lúc này. Bạn vui lòng thử lại sau.",
+                            trace=[*trace, AgentTraceStep(type="tool", label=tool.display_name, status="failed", tool=tool.name)],
+                            request_id=request_id,
+                        )
+                    if not self._rag_result_found(result):
+                        return self._simple_answer(
+                            "Mình chưa tìm thấy đủ căn cứ trong bộ tài liệu đã index để trả lời chắc chắn cho câu hỏi này.",
+                            trace=[*trace, AgentTraceStep(type="tool", label=tool.display_name, status="failed", tool=tool.name)],
+                            request_id=request_id,
+                        )
+                    rag_citations = self._rag_citations(result)
                 trace.append(
                     AgentTraceStep(
                         type="tool",
@@ -204,8 +236,8 @@ class SmartCampusAgent:
 
             if not tool.allows_action_for_message(normalized_message, validated):
                 return self._simple_answer(
-                    "Toi chua thay mot yeu cau hanh dong du ro rang trong cau hoi nay, nen tam thoi chua de xuat thao tac.",
-                    trace=[*trace, AgentTraceStep(type="analysis", label="Khong co intent hanh dong ro rang", status="failed")],
+                    "Tôi chưa thấy một yêu cầu hành động đủ rõ ràng trong câu hỏi này, nên tạm thời chưa đề xuất thao tác.",
+                    trace=[*trace, AgentTraceStep(type="analysis", label="Không có intent hành động rõ ràng", status="failed")],
                     request_id=request_id,
                 )
 
@@ -218,8 +250,8 @@ class SmartCampusAgent:
             )
 
         return self._simple_answer(
-            "Toi chua the hoan tat yeu cau trong mot luot an toan. Ban vui long thu lai voi cau hoi cu the hon.",
-            trace=[*trace, AgentTraceStep(type="analysis", label="Da dat gioi han buoc xu ly", status="failed")],
+            "Tôi chưa thể hoàn tất yêu cầu trong một lượt an toàn. Bạn vui lòng thử lại với câu hỏi cụ thể hơn.",
+            trace=[*trace, AgentTraceStep(type="analysis", label="Đã đạt giới hạn bước xử lý", status="failed")],
             request_id=request_id,
         )
 
@@ -290,7 +322,7 @@ class SmartCampusAgent:
                 metadata={"reason": "arguments_hash_mismatch"},
             )
             return AgentProposalExecutionResult(
-                answer="Toi khong the tiep tuc thao tac nay vi du lieu xac nhan khong con toan ven.",
+                answer="Tôi không thể tiếp tục thao tác này vì dữ liệu xác nhận không còn toàn vẹn.",
                 status=stored.status,
                 public_result={"ok": False, "error": error.model_dump(exclude_none=True)},
             )
@@ -304,7 +336,7 @@ class SmartCampusAgent:
                 error=tool_error_payload(error),
             )
             return AgentProposalExecutionResult(
-                answer="Khong the tiep tuc thao tac nay vi cong cu khong con kha dung.",
+                answer="Không thể tiếp tục thao tác này vì công cụ không còn khả dụng.",
                 status=stored.status,
                 public_result={"ok": False, "error": error.model_dump(exclude_none=True)},
             )
@@ -322,7 +354,7 @@ class SmartCampusAgent:
                 error=tool_error_payload(error),
             )
             return AgentProposalExecutionResult(
-                answer="Tinh nang thao tac nay hien chua duoc mo trong giai doan hien tai.",
+                answer="Tính năng thao tác này hiện chưa được mở trong giai đoạn hiện tại.",
                 status=stored.status,
                 public_result={"ok": False, "error": error.model_dump(exclude_none=True)},
             )
@@ -350,12 +382,12 @@ class SmartCampusAgent:
             answer = tool.success_message(validated, result)
         elif stored.status == "execution_unknown":
             answer = (
-                "Toi da gui thao tac nhung chua xac nhan duoc ket qua cuoi cung tu he thong. "
-                "Ban vui long kiem tra lai trang thai truoc khi thu lai."
+                "Tôi đã gửi thao tác nhưng chưa xác nhận được kết quả cuối cùng từ hệ thống. "
+                "Bạn vui lòng kiểm tra lại trạng thái trước khi thử lại."
             )
         else:
-            detail = result.error.message if result.error else "Khong ro nguyen nhan."
-            answer = f"Toi khong the hoan tat thao tac nay. {detail}"
+            detail = result.error.message if result.error else "Không rõ nguyên nhân."
+            answer = f"Tôi không thể hoàn tất thao tác này. {detail}"
 
         self._audit(
             event_type="proposal_confirm",
@@ -384,19 +416,19 @@ class SmartCampusAgent:
     ) -> AgentQueryResult:
         if not settings.agent_actions_enabled:
             return self._simple_answer(
-                "Tinh nang thao tac co xac nhan hien chua duoc bat. Ban tam thoi chi co the tra cuu du lieu.",
+                "Tính năng thao tác có xác nhận hiện chưa được bật. Bạn tạm thời chỉ có thể tra cứu dữ liệu.",
                 trace=[*trace, AgentTraceStep(type="confirmation", label=tool.display_name, status="failed", tool=tool.name)],
                 request_id=context.request_id,
             )
         if not self._is_action_enabled(tool):
             return self._simple_answer(
-                "Thao tac nay chua duoc mo trong giai doan hien tai.",
+                "Thao tác này chưa được mở trong giai đoạn hiện tại.",
                 trace=[*trace, AgentTraceStep(type="confirmation", label=tool.display_name, status="failed", tool=tool.name)],
                 request_id=context.request_id,
             )
         if not self.proposal_store.available:
             return self._simple_answer(
-                "Tinh nang thao tac dang tam thoi khong kha dung vi he thong chua cau hinh day du.",
+                "Tính năng thao tác đang tạm thời không khả dụng vì hệ thống chưa cấu hình đầy đủ.",
                 trace=[*trace, AgentTraceStep(type="confirmation", label=tool.display_name, status="failed", tool=tool.name)],
                 request_id=context.request_id,
             )
@@ -505,6 +537,42 @@ class SmartCampusAgent:
         payload = json.dumps(validated.model_dump(exclude_none=True), ensure_ascii=False, sort_keys=True)
         return f"{tool.name}:{payload}"
 
+    @staticmethod
+    def _rag_result_found(result: ToolResult) -> bool:
+        data = result.data if isinstance(result.data, dict) else {}
+        return bool(data.get("found"))
+
+    @staticmethod
+    def _rag_citations(result: ToolResult) -> list[Citation]:
+        data = result.data if isinstance(result.data, dict) else {}
+        citations = data.get("citations") or []
+        parsed: list[Citation] = []
+        for item in citations:
+            if isinstance(item, Citation):
+                parsed.append(item)
+            elif isinstance(item, dict):
+                parsed.append(Citation.model_validate(item))
+        return parsed
+
+    @staticmethod
+    def _validate_citations(answer: str, context_count: int) -> str:
+        def _replace(match: re.Match[str]) -> str:
+            index = int(match.group(1))
+            if 1 <= index <= context_count:
+                return match.group(0)
+            return ""
+
+        return re.sub(r"\[(\d+)\]", _replace, answer).strip()
+
+    @staticmethod
+    def _used_citations(answer: str, citations: list[Citation]) -> list[Citation]:
+        if not citations:
+            return []
+        used_indices = {int(match) for match in re.findall(r"\[(\d+)\]", answer)}
+        if not used_indices:
+            return []
+        return [citation for citation in citations if citation.index in used_indices]
+
     def _audit(
         self,
         *,
@@ -548,19 +616,21 @@ class SmartCampusAgent:
         return AgentQueryResult(
             answer_type="answer",
             answer=limit_text(answer, settings.agent_max_answer_chars),
-            trace=trace or [AgentTraceStep(type="analysis", label="Da phan tich yeu cau", status="completed")],
+            citations=[],
+            trace=trace or [AgentTraceStep(type="analysis", label="Đã phân tích yêu cầu", status="completed")],
         )
 
     def _timed_out_answer(self, trace: list[AgentTraceStep]) -> AgentQueryResult:
         return AgentQueryResult(
             answer_type="answer",
-            answer="Toi can dung lai de tranh xu ly qua lau trong mot luot. Ban vui long hoi cu the hon hoac thu lai sau.",
-            trace=[*trace, AgentTraceStep(type="analysis", label="Vuot qua thoi gian xu ly", status="failed")],
+            answer="Tôi cần dừng lại để tránh xử lý quá lâu trong một lượt. Bạn vui lòng hỏi cụ thể hơn hoặc thử lại sau.",
+            citations=[],
+            trace=[*trace, AgentTraceStep(type="analysis", label="Vượt quá thời gian xử lý", status="failed")],
         )
 
     @staticmethod
     def _fallback_answer() -> str:
-        return "Toi chua co du thong tin de tra loi ro rang luc nay."
+        return "Tôi chưa có đủ thông tin để trả lời rõ ràng lúc này."
 
     @staticmethod
     def _proposal_preview(proposal: ToolProposal) -> ProposalPreview:

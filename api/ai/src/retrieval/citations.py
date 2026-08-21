@@ -7,10 +7,11 @@ def score_from_distance(distance: float | None) -> float:
     return max(0.0, min(1.0, 1.0 - float(distance)))
 
 
-def citation_from_result(result: dict) -> Citation:
+def citation_from_result(result: dict, index: int | None = None) -> Citation:
     metadata = result.get("metadata") or {}
     distance = result.get("distance")
     return Citation(
+        index=index,
         source_file=result.get("source_file") or metadata.get("source_file") or "unknown",
         source_unit=result.get("source_unit") or metadata.get("source_unit"),
         category=result.get("category") or metadata.get("category"),

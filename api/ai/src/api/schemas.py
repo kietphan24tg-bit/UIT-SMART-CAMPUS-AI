@@ -14,6 +14,7 @@ class RagQueryRequest(BaseModel):
 
 
 class Citation(BaseModel):
+    index: int | None = None
     source_file: str
     source_unit: str | None = None
     category: str | None = None
@@ -39,6 +40,14 @@ class RagQueryResponse(BaseModel):
     retrieved_count: int = 0
     answer_type: str = "knowledge"
     contexts: list[RagContext] | None = None
+
+
+class RagEvidenceResponse(BaseModel):
+    found: bool
+    citations: list[Citation] = Field(default_factory=list)
+    confidence: float = 0.0
+    retrieved_count: int = 0
+    contexts: list[RagContext] = Field(default_factory=list)
 
 
 class IngestRebuildResponse(BaseModel):

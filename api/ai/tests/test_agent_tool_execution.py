@@ -7,14 +7,30 @@ from src.agent.tools.nest_client import NestApiClient
 
 
 class FakeRagResponse:
+    def to_response(self):
+        return self
+
     def model_dump(self, exclude_none: bool = True) -> dict:
         del exclude_none
-        return {"answer": "policy answer", "citations": [], "confidence": 0.88}
+        return {
+            "found": True,
+            "citations": [{"index": 1, "source_file": "quy-che.md", "heading_path": "Dieu 5"}],
+            "confidence": 0.88,
+            "retrieved_count": 1,
+            "contexts": [
+                {
+                    "index": 1,
+                    "content": "Noi dung quy che.",
+                    "citation": {"index": 1, "source_file": "quy-che.md", "heading_path": "Dieu 5"},
+                    "metadata": {},
+                }
+            ],
+        }
 
 
 class FakeRagService:
-    def answer(self, question: str, top_k: int | None = None, include_context: bool = False):
-        del question, top_k, include_context
+    def retrieve_evidence(self, question: str, top_k: int | None = None):
+        del question, top_k
         return FakeRagResponse()
 
 
@@ -87,4 +103,5 @@ def test_action_tool_requires_allowed_role_and_posts_body():
         {"query": "dieu kien du thi"},
     )
     assert rag_result.ok is True
-    assert rag_result.data["answer"] == "policy answer"
+    assert rag_result.data["found"] is True
+    assert rag_result.data["contexts"][0]["index"] == 1

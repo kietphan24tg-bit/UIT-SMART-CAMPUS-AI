@@ -7,14 +7,37 @@ from src.agent.tools.nest_client import NestApiClient
 
 
 class FakeRagResponse:
+    def to_response(self):
+        return self
+
     def model_dump(self, exclude_none: bool = True) -> dict:
         del exclude_none
-        return {"answer": "mocked", "citations": [], "confidence": 0.9}
+        return {
+            "found": True,
+            "citations": [
+                {
+                    "index": 1,
+                    "source_file": "quy-che.md",
+                    "heading_path": "Dieu 5",
+                    "score": 0.9,
+                }
+            ],
+            "confidence": 0.9,
+            "retrieved_count": 1,
+            "contexts": [
+                {
+                    "index": 1,
+                    "content": "Dieu 5 noi dung.",
+                    "citation": {"index": 1, "source_file": "quy-che.md", "heading_path": "Dieu 5"},
+                    "metadata": {},
+                }
+            ],
+        }
 
 
 class FakeRagService:
-    def answer(self, question: str, top_k: int | None = None, include_context: bool = False):
-        del question, top_k, include_context
+    def retrieve_evidence(self, question: str, top_k: int | None = None):
+        del question, top_k
         return FakeRagResponse()
 
 
@@ -105,3 +128,14 @@ def test_registry_hides_tools_with_opaque_payload_schema_from_llm():
     assert "register_class_section" in student_definitions
     assert "create_room_booking" not in student_definitions
     assert "create_canteen_product" not in admin_definitions
+
+
+def test_rag_tool_definition_is_retrieval_only():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),
+        rag_service=FakeRagService(),
+    )
+
+    definition = next(item for item in registry.definitions_for_role("student") if item["name"] == "search_university_policies")
+
+    assert "include_context" not in str(definition["parameters"])

@@ -1,0 +1,210 @@
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { USER_ROLES } from '@smart-campus/shared';
+import type { Response } from 'express';
+
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+
+import { AttendanceService } from './attendance.service';
+import { CheckinAttendanceDto } from './dto/checkin-attendance.dto';
+import { GetAttendanceHistoryDto } from './dto/get-attendance-history.dto';
+import { GetSessionRecordsDto } from './dto/get-session-records.dto';
+import { StartAttendanceSessionDto } from './dto/start-attendance-session.dto';
+
+@ApiTags('Attendance')
+@Controller('attendance')
+export class AttendanceController {
+  constructor(private readonly attendanceService: AttendanceService) {}
+
+  @Post('session/start')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Start an attendance session' })
+  startSession(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Body() dto: StartAttendanceSessionDto,
+  ) {
+    return this.attendanceService.startSession(actorId, actorRole, dto);
+  }
+
+  @Post('session/:id/stop')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Attendance session id' })
+  @ApiOperation({ summary: 'Stop an attendance session early' })
+  stopSession(
+    @Param('id') sessionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.stopSession(sessionId, actorId, actorRole);
+  }
+
+  @Get('session/:id/qr-token')
+  @ApiParam({ name: 'id', description: 'Attendance session id' })
+  @ApiQuery({ name: 'displayKey', required: true, description: 'Projector display key from start session response' })
+  @ApiOperation({ summary: 'Issue a dynamic attendance QR token' })
+  issueQrToken(@Param('id') sessionId: string, @Query('displayKey') displayKey: string) {
+    return this.attendanceService.issueQrToken(sessionId, displayKey);
+  }
+
+  @Post('checkin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.STUDENT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Check in attendance using dynamic token' })
+  checkin(@CurrentUser('id') studentId: string, @Body() dto: CheckinAttendanceDto) {
+    return this.attendanceService.checkin(studentId, dto);
+  }
+
+  @Get('session/:id/records')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Attendance session id' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOperation({ summary: 'Get attendance records for a session' })
+  getSessionRecords(
+    @Param('id') sessionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Query() query: GetSessionRecordsDto,
+  ) {
+    return this.attendanceService.getSessionRecords(sessionId, actorId, actorRole, query);
+  }
+
+  @Get('session/:id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Attendance session id' })
+  @ApiOperation({ summary: 'Export attendance session roster to Excel' })
+  async exportSessionAttendance(
+    @Param('id') sessionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Res() response: Response,
+  ) {
+    const exported = await this.attendanceService.exportSessionAttendance(
+      sessionId,
+      actorId,
+      actorRole,
+    );
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    response.send(exported.buffer);
+  }
+
+  @Get('class-sections/:id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Export attendance summary by class section to Excel' })
+  async exportClassSectionAttendanceSummary(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Res() response: Response,
+  ) {
+    const exported = await this.attendanceService.exportClassSectionAttendanceSummary(
+      classSectionId,
+      actorId,
+      actorRole,
+    );
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    response.send(exported.buffer);
+  }
+
+  @Get('history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiQuery({ name: 'classSectionId', required: true, type: String })
+  @ApiQuery({ name: 'date', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOperation({ summary: 'Get attendance session history by class/date for current manager role' })
+  getHistory(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+    @Query() query: GetAttendanceHistoryDto,
+  ) {
+    return this.attendanceService.getHistory(actorId, actorRole, query);
+  }
+
+  @Get('lecturer/class-sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get class sections manageable by current role' })
+  getLecturerClassSections(
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getLecturerClassSections(actorId, actorRole);
+  }
+
+  @Get('class-sections/:id/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Get enrolled students for a class section' })
+  getClassSectionStudents(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getClassSectionStudents(classSectionId, actorId, actorRole);
+  }
+
+  @Get('class-sections/:id/session-summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.LECTURER)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id', description: 'Class section id' })
+  @ApiOperation({ summary: 'Get attendance session summary for a class section' })
+  getClassSectionSessionSummary(
+    @Param('id') classSectionId: string,
+    @CurrentUser('id') actorId: string,
+    @CurrentUser('role') actorRole: Role,
+  ) {
+    return this.attendanceService.getClassSectionSessionSummary(classSectionId, actorId, actorRole);
+  }
+
+  @Get('me/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(USER_ROLES.STUDENT)
+  @ApiBearerAuth()
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOperation({ summary: 'Get attendance check-in history of current student' })
+  getStudentHistory(
+    @CurrentUser('id') studentId: string,
+    @Query() query: GetSessionRecordsDto,
+  ) {
+    return this.attendanceService.getStudentHistory(studentId, query);
+  }
+}
