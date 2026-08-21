@@ -265,7 +265,7 @@ def test_executor_rejects_multiple_tool_calls_safely(monkeypatch):
     result = agent.answer_query(user=_user(), message="Lam hai viec")
 
     assert result.answer_type == "answer"
-    assert "tung thao tac mot" in result.answer
+    assert "từng thao tác một" in result.answer
 
 
 def test_executor_uses_rag_evidence_and_returns_citations(monkeypatch):
@@ -300,7 +300,7 @@ def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     result = agent.answer_query(user=_user(), message="Cau hoi ngoai pham vi")
 
     assert result.answer_type == "answer"
-    assert "chua tim thay du can cu" in result.answer
+    assert "chưa tìm thấy đủ căn cứ" in result.answer
     assert result.citations == []
     assert rag_tool.calls == 1
     assert len(client.models.calls) == 1
