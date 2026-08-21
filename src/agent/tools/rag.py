@@ -13,7 +13,6 @@ from .results import ToolError, ToolResult
 class SearchUniversityPoliciesInput(ToolArgumentsModel):
     query: str = Field(min_length=1)
     top_k: int | None = Field(default=None, ge=1, le=10)
-    include_context: bool = False
 
 
 class SearchUniversityPoliciesTool(AgentTool):
@@ -34,14 +33,13 @@ class SearchUniversityPoliciesTool(AgentTool):
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
         del context
         rag_service = self.rag_service or RagService()
-        response = rag_service.answer(
+        response = rag_service.retrieve_evidence(
             question=arguments.query,
             top_k=arguments.top_k,
-            include_context=arguments.include_context,
         )
         return ToolResult(
             ok=True,
             tool=self.name,
             status="success",
-            data=response.model_dump(exclude_none=True),
+            data=response.to_response().model_dump(exclude_none=True),
         )

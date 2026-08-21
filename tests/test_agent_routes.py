@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.agent.models import AgentProposalExecutionResult, AgentQueryResult, AgentTraceStep, ProposalPreview
 from src.agent.proposals import ToolProposal
+from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser, require_authenticated_user
 from src.main import create_app
 
@@ -35,6 +36,7 @@ class FakeAgent:
                 confirm_path="/agent/proposals/11111111-1111-1111-1111-111111111111/confirm",
                 reject_path="/agent/proposals/11111111-1111-1111-1111-111111111111/reject",
             ),
+            citations=[Citation(index=1, source_file="quy-che.md", heading_path="Dieu 5")],
             trace=[
                 AgentTraceStep(type="analysis", label="Da phan tich yeu cau", status="completed"),
                 AgentTraceStep(
@@ -114,6 +116,7 @@ def test_agent_query_and_confirm_routes(monkeypatch):
     assert payload["answer_type"] == "confirmation_required"
     assert payload["proposal"]["id"] == "11111111-1111-1111-1111-111111111111"
     assert payload["proposal"]["risk_level"] == "medium"
+    assert payload["citations"][0]["source_file"] == "quy-che.md"
     assert payload["trace"] == [
         {"type": "analysis", "label": "Da phan tich yeu cau", "status": "completed", "tool": None},
         {

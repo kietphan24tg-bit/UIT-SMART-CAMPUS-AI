@@ -113,11 +113,11 @@ class AgentTool(ABC):
         return f"{self.display_name}: {', '.join(parts)}"
 
     def confirmation_message(self, arguments: BaseModel) -> str:
-        return f"Ban co chac muon thuc hien '{self.summarize_arguments(arguments)}' khong?"
+        return f"Bạn có chắc muốn thực hiện '{self.summarize_arguments(arguments)}' không?"
 
     def success_message(self, arguments: BaseModel, result: ToolResult) -> str:
         del result
-        return f"Da thuc hien thanh cong: {self.summarize_arguments(arguments)}."
+        return f"Đã thực hiện thành công: {self.summarize_arguments(arguments)}."
 
     def sanitize_arguments(self, arguments: BaseModel) -> dict[str, Any]:
         values = arguments.model_dump(exclude_none=True)
@@ -279,9 +279,9 @@ _DEFAULT_RISK_LEVELS: dict[ToolOperation, Literal["low", "medium", "high", "crit
 }
 
 _ACTION_KEYWORDS: dict[ToolOperation, tuple[str, ...]] = {
-    ToolOperation.CREATE: ("tao", "dang ky", "them", "dat", "gui"),
-    ToolOperation.UPDATE: ("cap nhat", "doi", "huy", "xac nhan", "stop", "bat dau", "gia han", "resolve"),
-    ToolOperation.DELETE: ("xoa", "huy", "go", "remove"),
-    ToolOperation.PAYMENT: ("thanh toan", "pay", "momo", "sepay"),
-    ToolOperation.EMERGENCY: ("sos", "khan cap", "cuu", "checkin", "diem danh"),
+    ToolOperation.CREATE: ("tao", "tạo", "dang ky", "đăng ký", "them", "thêm", "dat", "đặt", "gui", "gửi"),
+    ToolOperation.UPDATE: ("cap nhat", "cập nhật", "doi", "đổi", "huy", "hủy", "xac nhan", "xác nhận", "stop", "bat dau", "bắt đầu", "gia han", "gia hạn", "resolve"),
+    ToolOperation.DELETE: ("xoa", "xóa", "huy", "hủy", "go", "gỡ", "remove"),
+    ToolOperation.PAYMENT: ("thanh toan", "thanh toán", "pay", "momo", "sepay"),
+    ToolOperation.EMERGENCY: ("sos", "khan cap", "khẩn cấp", "cuu", "cứu", "checkin", "diem danh", "điểm danh"),
 }

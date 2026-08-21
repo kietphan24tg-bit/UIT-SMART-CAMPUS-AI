@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
+from src.api.schemas import Citation
+
 TraceType = Literal["analysis", "tool", "confirmation", "answer"]
 TraceStatus = Literal["completed", "failed", "pending"]
 
@@ -34,6 +36,7 @@ class AgentQueryResult:
     answer_type: str
     answer: str
     proposal: ProposalPreview | None = None
+    citations: list[Citation] | None = None
     trace: list[AgentTraceStep] | None = None
 
 

@@ -12,6 +12,7 @@ from src.agent.proposals import ToolProposal
 from src.agent.tools import ToolContext, ToolOperation, ToolRegistry
 from src.agent.tools.base import AgentTool, ToolArgumentsModel
 from src.agent.tools.results import ToolResult
+from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser
 
 
@@ -58,6 +59,60 @@ class ActionTool(AgentTool):
         del context, arguments
         self.calls += 1
         return ToolResult(ok=True, tool=self.name, status="success", data={"ok": True})
+
+
+class RagTool(AgentTool):
+    name = "search_university_policies"
+    display_name = "search university policies"
+    description = "Search indexed university policies."
+    input_model = EmptyInput
+    allowed_roles = frozenset({"student"})
+    operation_type = ToolOperation.READ
+    requires_confirmation = False
+
+    def __init__(self, *, found: bool = True) -> None:
+        self.found = found
+        self.calls = 0
+
+    def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
+        del context, arguments
+        self.calls += 1
+        return ToolResult(
+            ok=True,
+            tool=self.name,
+            status="success",
+            data={
+                "found": self.found,
+                "confidence": 0.91 if self.found else 0.0,
+                "retrieved_count": 1 if self.found else 0,
+                "citations": (
+                    [
+                        Citation(
+                            index=1,
+                            source_file="quy-che.md",
+                            heading_path="Dieu 5",
+                            page_start=3,
+                            page_end=3,
+                            score=0.91,
+                        ).model_dump(exclude_none=True)
+                    ]
+                    if self.found
+                    else []
+                ),
+                "contexts": (
+                    [
+                        {
+                            "index": 1,
+                            "content": "Dieu 5 quy dinh dieu kien du thi.",
+                            "citation": {"index": 1, "source_file": "quy-che.md", "heading_path": "Dieu 5"},
+                            "metadata": {"category": "exam"},
+                        }
+                    ]
+                    if self.found
+                    else []
+                ),
+            },
+        )
 
 
 class FakeModels:
@@ -211,3 +266,41 @@ def test_executor_rejects_multiple_tool_calls_safely(monkeypatch):
 
     assert result.answer_type == "answer"
     assert "tung thao tac mot" in result.answer
+
+
+def test_executor_uses_rag_evidence_and_returns_citations(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = RagTool(found=True)
+    registry.register(rag_tool)
+    client = FakeClient([
+        _response_with_call("search_university_policies", {}),
+        _response_with_text("Dieu kien du thi duoc neu trong Dieu 5 [1] [9]"),
+    ])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Dieu kien du thi la gi?")
+
+    assert result.answer_type == "answer"
+    assert result.citations is not None
+    assert len(result.citations) == 1
+    assert result.citations[0].index == 1
+    assert "[9]" not in result.answer
+    assert rag_tool.calls == 1
+
+
+def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = RagTool(found=False)
+    registry.register(rag_tool)
+    client = FakeClient([_response_with_call("search_university_policies", {})])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Cau hoi ngoai pham vi")
+
+    assert result.answer_type == "answer"
+    assert "chua tim thay du can cu" in result.answer
+    assert result.citations == []
+    assert rag_tool.calls == 1
+    assert len(client.models.calls) == 1

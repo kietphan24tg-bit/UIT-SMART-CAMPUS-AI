@@ -3,11 +3,11 @@
 Pipeline
 --------
 Question
-  → HybridRetriever  (vector + keyword → RRF → candidate_k chunks)
-  → Reranker?        (optional cross-encoder, enabled via RERANKER_ENABLED=true)
-  → Answer gate      (drop to fallback if top score < answer_min_confidence)
-  → GroqClient       (LLM generates answer with mandatory [N] citations)
-  → Citation check   (verify cited indices exist in context)
+  -> HybridRetriever  (vector + keyword -> RRF -> candidate_k chunks)
+  -> Reranker?        (optional cross-encoder, enabled via RERANKER_ENABLED=true)
+  -> Answer gate      (drop to fallback if top score < answer_min_confidence)
+  -> GroqClient       (LLM generates answer with mandatory [N] citations)
+  -> Citation check   (verify cited indices exist in context)
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from src.api.schemas import Citation, RagContext, RagQueryResponse
+from src.api.schemas import Citation, RagContext, RagEvidenceResponse, RagQueryResponse
 from src.core.config import Settings, settings
 from src.rag.prompts import RAG_SYSTEM_PROMPT, build_user_prompt
 from src.reranking.base import Reranker
@@ -39,11 +39,6 @@ FALLBACK_ANSWER = (
     "kênh thông báo chính thức hoặc liên hệ đơn vị phụ trách để có câu trả lời "
     "chính xác nhất."
 )
-
-
-# ---------------------------------------------------------------------------
-# Groq HTTP client
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -78,22 +73,27 @@ class GroqClient:
             return payload["choices"][0]["message"]["content"].strip()
 
 
-# ---------------------------------------------------------------------------
-# RAG service
-# ---------------------------------------------------------------------------
+@dataclass(slots=True)
+class RetrievedEvidence:
+    found: bool
+    confidence: float
+    retrieved_count: int
+    contexts: list[RagContext]
+    citations: list[Citation]
+    results: list[RetrievalResult]
+
+    def to_response(self) -> RagEvidenceResponse:
+        return RagEvidenceResponse(
+            found=self.found,
+            citations=self.citations,
+            confidence=round(self.confidence, 4),
+            retrieved_count=self.retrieved_count,
+            contexts=self.contexts,
+        )
 
 
 class RagService:
-    """Orchestrates the full RAG pipeline.
-
-    Dependency injection allows easy swapping of components in tests:
-
-        service = RagService(
-            retriever=MockRetriever(),
-            reranker=None,
-            llm_client=MockGroq(),
-        )
-    """
+    """Orchestrates the full RAG pipeline."""
 
     def __init__(
         self,
@@ -115,10 +115,6 @@ class RagService:
             model=config.llm_model,
         )
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def answer(
         self,
         question: str,
@@ -127,78 +123,77 @@ class RagService:
         min_score: float | None = None,
         include_context: bool = False,
     ) -> RagQueryResponse:
-        """Full RAG pipeline: retrieve → (rerank) → gate → generate.
-
-        Args:
-            question:        User question in Vietnamese.
-            filters:         Optional metadata filters forwarded to the retriever.
-            top_k:           Override for final chunk count (default from config).
-            min_score:       Override for minimum retrieval score (default from config).
-            include_context: Include raw chunk context in the response (debug).
-
-        Returns:
-            ``RagQueryResponse`` with answer_type="knowledge" or "fallback".
-        """
-        _top_k = top_k if top_k is not None else self.config.rag_top_k
-        _min_score = min_score if min_score is not None else self.config.retrieval_min_score
-
-        # 1. Hybrid retrieval (vector + keyword RRF)
-        candidates = self._retrieve_candidates(question, filters, _top_k, _min_score)
-
-        if not candidates:
-            logger.debug("No candidates retrieved for question: %r", question[:80])
+        evidence = self.retrieve_evidence(
+            question=question,
+            filters=filters,
+            top_k=top_k,
+            min_score=min_score,
+        )
+        if not evidence.found:
             return self._fallback_response(include_context=include_context)
 
-        # 2. Optional re-ranking
-        if self.reranker is not None:
-            results = self.reranker.rerank(question, candidates, top_k=_top_k)
-            # Apply min_score AFTER reranking (logit scale, different from cosine score)
-            results = [r for r in results if r.score >= self.config.reranker_min_score]
-        else:
-            results = candidates[:_top_k]
-
-        if not results:
-            logger.debug("All candidates dropped after reranking/min_score gate.")
-            return self._fallback_response(include_context=include_context)
-
-        # 3. Answer confidence gate — check top chunk score
-        top_score = results[0].score
-        if top_score < self.config.answer_min_confidence:
-            logger.info(
-                "Top chunk score %.3f < threshold %.3f → fallback",
-                top_score,
-                self.config.answer_min_confidence,
-            )
-            return self._fallback_response(include_context=include_context)
-
-        if not self._has_support_overlap(question, results):
-            logger.info("Retrieved chunks have weak lexical overlap with question -> fallback")
-            return self._fallback_response(include_context=include_context)
-
-        # 4. Generate answer via Groq
         answer_text = self.llm_client.chat(
             system_prompt=RAG_SYSTEM_PROMPT,
-            user_prompt=build_user_prompt(question, results),
+            user_prompt=build_user_prompt(question, evidence.results),
         )
-
-        # 5. Citation validation: ensure all [N] in answer point to real chunks
-        answer_text = self._validate_citations(answer_text, len(results))
-
-        citations = format_citations([r.raw for r in results])
-        contexts = self._contexts(results) if include_context else None
+        answer_text = self._validate_citations(answer_text, len(evidence.contexts))
 
         return RagQueryResponse(
             answer=answer_text,
-            citations=citations,
-            confidence=round(top_score, 4),
-            retrieved_count=len(results),
+            citations=format_citations([result.raw for result in evidence.results]),
+            confidence=round(evidence.confidence, 4),
+            retrieved_count=evidence.retrieved_count,
             answer_type="knowledge",
-            contexts=contexts,
+            contexts=evidence.contexts if include_context else None,
         )
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    def retrieve_evidence(
+        self,
+        question: str,
+        filters: dict | None = None,
+        top_k: int | None = None,
+        min_score: float | None = None,
+    ) -> RetrievedEvidence:
+        top_limit = top_k if top_k is not None else self.config.rag_top_k
+        score_limit = min_score if min_score is not None else self.config.retrieval_min_score
+
+        candidates = self._retrieve_candidates(question, filters, top_limit, score_limit)
+        if not candidates:
+            logger.debug("No candidates retrieved for question: %r", question[:80])
+            return self._empty_evidence()
+
+        if self.reranker is not None:
+            results = self.reranker.rerank(question, candidates, top_k=top_limit)
+            results = [result for result in results if result.score >= self.config.reranker_min_score]
+        else:
+            results = candidates[:top_limit]
+
+        if not results:
+            logger.debug("All candidates dropped after reranking/min_score gate.")
+            return self._empty_evidence()
+
+        top_score = results[0].score
+        if top_score < self.config.answer_min_confidence:
+            logger.info(
+                "Top chunk score %.3f < threshold %.3f -> fallback",
+                top_score,
+                self.config.answer_min_confidence,
+            )
+            return self._empty_evidence()
+
+        if not self._has_support_overlap(question, results):
+            logger.info("Retrieved chunks have weak lexical overlap with question -> fallback")
+            return self._empty_evidence()
+
+        contexts = self._contexts(results)
+        return RetrievedEvidence(
+            found=True,
+            confidence=top_score,
+            retrieved_count=len(results),
+            contexts=contexts,
+            citations=[context.citation for context in contexts],
+            results=results,
+        )
 
     def _fallback_response(self, include_context: bool) -> RagQueryResponse:
         return RagQueryResponse(
@@ -208,6 +203,17 @@ class RagService:
             retrieved_count=0,
             answer_type="fallback",
             contexts=[] if include_context else None,
+        )
+
+    @staticmethod
+    def _empty_evidence() -> RetrievedEvidence:
+        return RetrievedEvidence(
+            found=False,
+            confidence=0.0,
+            retrieved_count=0,
+            contexts=[],
+            citations=[],
+            results=[],
         )
 
     def _retrieve_candidates(
@@ -235,14 +241,10 @@ class RagService:
 
     @staticmethod
     def _validate_citations(answer: str, context_count: int) -> str:
-        """Remove citation references [N] that exceed available context chunks.
-
-        Prevents the LLM from hallucinating references to non-existent sources.
-        """
-        def _replace(match: re.Match) -> str:
+        def _replace(match: re.Match[str]) -> str:
             index = int(match.group(1))
             if index < 1 or index > context_count:
-                return ""  # strip invalid citation
+                return ""
             return match.group(0)
 
         return re.sub(r"\[(\d+)\]", _replace, answer).strip()
@@ -273,12 +275,11 @@ class RagService:
         for index, result in enumerate(results, start=1):
             raw = dict(result.raw)
             raw["distance"] = result.distance
-            citation: Citation = citation_from_result(raw)
             contexts.append(
                 RagContext(
                     index=index,
                     content=result.content,
-                    citation=citation,
+                    citation=citation_from_result(raw, index=index),
                     metadata=result.metadata,
                 )
             )
