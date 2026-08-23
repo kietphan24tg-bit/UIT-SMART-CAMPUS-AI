@@ -9,11 +9,14 @@ WORKDIR /app
 RUN addgroup --system app && adduser --system --ingroup app app
 
 COPY pyproject.toml README.md ./
+
+RUN python -m pip install --upgrade pip \
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0
+
 COPY src ./src
 COPY scripts ./scripts
 
-RUN python -m pip install --upgrade pip \
-    && pip install --no-cache-dir .
+RUN pip install --no-cache-dir .
 
 USER app
 
