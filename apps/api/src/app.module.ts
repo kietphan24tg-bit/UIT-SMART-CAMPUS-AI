@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { IdempotencyService } from './common/idempotency/idempotency.service';
 import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -51,5 +52,6 @@ import { UsersModule } from './modules/users/users.module';
     PaymentsModule,
     StudyMaterialsModule,
   ],
+  providers: [IdempotencyService],
 })
 export class AppModule {}

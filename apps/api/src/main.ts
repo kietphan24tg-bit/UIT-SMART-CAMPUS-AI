@@ -7,11 +7,14 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor';
+import { IdempotencyService } from './common/idempotency/idempotency.service';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const reflector = app.get(Reflector);
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (!req.originalUrl.includes('/canteen/products/image')) {
@@ -56,7 +59,10 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
+  app.useGlobalInterceptors(
+    new IdempotencyInterceptor(app.get(IdempotencyService)),
+    new TransformInterceptor(reflector),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle(APP_NAME)

@@ -126,7 +126,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   private readonly checkinRateLimitSeconds = 2;
   private readonly memoryStore = new Map<string, MemoryValue>();
 
-  private readonly redisClient: ReturnType<typeof createClient>;
+  private readonly redisClient: ReturnType<typeof createClient> | null;
 
   private redisEnabled = false;
 
@@ -137,23 +137,24 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     this.tokenTtlSeconds = Number(
       this.configService.get<number>('ATTENDANCE_TOKEN_TTL_SECONDS', 90),
     );
-    const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6379');
-    const isTestEnvironment = process.env.NODE_ENV === 'test';
-
-    this.redisClient = createClient({
-      url: redisUrl,
-      ...(isTestEnvironment
-        ? {
-          socket: {
-            connectTimeout: 1000,
-            reconnectStrategy: false,
-          },
-        }
-        : {}),
-    });
+    const redisUrl = this.configService.get<string>('REDIS_URL', '').trim();
+    this.redisClient = redisUrl
+      ? createClient({
+        url: redisUrl,
+        socket: {
+          connectTimeout: 1000,
+          reconnectStrategy: false,
+        },
+      })
+      : null;
   }
 
   async onModuleInit() {
+    if (!this.redisClient) {
+      this.redisEnabled = false;
+      return;
+    }
+
     try {
       if (!this.redisClient.isOpen) {
         await this.redisClient.connect();
@@ -166,7 +167,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     try {
-      if (this.redisClient.isOpen) {
+      if (this.redisClient?.isOpen) {
         await this.redisClient.close();
       }
     } catch {
@@ -1472,7 +1473,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async setStoreValue(key: string, value: string, ttlSeconds: number) {
-    if (this.redisEnabled) {
+    if (this.redisEnabled && this.redisClient) {
       await this.redisClient.set(key, value, { EX: ttlSeconds });
       return;
     }
@@ -1484,7 +1485,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async setStoreValueIfAbsent(key: string, value: string, ttlSeconds: number) {
-    if (this.redisEnabled) {
+    if (this.redisEnabled && this.redisClient) {
       const result = await this.redisClient.set(key, value, {
         EX: ttlSeconds,
         NX: true,
@@ -1505,7 +1506,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async getStoreValue(key: string) {
-    if (this.redisEnabled) {
+    if (this.redisEnabled && this.redisClient) {
       return this.redisClient.get(key);
     }
 
@@ -1514,7 +1515,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async deleteStoreValue(key: string) {
-    if (this.redisEnabled) {
+    if (this.redisEnabled && this.redisClient) {
       await this.redisClient.del(key);
       return;
     }
