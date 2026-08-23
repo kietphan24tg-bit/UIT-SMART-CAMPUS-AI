@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from src.agent.tools import ToolContext, build_tool_registry
 from src.agent.tools.nest_client import NestApiClient
@@ -34,35 +35,123 @@ class FakeRagService:
         return FakeRagResponse()
 
 
-def test_read_tool_executes_expected_http_contract():
+@pytest.mark.parametrize(
+    ("tool_name", "role", "arguments", "method", "path", "query", "body"),
+    [
+        (
+            "get_available_class_sections",
+            "student",
+            {},
+            "GET",
+            "/api/v1/registrations/available-class-sections",
+            {},
+            b"",
+        ),
+        (
+            "get_my_registrations",
+            "student",
+            {"status": "active"},
+            "GET",
+            "/api/v1/registrations/me",
+            {"status": "active"},
+            b"",
+        ),
+        (
+            "get_attendance_qr_token",
+            "lecturer",
+            {"session_id": "session-1", "display_key": "display-1"},
+            "GET",
+            "/api/v1/attendance/session/session-1/qr-token",
+            {"displayKey": "display-1"},
+            b"",
+        ),
+        (
+            "start_attendance_session",
+            "lecturer",
+            {"class_section_id": "section-1", "duration_minutes": 15},
+            "POST",
+            "/api/v1/attendance/session/start",
+            {},
+            b'{"classSectionId":"section-1","durationMinutes":15}',
+        ),
+        (
+            "delete_notifications",
+            "student",
+            {"category": "academic", "unread_only": True},
+            "DELETE",
+            "/api/v1/notifications",
+            {"category": "academic", "unreadOnly": "true"},
+            b"",
+        ),
+        (
+            "get_sos_route",
+            "student",
+            {"sos_id": "sos-1", "from_lat": 10.1, "from_lng": 106.2},
+            "GET",
+            "/api/v1/sos/sos-1/route",
+            {"fromLat": "10.1", "fromLng": "106.2"},
+            b"",
+        ),
+        (
+            "search_study_materials",
+            "student",
+            {"query": "AI", "category": "exam", "page": 2, "limit": 10},
+            "GET",
+            "/api/v1/study-materials",
+            {"q": "AI", "category": "exam", "page": "2", "limit": "10"},
+            b"",
+        ),
+    ],
+)
+def test_tools_execute_expected_nest_contract(
+    tool_name,
+    role,
+    arguments,
+    method,
+    path,
+    query,
+    body,
+):
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["method"] = request.method
         captured["path"] = request.url.path
         captured["query"] = dict(request.url.params)
+        captured["body"] = request.content
         return httpx.Response(200, json={"data": {"items": []}})
 
     registry = build_tool_registry(
         nest_client=NestApiClient(base_url="http://nest.test", api_prefix="/api/v1", transport=httpx.MockTransport(handler)),
         rag_service=FakeRagService(),
     )
-    context = ToolContext(user_id="u1", role="student", access_token="token", request_id="req-1")
+    context = ToolContext(user_id="u1", role=role, access_token="token", request_id="req-1")
 
-    result = registry.get("get_available_class_sections").execute(
-        context,
-        {"semester_id": "sem-1", "query": "AI", "page": 1, "limit": 20},
-    )
+    result = registry.get(tool_name).execute(context, arguments)
 
     assert result.ok is True
-    assert captured["method"] == "GET"
-    assert captured["path"] == "/api/v1/registrations/available-class-sections"
-    assert captured["query"] == {
-        "semesterId": "sem-1",
-        "query": "AI",
-        "page": "1",
-        "limit": "20",
-    }
+    assert captured["method"] == method
+    assert captured["path"] == path
+    assert captured["query"] == query
+    assert captured["body"] == body
+
+
+def test_event_limit_matches_nest_dto_maximum():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(
+            base_url="http://nest.test",
+            api_prefix="/api/v1",
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": []})),
+        ),
+        rag_service=FakeRagService(),
+    )
+    context = ToolContext(user_id="u1", role="student", access_token="token", request_id="req-1")
+
+    result = registry.get("list_upcoming_events").execute(context, {"limit": 51})
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.code == "validation_error"
 
 
 def test_action_tool_requires_allowed_role_and_posts_body():

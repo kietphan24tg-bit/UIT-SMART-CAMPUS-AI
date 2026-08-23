@@ -205,6 +205,9 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
     assert "Mon 1-3" in result.answer
     assert read_tool.calls == 1
     assert len(client.models.calls) == 2
+    follow_up_contents = client.models.calls[1]["contents"]
+    assert follow_up_contents[-1].role == "user"
+    assert follow_up_contents[-1].parts[0].function_response is not None
     assert result.trace is not None
     assert [(step.type, step.status) for step in result.trace] == [
         ("analysis", "completed"),
@@ -304,3 +307,49 @@ def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     assert result.citations == []
     assert rag_tool.calls == 1
     assert len(client.models.calls) == 1
+
+
+def test_executor_builds_contents_from_history_before_current_message(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    client = FakeClient([_response_with_text("Da hieu ngu canh.")])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(
+        user=_user(),
+        message="Con tuan sau thi sao?",
+        session_id="s1",
+        history=[
+            {"role": "user", "content": "Lich SE104?"},
+            {"role": "assistant", "content": "SE104 hoc thu ba."},
+        ],
+    )
+
+    assert result.answer_type == "answer"
+    contents = client.models.calls[0]["contents"]
+    assert [item.role for item in contents] == ["user", "model", "user"]
+    assert contents[0].parts[0].text == "Lich SE104?"
+    assert contents[1].parts[0].text == "SE104 hoc thu ba."
+    assert contents[2].parts[0].text == "Con tuan sau thi sao?"
+
+
+def test_executor_does_not_create_action_from_history_only(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    registry = ToolRegistry()
+    registry.register(ActionTool())
+    client = FakeClient([_response_with_call("cancel_room_booking", {"id": "rb-1"})])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(
+        user=_user(),
+        message="Con viec do hien tai trang thai sao?",
+        session_id="s1",
+        history=[
+            {"role": "user", "content": "Huy dat phong rb-1"},
+            {"role": "assistant", "content": "Ban co chac muon huy dat phong rb-1 khong?"},
+        ],
+    )
+
+    assert result.answer_type == "answer"
+    assert result.proposal is None
+    assert "chưa thấy một yêu cầu hành động đủ rõ ràng" in result.answer.lower()

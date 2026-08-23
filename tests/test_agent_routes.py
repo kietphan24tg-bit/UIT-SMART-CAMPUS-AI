@@ -20,8 +20,15 @@ class FakeAgent:
         self.query_calls = []
         self.proposals: dict[str, ToolProposal] = {}
 
-    def answer_query(self, *, user: AuthenticatedUser, message: str, session_id: str | None = None) -> AgentQueryResult:
-        self.query_calls.append((user.user_id, message, session_id))
+    def answer_query(
+        self,
+        *,
+        user: AuthenticatedUser,
+        message: str,
+        session_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AgentQueryResult:
+        self.query_calls.append((user.user_id, message, session_id, history or []))
         return AgentQueryResult(
             answer_type="confirmation_required",
             answer="Ban co chac muon huy dat phong rb-1 khong?",
@@ -136,6 +143,7 @@ def test_agent_query_and_confirm_routes(monkeypatch):
     )
     assert confirm_response.status_code == 200
     assert confirm_response.json()["result"]["tool"] == "cancel_room_booking"
+    assert fake_agent.query_calls == [("u1", "Huy dat phong rb-1", "s1", [])]
 
 
 def test_agent_reject_route_returns_conflict_when_not_pending(monkeypatch):
@@ -149,3 +157,77 @@ def test_agent_reject_route_returns_conflict_when_not_pending(monkeypatch):
     response = client.post("/agent/proposals/11111111-1111-1111-1111-111111111111/reject")
 
     assert response.status_code == 409
+
+
+def test_agent_query_accepts_optional_history(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[require_authenticated_user] = _current_user
+    fake_agent = FakeAgent(proposal_store=FakeStore())
+    monkeypatch.setattr("src.api.routes.agent.agent", fake_agent)
+
+    client = TestClient(app)
+    response = client.post(
+        "/agent/query",
+        json={
+            "message": "Con tuan sau thi sao?",
+            "session_id": "s1",
+            "history": [
+                {"role": "user", "content": "Lich SE104?"},
+                {"role": "assistant", "content": "SE104 hoc thu ba."},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_agent.query_calls == [
+        (
+            "u1",
+            "Con tuan sau thi sao?",
+            "s1",
+            [
+                {"role": "user", "content": "Lich SE104?"},
+                {"role": "assistant", "content": "SE104 hoc thu ba."},
+            ],
+        )
+    ]
+
+
+def test_agent_query_rejects_history_exceeding_limit(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[require_authenticated_user] = _current_user
+    fake_agent = FakeAgent(proposal_store=FakeStore())
+    monkeypatch.setattr("src.api.routes.agent.agent", fake_agent)
+
+    client = TestClient(app)
+    response = client.post(
+        "/agent/query",
+        json={
+            "message": "Xin chao",
+            "history": [{"role": "user", "content": "x"} for _ in range(11)],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "history must contain at most 10 messages" in response.json()["detail"]
+
+
+def test_agent_query_rejects_history_exceeding_total_chars(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[require_authenticated_user] = _current_user
+    fake_agent = FakeAgent(proposal_store=FakeStore())
+    monkeypatch.setattr("src.api.routes.agent.agent", fake_agent)
+
+    client = TestClient(app)
+    response = client.post(
+        "/agent/query",
+        json={
+            "message": "Xin chao",
+            "history": [
+                {"role": "user", "content": "a" * 16000},
+                {"role": "assistant", "content": "b"},
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "history must contain at most 16000 characters" in response.json()["detail"]

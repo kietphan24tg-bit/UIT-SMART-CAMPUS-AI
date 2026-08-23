@@ -82,6 +82,16 @@ class TestRRF:
         assert fused_ids[0] == 2, "Chunk found in both lists should rank first"
         assert fused_scores[2] > fused_scores[1]
         assert fused_scores[2] > fused_scores[4]
+        assert all(0.0 <= score <= 1.0 for score in fused_scores.values())
+
+    def test_rrf_normalization_is_compatible_with_confidence_thresholds(self):
+        config = _make_config()
+        retriever = HybridRetriever.__new__(HybridRetriever)
+        retriever.config = config
+
+        fused = retriever._reciprocal_rank_fusion([_make_row(1)], [_make_row(1)])
+
+        assert fused[0][1] == pytest.approx(1.0)
 
     def test_rrf_all_unique_docs(self):
         config = _make_config()
@@ -157,11 +167,11 @@ class TestHybridRetriever:
         assert len(results) > 0
 
     def test_min_score_filters_results(self):
-        config = _make_config(retrieval_min_score=0.99)
+        config = _make_config(retrieval_min_score=1.01)
         retriever = self._make_retriever(config)
         results = retriever.retrieve("điều kiện dự thi")
 
-        # All RRF scores will be well below 0.99
+        # Normalized RRF scores cannot exceed 1.0.
         assert results == []
 
     def test_top_k_limits_results(self):
