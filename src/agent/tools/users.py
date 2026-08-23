@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -19,7 +19,20 @@ ADMIN_ROLES = frozenset({ADMIN, SUPER_ADMIN})
 UserIdInput = create_input_model("UserIdInput", {"user_id": (str, Field(min_length=1))})
 SearchInput = create_input_model(
     "UserSearchInput",
-    {"query": (str | None, None), "page": (int | None, None), "limit": (int | None, None)},
+    {
+        "search": (str | None, None),
+        "page": (int | None, Field(default=None, ge=1)),
+        "limit": (int | None, Field(default=None, ge=1, le=100)),
+    },
+)
+StudyMaterialSearchInput = create_input_model(
+    "StudyMaterialSearchInput",
+    {
+        "query": (str | None, None),
+        "category": (Literal["exam", "textbook", "other"] | None, None),
+        "page": (int | None, Field(default=None, ge=1)),
+        "limit": (int | None, Field(default=None, ge=1)),
+    },
 )
 ProfileUpdateInput = create_input_model(
     "ProfileUpdateInput",
@@ -27,7 +40,10 @@ ProfileUpdateInput = create_input_model(
 )
 RoleUpdateInput = create_input_model(
     "RoleUpdateInput",
-    {"user_id": (str, Field(min_length=1)), "role": (str, Field(min_length=1))},
+    {
+        "user_id": (str, Field(min_length=1)),
+        "role": (Literal["student", "lecturer", "canteen_admin", "admin", "super_admin"], ...),
+    },
 )
 ActiveStatusInput = create_input_model(
     "ActiveStatusInput",
@@ -41,9 +57,9 @@ StudyMaterialUpdateInput = create_input_model(
 
 USER_SPECS = [
     ("GetMyProfileTool", "get_my_profile", "Lấy hồ sơ của người dùng hiện tại. Dùng khi cần thông tin cá nhân cơ bản. Không dùng cho quản trị danh sách người dùng. Dữ liệu thuộc người dùng hiện tại.", create_input_model("GetMyProfileInput", {}), USER_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/users/me")),
-    ("ListUsersTool", "list_users", "Liệt kê người dùng cho màn hình quản trị. Dùng cho admin hoặc super admin khi tìm kiếm tài khoản. Không dùng cho người dùng phổ thông. Dữ liệu quản trị.", SearchInput, ADMIN_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/users", query_params={"query": "query", "page": "page", "limit": "limit"})),
+    ("ListUsersTool", "list_users", "Liệt kê người dùng cho màn hình quản trị. Dùng cho admin hoặc super admin khi tìm kiếm tài khoản. Không dùng cho người dùng phổ thông. Dữ liệu quản trị.", SearchInput, ADMIN_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/users", query_params={"search": "search", "page": "page", "limit": "limit"})),
     ("GetUserTool", "get_user", "Lấy chi tiết một người dùng theo user_id. Dùng cho admin khi cần xem hồ sơ người khác. Không dùng cho người dùng phổ thông. Dữ liệu quản trị.", UserIdInput, ADMIN_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/users/{userId}", path_params={"user_id": "userId"})),
-    ("SearchStudyMaterialsTool", "search_study_materials", "Tìm kiếm tài liệu học tập theo từ khóa. Dùng khi người dùng hỏi file học liệu, slide hoặc đề cương. Không dùng để upload tài liệu mới. Dữ liệu công khai nội bộ theo quyền xem.", SearchInput, USER_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/study-materials", query_params={"query": "query", "page": "page", "limit": "limit"})),
+    ("SearchStudyMaterialsTool", "search_study_materials", "Tìm kiếm tài liệu học tập theo từ khóa hoặc phân loại. Không dùng để upload tài liệu mới. Dữ liệu theo quyền xem.", StudyMaterialSearchInput, USER_ROLES, ToolOperation.READ, build_nest_request(method="GET", path="/study-materials", query_params={"query": "q", "category": "category", "page": "page", "limit": "limit"})),
     ("UpdateMyProfileTool", "update_my_profile", "Cập nhật hồ sơ của người dùng hiện tại bằng payload nghiệp vụ. Dùng khi cần sửa thông tin cá nhân. Không dùng cho avatar upload. Dữ liệu thuộc người dùng hiện tại.", ProfileUpdateInput, USER_ROLES, ToolOperation.UPDATE, build_nest_request(method="PATCH", path="/users/me", body_field="payload")),
     ("UpdateUserRoleTool", "update_user_role", "Cập nhật role của một người dùng theo user_id. Dùng cho admin hoặc super admin. Không dùng cho người dùng tự đổi quyền. Dữ liệu quản trị.", RoleUpdateInput, ADMIN_ROLES, ToolOperation.UPDATE, build_nest_request(method="PATCH", path="/users/{userId}/role", path_params={"user_id": "userId"}, body_params={"role": "role"})),
     ("UpdateUserActiveStatusTool", "update_user_active_status", "Bật hoặc tắt trạng thái hoạt động của một người dùng. Dùng cho admin quản trị tài khoản. Không dùng cho chỉnh hồ sơ cá nhân. Dữ liệu quản trị.", ActiveStatusInput, ADMIN_ROLES, ToolOperation.UPDATE, build_nest_request(method="PATCH", path="/users/{userId}/active", path_params={"user_id": "userId"}, body_params={"is_active": "isActive"})),

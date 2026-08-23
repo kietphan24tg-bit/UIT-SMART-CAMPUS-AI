@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.agent.executor import (
     ProposalConflictError,
@@ -22,10 +22,43 @@ from src.core.limits import RateLimitPolicy, guardrail_store
 
 router = APIRouter()
 
+AGENT_HISTORY_LIMIT = 10
+AGENT_HISTORY_MAX_CHARS = 16_000
+
+
+class AgentHistoryMessage(BaseModel):
+    role: str
+    content: str = Field(min_length=1)
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        if value not in {"user", "assistant"}:
+            raise ValueError("history role must be either 'user' or 'assistant'")
+        return value
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        content = value.strip()
+        if not content:
+            raise ValueError("history content must not be blank")
+        return content
+
 
 class AgentQueryRequest(BaseModel):
     message: str = Field(min_length=1, max_length=settings.agent_max_message_chars)
     session_id: str | None = Field(default=None, max_length=settings.agent_max_session_id_chars)
+    history: list[AgentHistoryMessage] | None = None
+
+    @model_validator(mode="after")
+    def validate_history(self) -> "AgentQueryRequest":
+        history = self.history or []
+        if len(history) > AGENT_HISTORY_LIMIT:
+            raise ValueError(f"history must contain at most {AGENT_HISTORY_LIMIT} messages")
+        if sum(len(item.content) for item in history) > AGENT_HISTORY_MAX_CHARS:
+            raise ValueError(f"history must contain at most {AGENT_HISTORY_MAX_CHARS} characters")
+        return self
 
 
 class AgentProposalResponse(BaseModel):
@@ -89,6 +122,7 @@ def query_agent(
             user=current_user,
             message=req.message.strip(),
             session_id=req.session_id,
+            history=[item.model_dump() for item in (req.history or [])],
         )
     proposal = None
     if result.proposal is not None:

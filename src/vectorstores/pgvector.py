@@ -298,7 +298,7 @@ class PgVectorStore:
         params: list[Any] = [self._vector_literal(query_vector)]
 
         if filter_current:
-            clauses.append("d.is_current = 'true'")
+            clauses.append("(d.is_current IS NULL OR lower(d.is_current) <> 'false')")
 
         if filters:
             for key, value in filters.items():
@@ -348,7 +348,7 @@ class PgVectorStore:
         params: list[Any] = [query]
 
         if filter_current:
-            clauses.append("d.is_current = 'true'")
+            clauses.append("(d.is_current IS NULL OR lower(d.is_current) <> 'false')")
 
         if filters:
             for key, value in filters.items():
