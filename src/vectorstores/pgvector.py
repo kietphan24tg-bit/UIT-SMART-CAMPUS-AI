@@ -96,6 +96,40 @@ class PgVectorStore:
                 cur.execute(f"CREATE INDEX IF NOT EXISTS documents_issued_date_idx ON {schema}.documents (issued_date)")
             conn.commit()
 
+    def ensure_fts_column(self) -> None:
+        """One-time migration: add search_vector TSVECTOR generated column + GIN index.
+
+        Safe to call multiple times (uses IF NOT EXISTS / ALTER IF NOT EXISTS).
+        Vietnamese text uses the 'simple' dictionary (lowercase, no stemming),
+        which is the best PostgreSQL can offer without an external extension.
+        """
+        schema = self._quoted_schema
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                # Add column only if it doesn't exist yet
+                cur.execute(
+                    f"""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{self.schema}'
+                              AND table_name   = 'document_chunks'
+                              AND column_name  = 'search_vector'
+                        ) THEN
+                            ALTER TABLE {schema}.document_chunks
+                                ADD COLUMN search_vector tsvector
+                                GENERATED ALWAYS AS (
+                                    to_tsvector('simple', lower(coalesce(content, '')))
+                                ) STORED;
+                        END IF;
+                    END $$;
+                    """
+                )
+                cur.execute(
+                    f"CREATE INDEX IF NOT EXISTS document_chunks_fts_gin ON {schema}.document_chunks USING GIN (search_vector)"
+                )
+            conn.commit()
+
     def create_ingest_run(self) -> int:
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -240,14 +274,40 @@ class PgVectorStore:
         return {"documents": documents, "chunks": chunks, "last_run": last_run}
 
     def search(self, query_vector: list[float], filters: dict | None = None, limit: int = 8) -> list[dict]:
-        clauses = []
+        """Legacy single-mode vector search – kept for backwards compatibility."""
+        return self.vector_search(query_vector, filters=filters, limit=limit)
+
+    def vector_search(
+        self,
+        query_vector: list[float],
+        filters: dict | None = None,
+        limit: int = 30,
+        filter_current: bool = False,
+    ) -> list[dict]:
+        """Cosine-distance vector search using the HNSW index.
+
+        Args:
+            query_vector:   Embedding of the user question.
+            filters:        Optional metadata key→value equality filters
+                            (applied via JSONB ->> operator).
+            limit:          Maximum rows to return (candidate pool size).
+            filter_current: When True, only return chunks whose parent document
+                            has is_current = 'true'.
+        """
+        clauses: list[str] = []
         params: list[Any] = [self._vector_literal(query_vector)]
+
+        if filter_current:
+            clauses.append("(d.is_current IS NULL OR lower(d.is_current) <> 'false')")
+
         if filters:
             for key, value in filters.items():
                 clauses.append("c.metadata ->> %s = %s")
                 params.extend([key, str(value)])
+
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
+
         with self._connect(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -256,6 +316,7 @@ class PgVectorStore:
                            c.page_start, c.page_end, c.metadata,
                            d.source_file, d.source_path, d.source_url, d.source_unit,
                            d.category, d.document_number, d.issued_date, d.effective_date,
+                           d.is_current,
                            c.embedding <=> %s::vector AS distance
                     FROM {self._quoted_schema}.document_chunks c
                     JOIN {self._quoted_schema}.documents d ON d.id = c.document_id
@@ -264,6 +325,98 @@ class PgVectorStore:
                     LIMIT %s
                     """,
                     [params[0], *params[1:-1], params[0], params[-1]],
+                )
+                return list(cur.fetchall())
+
+    def keyword_search(
+        self,
+        query: str,
+        filters: dict | None = None,
+        limit: int = 30,
+        filter_current: bool = False,
+    ) -> list[dict]:
+        """Full-text keyword search using PostgreSQL tsvector (simple config).
+
+        Uses ``websearch_to_tsquery('simple', ...)`` which handles quoted phrases,
+        OR, and NOT operators similarly to a web search box.  The 'simple'
+        dictionary lowercases tokens without stemming, which is the most
+        reliable option for Vietnamese text in stock PostgreSQL.
+
+        Requires the search_vector column to exist (call ensure_fts_column first).
+        """
+        clauses: list[str] = ["c.search_vector @@ websearch_to_tsquery('simple', %s)"]
+        params: list[Any] = [query]
+
+        if filter_current:
+            clauses.append("(d.is_current IS NULL OR lower(d.is_current) <> 'false')")
+
+        if filters:
+            for key, value in filters.items():
+                clauses.append("c.metadata ->> %s = %s")
+                params.extend([key, str(value)])
+
+        where = f"WHERE {' AND '.join(clauses)}"
+        params.append(limit)
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.document_id, c.content, c.heading_path, c.parent_heading_path,
+                           c.page_start, c.page_end, c.metadata,
+                           d.source_file, d.source_path, d.source_url, d.source_unit,
+                           d.category, d.document_number, d.issued_date, d.effective_date,
+                           d.is_current,
+                           ts_rank_cd(c.search_vector, websearch_to_tsquery('simple', %s)) AS ts_rank
+                    FROM {self._quoted_schema}.document_chunks c
+                    JOIN {self._quoted_schema}.documents d ON d.id = c.document_id
+                    {where}
+                    ORDER BY ts_rank DESC
+                    LIMIT %s
+                    """,
+                    [query, *params[1:-1], query, params[-1]],
+                )
+                return list(cur.fetchall())
+
+    def fetch_sibling_chunks(
+        self,
+        document_id: int,
+        heading_path: str | None,
+        exclude_chunk_id: int | None = None,
+        limit: int = 4,
+    ) -> list[dict]:
+        """Return chunks from the same document that share the same heading_path.
+
+        Used for parent-child retrieval: after finding a child chunk, fetch its
+        siblings to provide fuller legal/regulatory context to the LLM.
+        """
+        if not heading_path:
+            return []
+
+        params: list[Any] = [document_id, heading_path]
+        exclude_clause = ""
+        if exclude_chunk_id is not None:
+            exclude_clause = "AND c.id != %s"
+            params.append(exclude_chunk_id)
+        params.append(limit)
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.document_id, c.content, c.heading_path, c.parent_heading_path,
+                           c.page_start, c.page_end, c.metadata,
+                           d.source_file, d.source_path, d.source_url, d.source_unit,
+                           d.category, d.document_number, d.issued_date, d.effective_date
+                    FROM {self._quoted_schema}.document_chunks c
+                    JOIN {self._quoted_schema}.documents d ON d.id = c.document_id
+                    WHERE c.document_id = %s
+                      AND c.heading_path = %s
+                      {exclude_clause}
+                    ORDER BY c.chunk_index
+                    LIMIT %s
+                    """,
+                    params,
                 )
                 return list(cur.fetchall())
 

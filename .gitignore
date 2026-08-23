@@ -1,27 +1,19 @@
-# Python
+.env
+.env.*
+!.env.example
+
 __pycache__/
 *.py[cod]
-*.egg-info/
-dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 .venv/
 venv/
+*.egg-info/
 
-# Environment
-.env
-.env.local
+*.log
+*.err.log
 
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# Node (NestJS lives in a separate repo)
-api/nest/
-node_modules/
-package.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-
-# OS
 .DS_Store
 Thumbs.db

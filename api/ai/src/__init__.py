@@ -1,2 +1,0 @@
-"""Smart Campus AI service."""
-

@@ -83,6 +83,58 @@ def test_rag_service_calls_llm_and_formats_citations():
     assert response.contexts and response.contexts[0].index == 1
     assert "[1]" in llm.calls[0]["user"]
     assert retriever.calls[0]["top_k"] == 3
+    assert response.citations[0].index is None
+
+
+def test_retrieve_evidence_returns_contexts_without_calling_llm():
+    llm = FakeLlm()
+    service = RagService(retriever=FakeRetriever([_result()]), llm_client=llm)
+
+    evidence = service.retrieve_evidence("Dieu kien du thi la gi?", top_k=2)
+    response = evidence.to_response()
+
+    assert evidence.found is True
+    assert response.retrieved_count == 1
+    assert response.contexts[0].index == 1
+    assert response.citations[0].index == 1
+    assert llm.calls == []
+
+
+def test_rag_service_falls_back_when_context_has_no_support_overlap():
+    llm = FakeLlm()
+    raw = {
+        "content": "Quy trinh cap the sinh vien duoc thuc hien tai phong cong tac sinh vien.",
+        "metadata": {
+            "source_file": "cam-nang.pdf",
+            "source_unit": "CTSV",
+            "category": "handbook",
+            "heading_path": "Thu tuc sinh vien",
+            "page_start": 7,
+            "page_end": 7,
+        },
+        "source_file": "cam-nang.pdf",
+        "source_unit": "CTSV",
+        "category": "handbook",
+        "heading_path": "Thu tuc sinh vien",
+        "parent_heading_path": "Cam nang",
+        "page_start": 7,
+        "page_end": 7,
+        "distance": 0.2,
+    }
+    result = RetrievalResult(
+        content=raw["content"],
+        metadata=raw["metadata"],
+        distance=0.2,
+        score=0.8,
+        raw=raw,
+    )
+    service = RagService(retriever=FakeRetriever([result]), llm_client=llm)
+
+    response = service.answer("Thoi tiet hom nay the nao?")
+
+    assert response.answer_type == "fallback"
+    assert response.citations == []
+    assert llm.calls == []
 
 
 def test_prompt_builder_includes_source_number_and_question():
