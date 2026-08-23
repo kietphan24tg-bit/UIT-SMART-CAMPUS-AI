@@ -1,0 +1,25 @@
+[project]
+name = "smart-campus-ai"
+version = "0.1.0"
+description = "FastAPI AI service for UIT Smart Campus RAG and future agents"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "google-genai>=1.0.0",
+  "httpx>=0.27.0",
+  "psycopg[binary]>=3.2.0",
+  "redis>=5.0.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "pytest>=8.0.0",
+  "pyyaml>=6.0.0",
+  "sentence-transformers>=3.0.0,<6.0.0",
+  "transformers>=4.41.0,<5.0.0",
+  "huggingface-hub>=0.34.0,<1.0",
+  "tokenizers>=0.22.0,<0.23.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
