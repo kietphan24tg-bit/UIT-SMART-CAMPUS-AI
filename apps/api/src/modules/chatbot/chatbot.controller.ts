@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { USER_ROLES } from '@smart-campus/shared';
 import type { Role } from '@prisma/client';
@@ -28,8 +38,10 @@ export class ChatbotController {
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: Role,
     @Body() dto: QueryChatbotDto,
+    @Headers('authorization') authorization: string,
+    @Headers('x-request-id') requestId?: string,
   ) {
-    return this.chatbotService.query(userId, role, dto);
+    return this.chatbotService.query(userId, role, dto, authorization, requestId);
   }
 
   @Get('sessions')
@@ -58,6 +70,39 @@ export class ChatbotController {
   @ApiOperation({ summary: 'Get chatbot capabilities and quick prompts for current role' })
   capabilities(@CurrentUser('role') role: Role) {
     return this.chatbotService.getCapabilities(role);
+  }
+
+  @Get('proposals/:id')
+  @ApiOperation({ summary: 'Get an AI agent proposal for the current user' })
+  getProposal(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe()) proposalId: string,
+    @Headers('authorization') authorization: string,
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    return this.chatbotService.getProposal(userId, proposalId, authorization, requestId);
+  }
+
+  @Post('proposals/:id/confirm')
+  @ApiOperation({ summary: 'Confirm an AI agent proposal for the current user' })
+  confirmProposal(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe()) proposalId: string,
+    @Headers('authorization') authorization: string,
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    return this.chatbotService.confirmProposal(userId, proposalId, authorization, requestId);
+  }
+
+  @Post('proposals/:id/reject')
+  @ApiOperation({ summary: 'Reject an AI agent proposal for the current user' })
+  rejectProposal(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe()) proposalId: string,
+    @Headers('authorization') authorization: string,
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    return this.chatbotService.rejectProposal(userId, proposalId, authorization, requestId);
   }
 
   @Post('knowledge')

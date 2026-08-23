@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AiAgentService } from './ai-agent.service';
 import { ChatbotDomainRegistry } from './chatbot.domain-registry';
 import { ChatbotController } from './chatbot.controller';
 import { ChatbotKnowledgeService } from './chatbot.knowledge.service';
@@ -10,6 +11,7 @@ import { ChatbotService } from './chatbot.service';
 @Module({
   controllers: [ChatbotController],
   providers: [
+    AiAgentService,
     ChatbotDomainRegistry,
     ChatbotKnowledgeService,
     ChatbotLiveDomainHandlersService,

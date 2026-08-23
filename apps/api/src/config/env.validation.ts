@@ -90,7 +90,25 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  REDIS_URL = 'redis://localhost:6379';
+  REDIS_URL = '';
+
+  @IsString()
+  @IsOptional()
+  AI_SERVICE_URL = '';
+
+  @IsString()
+  @IsOptional()
+  AI_SERVICE_TOKEN = '';
+
+  @toOptionalBoolean(false)
+  @IsBoolean()
+  @IsOptional()
+  AI_AGENT_ENABLED = false;
+
+  @toOptionalNumber(30_000)
+  @IsNumber()
+  @IsOptional()
+  AI_AGENT_TIMEOUT_MS = 30_000;
 
   @IsString()
   @IsOptional()
@@ -274,6 +292,16 @@ export function validate(config: Record<string, unknown>) {
 
   if (errors.length > 0) {
     throw new Error(errors.toString());
+  }
+
+  const isProduction = validatedConfig.NODE_ENV === 'production';
+  if (isProduction && validatedConfig.AI_AGENT_ENABLED) {
+    if (!validatedConfig.AI_SERVICE_URL.trim()) {
+      throw new Error('AI_SERVICE_URL is required when AI_AGENT_ENABLED=true in production.');
+    }
+    if (!validatedConfig.AI_SERVICE_TOKEN.trim()) {
+      throw new Error('AI_SERVICE_TOKEN is required when AI_AGENT_ENABLED=true in production.');
+    }
   }
 
   return validatedConfig;

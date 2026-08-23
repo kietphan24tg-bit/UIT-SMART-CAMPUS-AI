@@ -160,10 +160,12 @@ export function buildDerivedCitation(
   };
 }
 
-export function finalizeAnswer(answer: Omit<ChatbotAnswer, 'deepLinks'>): ChatbotAnswer {
+export function finalizeAnswer(answer: Omit<ChatbotAnswer, 'deepLinks' | 'trace' | 'proposal'>): ChatbotAnswer {
   return {
     ...answer,
     deepLinks: answer.actions.map((item) => item.route),
+    trace: [],
+    proposal: null,
   };
 }
 

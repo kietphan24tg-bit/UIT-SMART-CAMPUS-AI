@@ -17,9 +17,17 @@ export type ChatbotDomainId =
   | 'ops'
   | 'campus-map';
 
-export type ChatbotAnswerType = 'live' | 'summary' | 'knowledge' | 'fallback';
+export type ChatbotAnswerType =
+  | 'live'
+  | 'summary'
+  | 'knowledge'
+  | 'fallback'
+  | 'answer'
+  | 'confirmation_required';
 export type ChatbotSummaryScope = 'today' | 'work' | 'ops';
 export type ChatbotActionKind = 'navigate';
+export type AgentTraceStepType = 'analysis' | 'tool' | 'confirmation' | 'answer';
+export type AgentTraceStepStatus = 'completed' | 'failed' | 'pending';
 
 export interface ChatbotAction {
   label: string;
@@ -28,13 +36,42 @@ export interface ChatbotAction {
 }
 
 export interface ChatbotCitation {
-  type: 'db' | 'kb' | 'derived' | 'system';
+  type: 'db' | 'kb' | 'derived' | 'system' | 'rag';
   label: string;
   sourceId: string;
   route?: string;
   table?: string;
   slug?: string;
   sourceUrl?: string | null;
+  index?: number;
+  sourceFile?: string | null;
+  sourceUnit?: string | null;
+  category?: string | null;
+  headingPath?: string | null;
+  parentHeadingPath?: string | null;
+  pageStart?: number | null;
+  pageEnd?: number | null;
+  distance?: number | null;
+  score?: number | null;
+}
+
+export interface AgentTraceStep {
+  type: AgentTraceStepType;
+  label: string;
+  status: AgentTraceStepStatus;
+  tool?: string | null;
+}
+
+export interface AgentProposal {
+  id: string;
+  tool: string;
+  operation: string;
+  riskLevel: string;
+  summary: string;
+  status: string;
+  expiresAt: string;
+  confirmPath: string;
+  rejectPath: string;
 }
 
 export interface ChatbotAnswer {
@@ -47,6 +84,8 @@ export interface ChatbotAnswer {
   intent: string;
   domain: ChatbotDomainId;
   answerType: ChatbotAnswerType;
+  trace?: AgentTraceStep[];
+  proposal?: AgentProposal | null;
 }
 
 export interface ChatbotMessageContext {
