@@ -910,6 +910,7 @@ model ChatMessage {
   confidence Float?
   citations  Json?
   deepLinks  Json?    @map("deep_links")
+  agentMetadata Json? @map("agent_metadata")
   createdAt  DateTime @default(now()) @map("created_at")
 
   session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
