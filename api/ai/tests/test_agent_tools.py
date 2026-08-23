@@ -45,6 +45,31 @@ def _catalog():
     return build_tool_catalog(nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {"ok": True}}))), rag_service=FakeRagService())
 
 
+def _sample_value(schema: dict):
+    if "enum" in schema:
+        return schema["enum"][0]
+    if "const" in schema:
+        return schema["const"]
+    for branch in schema.get("anyOf", []):
+        if branch.get("type") != "null":
+            return _sample_value(branch)
+
+    value_type = schema.get("type")
+    if value_type == "string":
+        return "value"
+    if value_type == "integer":
+        return max(1, schema.get("minimum", 1))
+    if value_type == "number":
+        return 1.0
+    if value_type == "boolean":
+        return True
+    if value_type == "array":
+        return [_sample_value(schema.get("items", {"type": "string"}))]
+    if value_type == "object":
+        return {"field": "value"}
+    return "value"
+
+
 def test_tool_catalog_has_unique_names_and_metadata():
     tools = _catalog()
 
@@ -55,6 +80,7 @@ def test_tool_catalog_has_unique_names_and_metadata():
     assert "search_university_policies" in names
 
     for tool in tools:
+        assert tool.display_name
         assert tool.description
         assert tool.allowed_roles
         assert tool.input_model is not None
@@ -62,6 +88,25 @@ def test_tool_catalog_has_unique_names_and_metadata():
             assert tool.requires_confirmation is False
         else:
             assert tool.requires_confirmation is True
+
+
+def test_every_nest_tool_can_build_request_from_required_arguments():
+    tools = [tool for tool in _catalog() if tool.name != "search_university_policies"]
+
+    for tool in tools:
+        schema = tool.input_model.model_json_schema()
+        required = set(schema.get("required", []))
+        values = {
+            name: _sample_value(field_schema)
+            for name, field_schema in schema.get("properties", {}).items()
+            if name in required
+        }
+        arguments = tool.input_model.model_validate(values)
+        request = tool.request_builder(arguments)
+
+        assert request["method"] in {"GET", "POST", "PUT", "PATCH", "DELETE"}, tool.name
+        assert request["path"].startswith("/"), tool.name
+        assert "{" not in request["path"], tool.name
 
 
 def test_tool_validation_rejects_extra_identity_or_url_fields():
