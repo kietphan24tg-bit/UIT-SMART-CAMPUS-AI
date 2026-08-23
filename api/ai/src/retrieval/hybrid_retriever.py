@@ -178,7 +178,10 @@ class HybridRetriever:
             id_to_score[cid] = id_to_score.get(cid, 0.0) + kw_weight / (k + rank)
 
         sorted_ids = sorted(id_to_score, key=id_to_score.__getitem__, reverse=True)
-        return [(id_to_row[cid], id_to_score[cid]) for cid in sorted_ids]
+        max_score = (kw_weight + vec_weight) / (k + 1)
+        if max_score <= 0:
+            return [(id_to_row[cid], 0.0) for cid in sorted_ids]
+        return [(id_to_row[cid], min(id_to_score[cid] / max_score, 1.0)) for cid in sorted_ids]
 
     @staticmethod
     def _build_metadata(row: dict) -> dict:

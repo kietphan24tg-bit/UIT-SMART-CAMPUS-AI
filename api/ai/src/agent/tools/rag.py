@@ -17,6 +17,7 @@ class SearchUniversityPoliciesInput(ToolArgumentsModel):
 
 class SearchUniversityPoliciesTool(AgentTool):
     name = "search_university_policies"
+    display_name = "Tra cuu quy che UIT"
     description = (
         "Tra cứu quy chế, quy định, cẩm nang sinh viên và tài liệu tĩnh của trường bằng RAG. "
         "Dùng khi câu hỏi cần nguồn văn bản chính thức của trường. Không dùng cho dữ liệu cá nhân hóa thời gian thực "
@@ -26,6 +27,7 @@ class SearchUniversityPoliciesTool(AgentTool):
     allowed_roles = frozenset({"student", "lecturer", "admin", "super_admin", "canteen_admin"})
     operation_type = ToolOperation.READ
     requires_confirmation = False
+    retry_policy = "once_transient"
 
     def __init__(self, rag_service: RagService | None = None) -> None:
         self.rag_service = rag_service

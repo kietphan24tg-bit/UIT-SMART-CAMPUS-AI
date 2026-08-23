@@ -29,6 +29,9 @@ from src.core.safety import fit_public_payload, limit_text
 
 logger = logging.getLogger(__name__)
 
+AGENT_HISTORY_LIMIT = 10
+AGENT_HISTORY_MAX_CHARS = 16_000
+
 
 class SmartCampusAgent:
     def __init__(
@@ -51,6 +54,7 @@ class SmartCampusAgent:
         user: AuthenticatedUser,
         message: str,
         session_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> AgentQueryResult:
         request_id = str(uuid4())
         normalized_message = message.strip()
@@ -64,6 +68,7 @@ class SmartCampusAgent:
                 "Session hiện tại không hợp lệ. Bạn vui lòng bắt đầu lại cuộc hội thoại.",
                 request_id=request_id,
             )
+        normalized_history = self._normalize_history(history)
 
         started = time.monotonic()
         deadline = started + settings.agent_total_timeout_seconds
@@ -74,9 +79,7 @@ class SmartCampusAgent:
             request_id=request_id,
             session_id=session_id,
         )
-        contents: list[types.Content] = [
-            types.Content(role="user", parts=[types.Part.from_text(text=normalized_message)]),
-        ]
+        contents: list[types.Content] = self._build_contents(normalized_history, normalized_message)
         trace = [
             AgentTraceStep(
                 type="analysis",
@@ -222,7 +225,7 @@ class SmartCampusAgent:
                     [
                         self._response_content(response),
                         types.Content(
-                            role="tool",
+                            role="user",
                             parts=[
                                 types.Part.from_function_response(
                                     name=call.name,
@@ -572,6 +575,36 @@ class SmartCampusAgent:
         if not used_indices:
             return []
         return [citation for citation in citations if citation.index in used_indices]
+
+    def _build_contents(self, history: list[dict[str, str]], message: str) -> list[types.Content]:
+        contents: list[types.Content] = []
+        for item in history:
+            role = "model" if item["role"] == "assistant" else "user"
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=item["content"])]))
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message)]))
+        return contents
+
+    def _normalize_history(self, history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+        if not history:
+            return []
+
+        normalized: list[dict[str, str]] = []
+        total_chars = 0
+        for item in history[:AGENT_HISTORY_LIMIT]:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            content = item.get("content")
+            if role not in {"user", "assistant"} or not isinstance(content, str):
+                continue
+            trimmed = content.strip()
+            if not trimmed:
+                continue
+            if total_chars + len(trimmed) > AGENT_HISTORY_MAX_CHARS:
+                continue
+            normalized.append({"role": role, "content": trimmed})
+            total_chars += len(trimmed)
+        return normalized
 
     def _audit(
         self,

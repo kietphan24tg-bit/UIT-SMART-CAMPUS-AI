@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"
     llm_model: str = "llama-3.1-8b-instant"
     groq_key: str | None = Field(default=None, validation_alias="GROQ_KEY")
-    agent_model: str = "gemini-2.5-flash"
+    agent_model: str = "gemini-3.5-flash-lite"
     agent_db_schema: str = "agent"
     agent_actions_enabled: bool = False
     agent_confirmation_ttl_seconds: int = 300
