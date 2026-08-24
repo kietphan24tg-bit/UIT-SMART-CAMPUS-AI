@@ -15,5 +15,8 @@ venv/
 *.log
 *.err.log
 
+evaluation/results/
+evaluation/.cache/
+
 .DS_Store
 Thumbs.db

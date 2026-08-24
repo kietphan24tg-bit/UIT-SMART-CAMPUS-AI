@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.evaluation.metrics import (
+from evaluation.metrics import (
     mean_ndcg_at_k,
     mean_recall_at_k,
     mean_reciprocal_rank,
