@@ -7,6 +7,7 @@ from psycopg.rows import dict_row
 from src.chunking.fallback_chunker import TextChunk
 from src.documents.loader import sha256_text
 from src.documents.metadata import MarkdownDocument
+from src.retrieval.taxonomy import enrich_metadata
 
 
 class PgVectorStore:
@@ -119,7 +120,13 @@ class PgVectorStore:
                             ALTER TABLE {schema}.document_chunks
                                 ADD COLUMN search_vector tsvector
                                 GENERATED ALWAYS AS (
-                                    to_tsvector('simple', lower(coalesce(content, '')))
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'title', ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(heading_path, ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'taxonomy_aliases', ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'source_file', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'source_unit', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'category', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(content, ''))), 'D')
                                 ) STORED;
                         END IF;
                     END $$;
@@ -231,6 +238,7 @@ class PgVectorStore:
                             "page_end": chunk.page_end,
                         }
                     )
+                    metadata = enrich_metadata(metadata, source_unit=metadata.get("source_unit"), category=metadata.get("category"))
                     cur.execute(
                         f"""
                         INSERT INTO {self._quoted_schema}.document_chunks (
@@ -302,8 +310,15 @@ class PgVectorStore:
 
         if filters:
             for key, value in filters.items():
-                clauses.append("c.metadata ->> %s = %s")
-                params.extend([key, str(value)])
+                if key == "source_files":
+                    source_files = [str(item) for item in value] if isinstance(value, (list, tuple, set)) else []
+                    if not source_files:
+                        return []
+                    clauses.append("d.source_file = ANY(%s)")
+                    params.append(source_files)
+                else:
+                    clauses.append("c.metadata ->> %s = %s")
+                    params.extend([key, str(value)])
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
@@ -325,6 +340,38 @@ class PgVectorStore:
                     LIMIT %s
                     """,
                     [params[0], *params[1:-1], params[0], params[-1]],
+                )
+                return list(cur.fetchall())
+
+    def source_catalog(self) -> list[dict[str, Any]]:
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        d.source_file,
+                        d.source_unit,
+                        d.category,
+                        d.document_number,
+                        d.issued_date,
+                        d.effective_date,
+                        d.is_current,
+                        d.chunk_count,
+                        max(c.heading_path) FILTER (WHERE c.heading_path IS NOT NULL) AS sample_heading,
+                        max(c.metadata ->> 'title') FILTER (WHERE c.metadata ? 'title') AS title
+                    FROM {self._quoted_schema}.documents d
+                    LEFT JOIN {self._quoted_schema}.document_chunks c ON c.document_id = d.id
+                    GROUP BY
+                        d.source_file,
+                        d.source_unit,
+                        d.category,
+                        d.document_number,
+                        d.issued_date,
+                        d.effective_date,
+                        d.is_current,
+                        d.chunk_count
+                    ORDER BY d.source_unit NULLS LAST, d.category NULLS LAST, d.source_file
+                    """
                 )
                 return list(cur.fetchall())
 
@@ -352,8 +399,15 @@ class PgVectorStore:
 
         if filters:
             for key, value in filters.items():
-                clauses.append("c.metadata ->> %s = %s")
-                params.extend([key, str(value)])
+                if key == "source_files":
+                    source_files = [str(item) for item in value] if isinstance(value, (list, tuple, set)) else []
+                    if not source_files:
+                        return []
+                    clauses.append("d.source_file = ANY(%s)")
+                    params.append(source_files)
+                else:
+                    clauses.append("c.metadata ->> %s = %s")
+                    params.extend([key, str(value)])
 
         where = f"WHERE {' AND '.join(clauses)}"
         params.append(limit)
@@ -374,7 +428,7 @@ class PgVectorStore:
                     ORDER BY ts_rank DESC
                     LIMIT %s
                     """,
-                    [query, *params[1:-1], query, params[-1]],
+                    [query, *params[:-1], params[-1]],
                 )
                 return list(cur.fetchall())
 

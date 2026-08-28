@@ -1,4 +1,4 @@
-"""Evaluation framework for Smart Campus RAG and Agent quality gates."""
+"""Evaluation framework for the UIT training and examination RAG domain."""
 
 from .schemas import EvaluationDataset, EvaluationSample
 

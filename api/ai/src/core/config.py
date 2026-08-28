@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     # weight for keyword vs vector rank when merging (1.0 = equal weight)
     hybrid_keyword_weight: float = 1.0
     hybrid_vector_weight: float = 1.0
+    hybrid_phrase_boost_weight: float = 0.15
+    hybrid_domain_boost_weight: float = 0.12
+    hybrid_authority_boost_weight: float = 0.08
 
     # ── Re-ranker ─────────────────────────────────────────────────────────────
     reranker_enabled: bool = False
@@ -90,6 +93,11 @@ class Settings(BaseSettings):
     # ── Answer gating ─────────────────────────────────────────────────────────
     # minimum top-chunk score to call the LLM at all
     answer_min_confidence: float = 0.20
+    answer_min_vector_confidence: float = 0.32
+    answer_min_hybrid_confidence: float = 0.38
+    answer_min_reranker_confidence: float = 0.55
+    answer_min_top_gap: float = 0.03
+    answer_min_lexical_coverage: float = 0.20
 
 
 settings = Settings()

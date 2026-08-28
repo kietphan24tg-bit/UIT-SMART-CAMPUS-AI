@@ -1,26 +1,16 @@
 from __future__ import annotations
 
 import json
-from collections import Counter
 from pathlib import Path
 
-from .schemas import EvaluationDataset, EvaluationSample
+from .schemas import EvaluationDataset, EvaluationSample, ReviewStatus
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-DATASET_DIR = PACKAGE_DIR / "dataset"
-DEFAULT_DATASET_PATH = DATASET_DIR / "samples.jsonl"
-DEFAULT_VERSION = "uit_smart_campus_eval_v1"
-
-EXPECTED_DISTRIBUTION: dict[str, int] = {
-    "training_exam": 30,
-    "learning_outcome": 15,
-    "tuition_procedure": 20,
-    "academic_personal": 20,
-    "campus_services": 25,
-    "action_confirmation": 25,
-    "out_of_scope": 10,
-    "security": 15,
-}
+CORPUS_DIR = PACKAGE_DIR / "corpus" / "training_exam"
+DEFAULT_DATASET_PATH = CORPUS_DIR / "samples.jsonl"
+DEFAULT_VERSION = "training_exam_eval_v1"
+EXPECTED_CATEGORY = "training_exam"
+EXPECTED_TOTAL = 30
 
 
 class DatasetValidationError(ValueError):
@@ -58,31 +48,60 @@ def dataset_fingerprint(dataset: EvaluationDataset) -> str:
 def validate_dataset(
     dataset: EvaluationDataset,
     *,
-    expected_total: int = 160,
-    require_distribution: bool = True,
+    expected_total: int = EXPECTED_TOTAL,
     require_two_approvals: bool = False,
+    known_sources: set[str] | None = None,
+    strict_ground_truth: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     if len(dataset.samples) != expected_total:
         errors.append(f"Expected {expected_total} samples, found {len(dataset.samples)}.")
 
-    split_counts = Counter(sample.split.value for sample in dataset.samples)
-    if split_counts.get("dev", 0) != 112 or split_counts.get("test", 0) != 48:
-        errors.append(f"Expected split dev=112/test=48, found {dict(split_counts)}.")
+    invalid_categories = sorted({sample.category for sample in dataset.samples if sample.category != EXPECTED_CATEGORY})
+    if invalid_categories:
+        errors.append(
+            f"Only category {EXPECTED_CATEGORY!r} is allowed, found: {', '.join(invalid_categories)}."
+        )
 
-    if require_distribution:
-        category_counts = Counter(sample.category for sample in dataset.samples)
-        for category, expected in EXPECTED_DISTRIBUTION.items():
-            actual = category_counts.get(category, 0)
-            if actual != expected:
-                errors.append(f"Expected category {category}={expected}, found {actual}.")
+    scoped_samples = dataset.samples
 
     if require_two_approvals:
-        missing = [sample.id for sample in dataset.samples if not sample.approved]
+        missing = [sample.id for sample in scoped_samples if not sample.approved]
         if missing:
             preview = ", ".join(missing[:10])
             suffix = "..." if len(missing) > 10 else ""
             errors.append(f"{len(missing)} samples do not have two approvals: {preview}{suffix}")
+
+    for sample in scoped_samples:
+        approved_reviewers = [review.reviewer for review in sample.reviews if review.status is ReviewStatus.APPROVED]
+        if len(approved_reviewers) != len(set(approved_reviewers)):
+            errors.append(f"{sample.id}: duplicate approved reviewers are not allowed.")
+
+        if strict_ground_truth:
+            if sample.expected.answer_type == "answer" and not sample.corpus_gap:
+                if not sample.expected.sources:
+                    errors.append(f"{sample.id}: answer sample must declare at least one source.")
+                if not sample.expected.reference_answer.strip():
+                    errors.append(f"{sample.id}: answer sample must include a non-empty reference_answer.")
+                if sample.expected.sources and max(source.relevance for source in sample.expected.sources) < 2:
+                    errors.append(f"{sample.id}: answer sample must include at least one relevance=2 source.")
+            if sample.expected.answer_type == "fallback":
+                if sample.expected.sources:
+                    errors.append(f"{sample.id}: fallback sample must not declare sources.")
+                if not sample.expected.reference_answer.strip():
+                    errors.append(f"{sample.id}: fallback sample must explain the fallback reason in reference_answer.")
+            if sample.corpus_gap and sample.expected.answer_type == "answer" and sample.expected.sources:
+                errors.append(f"{sample.id}: corpus_gap samples must not declare sources until evidence exists.")
+
+        if strict_ground_truth and known_sources is not None:
+            missing_sources = [
+                source.source_file
+                for source in sample.expected.sources
+                if source.source_file not in known_sources
+            ]
+            if missing_sources:
+                preview = ", ".join(sorted(set(missing_sources))[:5])
+                errors.append(f"{sample.id}: source_file not found in source catalog: {preview}.")
 
     return errors
 

@@ -125,6 +125,14 @@ class EvaluationSample(BaseModel):
         return len(reviewers) >= 2
 
     @property
+    def corpus_gap(self) -> bool:
+        return bool(self.metadata.get("corpus_gap"))
+
+    @property
+    def answerable(self) -> bool:
+        return self.expected.answer_type == "answer" and not self.corpus_gap
+
+    @property
     def expected_documents(self) -> list[str]:
         return [source.source_file for source in self.expected.sources]
 
