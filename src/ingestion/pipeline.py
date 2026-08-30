@@ -35,6 +35,8 @@ class IngestionPipeline:
             database_url=config.database_url or "",
             schema=config.rag_db_schema,
             dimensions=config.embedding_dimensions,
+            embedding_provider=config.embedding_provider,
+            embedding_model=config.embedding_model,
         )
         self.structure_chunker = StructureChunker(
             max_tokens=config.chunk_max_tokens,
@@ -141,6 +143,11 @@ class IngestionPipeline:
             "sha256": metadata.sha256,
             "extraction_method": metadata.extraction_method,
             "extraction_status": metadata.extraction_status,
+            # Keep vector provenance with every chunk so embedding spaces cannot be mixed silently.
+            "embedding_provider": self.config.embedding_provider,
+            "embedding_model": self.config.embedding_model,
+            "embedding_dimensions": self.config.embedding_dimensions,
+            "embedding_space": f"{self.config.embedding_provider}:{self.config.embedding_model}:v1",
         }
 
     def _content_for_embedding(self, chunk: TextChunk) -> str:

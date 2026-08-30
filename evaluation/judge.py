@@ -5,7 +5,9 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field, ValidationError
 
 from .cache import EvaluationCache
@@ -32,15 +34,19 @@ class JudgeScore(BaseModel):
 class GeminiJudge:
     api_key: str | None = None
     model: str | None = None
+    provider: str = "gemini"
+    ollama_base_url: str = "http://localhost:11434"
     cache: EvaluationCache | None = None
 
     def score(self, sample: EvaluationSample, generated_answer: str, evidence: list[dict[str, Any]], *, refresh: bool = False) -> JudgeScore:
+        provider = self.provider or os.environ.get("EVAL_JUDGE_PROVIDER", "gemini")
         model = self.model or os.environ.get("EVAL_JUDGE_MODEL", "gemini-3.5-flash")
         payload = {
             "sample": sample.model_dump(mode="json"),
             "generated_answer": generated_answer,
             "evidence": evidence,
             "judge_model": model,
+            "judge_provider": provider,
             "judge_prompt_hash": stable_hash(JUDGE_SYSTEM_PROMPT),
         }
         cache_key = self.cache.key(payload) if self.cache else None
@@ -49,21 +55,53 @@ class GeminiJudge:
             if cached:
                 return JudgeScore.model_validate(cached)
 
-        client = genai.Client(api_key=self.api_key or os.environ.get("GEMINI_KEY"))
         prompt = json.dumps(payload, ensure_ascii=False)
+        if provider.lower() == "ollama":
+            response = httpx.post(
+                f"{self.ollama_base_url.rstrip('/')}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "stream": False,
+                    "think": False,
+                    "format": JudgeScore.model_json_schema(),
+                    "options": {"temperature": 0},
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+            raw_text = ((response.json().get("message") or {}).get("content") or "")
+            try:
+                score = JudgeScore.model_validate_json(raw_text)
+            except ValidationError as exc:
+                raise ValueError(f"Ollama judge returned invalid JSON: {exc}") from exc
+            if cache_key:
+                self.cache.set(cache_key, score.model_dump(mode="json"))
+            return score
+
+        client = genai.Client(api_key=self.api_key or os.environ.get("GEMINI_KEY"))
         response = client.models.generate_content(
             model=model,
             contents=prompt,
-            config={
-                "system_instruction": JUDGE_SYSTEM_PROMPT,
-                "temperature": 0,
-                "response_mime_type": "application/json",
-            },
+            config=types.GenerateContentConfig(
+                system_instruction=JUDGE_SYSTEM_PROMPT,
+                temperature=0,
+                response_mime_type="application/json",
+                response_schema=JudgeScore,
+            ),
         )
-        try:
-            score = JudgeScore.model_validate_json(response.text or "{}")
-        except ValidationError as exc:
-            raise ValueError(f"Judge returned invalid JSON: {exc}") from exc
+        if isinstance(response.parsed, JudgeScore):
+            score = response.parsed
+        elif response.parsed is not None:
+            score = JudgeScore.model_validate(response.parsed)
+        else:
+            try:
+                score = JudgeScore.model_validate_json(response.text or "{}")
+            except ValidationError as exc:
+                raise ValueError(f"Judge returned invalid JSON: {exc}") from exc
         if cache_key:
             self.cache.set(cache_key, score.model_dump(mode="json"))
         return score

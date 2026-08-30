@@ -1,0 +1,96 @@
+{
+  "corpus_id": "training_exam",
+  "version": "v1.0.0",
+  "domain": "training_and_exam_regulations",
+  "language": "vi",
+  "scope": "Quy che dao tao tin chi, quy dinh to chuc thi, quan ly diem va xu ly hoc vu cho sinh vien dai hoc chinh quy UIT.",
+  "source_root": "D:/Workspace/UIT-document-normalized",
+  "curated_documents_dir": "evaluation/corpus/training_exam/documents",
+  "source_catalog": "../../dataset/source_catalog.json",
+  "authority_policy": "Do not treat a document as current until its official page or signed document is manually verified.",
+  "document_count": 7,
+  "documents": [
+    {
+      "source_file": "daa-790-qd-dhcntt_28-9-22_quy_che_dao_tao.pdf",
+      "normalized_file": "daa-790-qd-dhcntt-28-9-22-quy-che-dao-tao.md",
+      "curated_file": "documents/daa-790-qd-dhcntt-28-9-22-quy-che-dao-tao.md",
+      "role": "primary",
+      "topic": "credit_based_training_regulation",
+      "authority_level": 3,
+      "effective_status": "partially_amended"
+    },
+    {
+      "source_file": "cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.pdf",
+      "normalized_file": "cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.md",
+      "curated_file": "documents/cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.md",
+      "role": "amendment",
+      "topic": "credit_based_training_regulation",
+      "authority_level": 3,
+      "effective_status": "verified_current"
+    },
+    {
+      "source_file": "daa-1139_qd-dhcntt_20-12-2022_to_chuc_thi_cac_mon_hoc_he_dai_hoc_chinh_quy.pdf",
+      "normalized_file": "daa-1139-qd-dhcntt-20-12-2022-to-chuc-thi-cac-mon-hoc-he-dai-hoc-chinh-quy.md",
+      "curated_file": "documents/daa-1139-qd-dhcntt-20-12-2022-to-chuc-thi-cac-mon-hoc-he-dai-hoc-chinh-quy.md",
+      "role": "primary",
+      "topic": "centralized_examination",
+      "authority_level": 3,
+      "effective_status": "partially_amended"
+    },
+    {
+      "source_file": "daa-1376_qd-dhcntt_28-12-2023_cap_nhat_quy_dinh_to_chuc_thi.pdf",
+      "normalized_file": "daa-1376-qd-dhcntt-28-12-2023-cap-nhat-quy-dinh-to-chuc-thi.md",
+      "curated_file": "documents/daa-1376-qd-dhcntt-28-12-2023-cap-nhat-quy-dinh-to-chuc-thi.md",
+      "role": "amendment",
+      "topic": "centralized_examination",
+      "authority_level": 3,
+      "effective_status": "verified_current"
+    },
+    {
+      "source_file": "daa-135-qd-dhcntt_10-02-2026_quy_dinh_ve_to_chuc_thi_tren_may_tinh_0.pdf",
+      "normalized_file": "daa-135-qd-dhcntt-10-02-2026-quy-dinh-ve-to-chuc-thi-tren-may-tinh-0.md",
+      "curated_file": "documents/daa-135-qd-dhcntt-10-02-2026-quy-dinh-ve-to-chuc-thi-tren-may-tinh-0.md",
+      "role": "specialized_primary",
+      "topic": "computer_based_examination",
+      "authority_level": 3,
+      "effective_status": "verified_current"
+    },
+    {
+      "source_file": "quy-trinh-to-chuc-thi-quan-ly-diem-bai-thi.pdf",
+      "normalized_file": "quy-trinh-to-chuc-thi-quan-ly-diem-bai-thi.md",
+      "curated_file": "documents/quy-trinh-to-chuc-thi-quan-ly-diem-bai-thi.md",
+      "role": "operational_procedure",
+      "topic": "examination_and_grade_management",
+      "authority_level": 2,
+      "effective_status": "needs_verification",
+      "benchmark_eligible": false
+    },
+    {
+      "source_file": "daa-803-qd-dhcntt_11-07-2025_quy_trinh_xlhv.pdf",
+      "normalized_file": "daa-803-qd-dhcntt-11-07-2025-quy-trinh-xlhv.md",
+      "curated_file": "documents/daa-803-qd-dhcntt-11-07-2025-quy-trinh-xlhv.md",
+      "role": "primary_procedure",
+      "topic": "academic_status_processing",
+      "authority_level": 3,
+      "effective_status": "verified_current"
+    }
+  ],
+  "excluded_topics": [
+    "learning_outcomes",
+    "tuition",
+    "library",
+    "canteen",
+    "room_booking",
+    "attendance",
+    "postgraduate_training",
+    "distance_learning",
+    "temporary_event_announcements"
+  ],
+  "quality_gates": [
+    "source_file_exists_in_source_catalog",
+    "source_file_exists_under_source_root",
+    "utf8_text_is_readable",
+    "heading_path_and_page_markers_are_preserved",
+    "authority_and_effective_status_are_verified_before_final_test_split"
+  ]
+}

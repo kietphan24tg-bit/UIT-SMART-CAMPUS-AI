@@ -1,0 +1,149 @@
+{
+  "corpus_id": "training_exam",
+  "version": "v1.0.0",
+  "last_reviewed": "2026-08-27",
+  "review_status": "benchmark_ready_with_unverified_source_excluded",
+  "status_vocabulary": [
+    "verified_current",
+    "verified_superseded",
+    "partially_amended",
+    "needs_verification",
+    "out_of_scope"
+  ],
+  "records": [
+    {
+      "source_file": "daa-790-qd-dhcntt_28-9-22_quy_che_dao_tao.pdf",
+      "normalized_file": "daa-790-qd-dhcntt-28-9-22-quy-che-dao-tao.md",
+      "document_number": "790/QD-DHCNTT",
+      "issued_date": "2022-09-28",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "regulation",
+      "role": "primary",
+      "domain": "training_regulation",
+      "authority_level": 3,
+      "status": "partially_amended",
+      "relations": [
+        {
+          "type": "possibly_amended_by",
+          "source_file": "cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.pdf"
+        }
+      ],
+      "official_source": "https://daa.uit.edu.vn/01-quyet-dinh-ve-viec-ban-hanh-quy-che-dao-tao-theo-hoc-che-tin-chi",
+      "verification_note": "Verify the signed document and identify which articles, if any, are amended by 1393/QD-... before marking current."
+    },
+    {
+      "source_file": "cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.pdf",
+      "normalized_file": "cap-nhat-quy-che-dao-tao-tin-chi-1393-2023.md",
+      "document_number": "1393/QD-DHCNTT",
+      "issued_date": "2023-12-29",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "amendment",
+      "role": "amendment",
+      "domain": "training_regulation",
+      "authority_level": 3,
+      "status": "verified_current",
+      "relations": [
+        {
+          "type": "amends",
+          "source_file": "daa-790-qd-dhcntt_28-9-22_quy_che_dao_tao.pdf"
+        }
+      ],
+      "official_source": "https://daa.uit.edu.vn/qui-che-qui-dinh-qui-trinh",
+      "verification_note": "The official UIT attachment filename and current UIT program pages identify this as 1393/QD-DHCNTT dated 2023-12-29. OCR misread 1393 as 423. It updates selected provisions of the 790 regulation."
+    },
+    {
+      "source_file": "daa-1139_qd-dhcntt_20-12-2022_to_chuc_thi_cac_mon_hoc_he_dai_hoc_chinh_quy.pdf",
+      "normalized_file": "daa-1139-qd-dhcntt-20-12-2022-to-chuc-thi-cac-mon-hoc-he-dai-hoc-chinh-quy.md",
+      "document_number": "1139/QD-DHCNTT",
+      "issued_date": "2022-12-20",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "regulation",
+      "role": "primary",
+      "domain": "exam",
+      "authority_level": 3,
+      "status": "partially_amended",
+      "relations": [
+        {
+          "type": "possibly_amended_by",
+          "source_file": "daa-1376_qd-dhcntt_28-12-2023_cap_nhat_quy_dinh_to_chuc_thi.pdf"
+        }
+      ],
+      "official_source": "https://daa.uit.edu.vn/07-quyet-dinh-ve-viec-ban-hanh-quy-dinh-chuc-thi-tap-trung-cac-mon-hoc-he-dhcq",
+      "verification_note": "Check whether later examination rules replace or only amend selected articles."
+    },
+    {
+      "source_file": "daa-1376_qd-dhcntt_28-12-2023_cap_nhat_quy_dinh_to_chuc_thi.pdf",
+      "normalized_file": "daa-1376-qd-dhcntt-28-12-2023-cap-nhat-quy-dinh-to-chuc-thi.md",
+      "document_number": "1376/QD-DHCNTT",
+      "issued_date": "2023-12-28",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "amendment",
+      "role": "amendment",
+      "domain": "exam",
+      "authority_level": 3,
+      "status": "verified_current",
+      "relations": [
+        {
+          "type": "amends",
+          "source_file": "daa-1139_qd-dhcntt_20-12-2022_to_chuc_thi_cac_mon_hoc_he_dai_hoc_chinh_quy.pdf"
+        }
+      ],
+      "official_source": "https://daa.uit.edu.vn/qui-che-qui-dinh-qui-trinh",
+      "verification_note": "The official UIT attachment filename identifies 1376/QD-DHCNTT dated 2023-12-28. Its text amends the 1139 examination regulation, and the later computer-based examination regulation cites both decisions."
+    },
+    {
+      "source_file": "daa-135-qd-dhcntt_10-02-2026_quy_dinh_ve_to_chuc_thi_tren_may_tinh_0.pdf",
+      "normalized_file": "daa-135-qd-dhcntt-10-02-2026-quy-dinh-ve-to-chuc-thi-tren-may-tinh-0.md",
+      "document_number": "425/QD-DHCNTT",
+      "issued_date": "2026-02-10",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "specialized_regulation",
+      "role": "specialized_primary",
+      "domain": "computer_based_exam",
+      "authority_level": 3,
+      "status": "verified_current",
+      "relations": [],
+      "official_source": "https://daa.uit.edu.vn/danh-muc/thong-bao-quan-trong?page=2",
+      "verification_note": "The normalized text contains 425/QD-DHCNTT dated 2026-02-10 and UIT announced the regulation on 2026-02-11. Use only for computer-based examination questions; do not generalize it to all examinations."
+    },
+    {
+      "source_file": "quy-trinh-to-chuc-thi-quan-ly-diem-bai-thi.pdf",
+      "normalized_file": "quy-trinh-to-chuc-thi-quan-ly-diem-bai-thi.md",
+      "document_number": "27/QD-DHCNTT-DTDH",
+      "issued_date": "2013-01-28",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "operational_procedure",
+      "role": "operational_procedure",
+      "domain": "exam_and_grade_management",
+      "authority_level": 2,
+      "status": "needs_verification",
+      "benchmark_eligible": false,
+      "relations": [],
+      "official_source": "https://daa.uit.edu.vn/sites/daa/files/files/Quy%20trinh%20to%20chuc%20thi%2Cquan%20ly%20diem%20%26%20bai%20thi.pdf",
+      "verification_note": "Treat as procedural evidence, not as the sole authority for current student eligibility rules."
+    },
+    {
+      "source_file": "daa-803-qd-dhcntt_11-07-2025_quy_trinh_xlhv.pdf",
+      "normalized_file": "daa-803-qd-dhcntt-11-07-2025-quy-trinh-xlhv.md",
+      "document_number": "803/QD-DHCNTT",
+      "issued_date": "2025-07-11",
+      "authority": "Truong Dai hoc Cong nghe Thong tin",
+      "document_type": "academic_status_procedure",
+      "role": "primary_procedure",
+      "domain": "academic_status",
+      "authority_level": 3,
+      "status": "verified_current",
+      "relations": [],
+      "official_source": "https://daa.uit.edu.vn/38-quy-trinh-xu-ly-hoc-vu-sinh-vien-dai-hoc-chinh-quy",
+      "verification_note": "UIT publishes this 803/QD-DHCNTT procedure on its current internal-documents index. Apply only to regular undergraduate academic-status processing."
+    }
+  ],
+  "manual_verification_checklist": [
+    "Open the signed PDF from the official UIT page.",
+    "Record the exact decision number, signing date and effective date.",
+    "Read the implementation/effectiveness clause.",
+    "Record amended, replaced or repealed articles explicitly.",
+    "Record applicable education system, cohort and examination modality.",
+    "Only then change status from needs_verification to verified_current or verified_superseded."
+  ]
+}

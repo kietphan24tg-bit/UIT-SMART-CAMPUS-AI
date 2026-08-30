@@ -6,7 +6,7 @@ import re
 import unicodedata
 from collections import defaultdict
 from statistics import mean
-from typing import Iterable
+from typing import Any, Iterable
 
 
 def _dedupe(values: Iterable[str]) -> list[str]:
@@ -40,6 +40,47 @@ def source_matches(expected: str, retrieved: str) -> bool:
     )
 
 
+def source_key_matches(expected: str, retrieved: str) -> bool:
+    expected_doc, _, expected_heading = expected.partition("::")
+    retrieved_doc, _, retrieved_heading = retrieved.partition("::")
+    if not source_matches(expected_doc, retrieved_doc):
+        return False
+    if not expected_heading.strip():
+        return True
+    if not retrieved_heading.strip():
+        return False
+
+    expected_normalized = _normalize_heading(expected_heading)
+    retrieved_normalized = _normalize_heading(retrieved_heading)
+    expected_article = _article_number(expected_normalized)
+    retrieved_article = _article_number(retrieved_normalized)
+    if expected_article and retrieved_article and expected_article != retrieved_article:
+        return False
+    return (
+        expected_normalized in retrieved_normalized
+        or retrieved_normalized in expected_normalized
+        or _heading_token_overlap(expected_normalized, retrieved_normalized) >= 0.65
+    )
+
+
+def _normalize_heading(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+
+
+def _article_number(value: str) -> str | None:
+    match = re.search(r"\bdieu\s+(\d+[a-z]?)\b", value)
+    return match.group(1) if match else None
+
+
+def _heading_token_overlap(expected: str, retrieved: str) -> float:
+    expected_tokens = set(expected.split())
+    retrieved_tokens = set(retrieved.split())
+    if not expected_tokens:
+        return 0.0
+    return len(expected_tokens & retrieved_tokens) / len(expected_tokens)
+
+
 def _is_relevant(expected: list[str], retrieved: str) -> bool:
     return any(source_matches(item, retrieved) for item in expected)
 
@@ -49,6 +90,17 @@ def recall_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
         return 1.0
     hits = sum(1 for item in _dedupe(expected) if any(source_matches(item, got) for got in _dedupe(retrieved[:k])))
     return hits / len(_dedupe(expected))
+
+
+def source_key_recall_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
+    if not expected:
+        return 1.0
+    expected_unique = _dedupe(expected)
+    retrieved_unique = _dedupe(retrieved[:k])
+    hits = sum(
+        1 for item in expected_unique if any(source_key_matches(item, got) for got in retrieved_unique)
+    )
+    return hits / len(expected_unique)
 
 
 def precision_at_k(expected: list[str], retrieved: list[str], k: int) -> float:
@@ -97,7 +149,7 @@ def _matched_relevance(
     matches = [
         (expected_key, relevance)
         for expected_key, relevance in relevance_by_key.items()
-        if expected_key not in already_matched and source_matches(expected_key, retrieved_key)
+        if expected_key not in already_matched and source_key_matches(expected_key, retrieved_key)
     ]
     if not matches:
         return (None, 0)
@@ -149,6 +201,56 @@ def paired_bootstrap_delta(
         raise ValueError("baseline and candidate must have the same length")
     deltas = [cand - base for base, cand in zip(baseline, candidate, strict=True)]
     return (mean_metric(deltas), bootstrap_ci(deltas, seed=seed, resamples=resamples))
+
+
+def paired_permutation_p_value(
+    baseline: list[float],
+    candidate: list[float],
+    *,
+    seed: int = 42,
+    resamples: int = 10_000,
+) -> float:
+    """Compute deterministic Monte Carlo paired sign-flip/permutation estimate p-value (seed 42)."""
+    if len(baseline) != len(candidate):
+        raise ValueError("baseline and candidate must have the same length")
+    n = len(baseline)
+    if n == 0:
+        return 1.0
+    deltas = [cand - base for base, cand in zip(baseline, candidate, strict=True)]
+    obs_diff = abs(mean(deltas))
+    if obs_diff == 0.0:
+        return 1.0
+
+    rng = random.Random(seed)
+    count = 0
+    for _ in range(resamples):
+        perm_mean = abs(mean(d if rng.random() < 0.5 else -d for d in deltas))
+        if perm_mean >= obs_diff - 1e-12:
+            count += 1
+
+    return (count + 1) / (resamples + 1)
+
+
+def paired_stats(
+    baseline: list[float],
+    candidate: list[float],
+    *,
+    seed: int = 42,
+    resamples: int = 10_000,
+) -> dict[str, Any]:
+    """Compute candidate-minus-baseline mean difference, deterministic 95% bootstrap CI, and paired p-value."""
+    if len(baseline) != len(candidate):
+        raise ValueError("baseline and candidate must have the same length")
+    deltas = [cand - base for base, cand in zip(baseline, candidate, strict=True)]
+    mean_diff = mean_metric(deltas)
+    ci_low, ci_high = bootstrap_ci(deltas, seed=seed, resamples=resamples)
+    p_val = paired_permutation_p_value(baseline, candidate, seed=seed, resamples=resamples)
+    return {
+        "candidate_minus_baseline_mean_diff": mean_diff,
+        "ci95": [ci_low, ci_high],
+        "p_value": p_val,
+        "n_samples": len(baseline),
+    }
 
 
 def mean_reciprocal_rank(samples: list[dict]) -> float:

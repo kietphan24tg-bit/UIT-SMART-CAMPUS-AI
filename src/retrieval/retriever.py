@@ -28,6 +28,8 @@ class Retriever:
             database_url=config.database_url or "",
             schema=config.rag_db_schema,
             dimensions=config.embedding_dimensions,
+            embedding_provider=config.embedding_provider,
+            embedding_model=config.embedding_model,
         )
 
     def retrieve(

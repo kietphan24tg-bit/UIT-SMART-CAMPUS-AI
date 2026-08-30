@@ -11,13 +11,37 @@ from .metrics import (
     precision_at_k,
     recall_at_k,
     reciprocal_rank,
+    source_key_recall_at_k,
 )
 from .schemas import EvaluationSample
+from src.retrieval.taxonomy import classify_query
 
 RETRIEVAL_CONFIGS: dict[str, dict[str, Any]] = {
-    "vector_baseline": {"hybrid_search_enabled": False, "reranker_enabled": False},
-    "hybrid": {"hybrid_search_enabled": True, "reranker_enabled": False},
-    "hybrid_reranker": {"hybrid_search_enabled": True, "reranker_enabled": True},
+    "vector_baseline": {
+        "hybrid_search_enabled": False,
+        "reranker_enabled": False,
+        "retrieval_candidate_k": 30,
+    },
+    "hybrid": {
+        "hybrid_search_enabled": True,
+        "reranker_enabled": False,
+        "retrieval_candidate_k": 30,
+    },
+    "hybrid_reranker_k10": {
+        "hybrid_search_enabled": True,
+        "reranker_enabled": True,
+        "retrieval_candidate_k": 10,
+    },
+    "hybrid_reranker_k15": {
+        "hybrid_search_enabled": True,
+        "reranker_enabled": True,
+        "retrieval_candidate_k": 15,
+    },
+    "hybrid_reranker": {
+        "hybrid_search_enabled": True,
+        "reranker_enabled": True,
+        "retrieval_candidate_k": 30,
+    },
 }
 
 
@@ -61,7 +85,13 @@ def document_from_context(context: Any) -> str:
     return citation.get("source_file") or ""
 
 
-def run_retrieval(samples: list[EvaluationSample], *, config_name: str, k: int = 5) -> list[dict[str, Any]]:
+def run_retrieval(
+    samples: list[EvaluationSample],
+    *,
+    config_name: str,
+    k: int = 5,
+    filters: dict | None = None,
+) -> list[dict[str, Any]]:
     from src.rag.service import RagService
 
     service = RagService(config=apply_retrieval_config(config_name))
@@ -72,7 +102,7 @@ def run_retrieval(samples: list[EvaluationSample], *, config_name: str, k: int =
         error = None
         evidence = None
         try:
-            evidence = service.retrieve_evidence(question=sample.question, top_k=k)
+            evidence = service.retrieve_evidence(question=sample.question, filters=filters, top_k=k)
         except Exception as exc:  # pragma: no cover - live provider/db dependent
             error = type(exc).__name__
         latency = time.perf_counter() - started
@@ -81,9 +111,17 @@ def run_retrieval(samples: list[EvaluationSample], *, config_name: str, k: int =
         retrieved_docs = [document_from_context(context) for context in contexts if document_from_context(context)]
         retrieved_keys = [source_key_from_context(context) for context in contexts]
         expected_docs = sample.expected_documents
+        primary_expected_docs = sample.primary_expected_documents
         expected_keys = sample.expected_source_keys
+        primary_expected_keys = sample.primary_expected_source_keys
+        hint = classify_query(sample.question)
+        answerable = sample.answerable
         expected_fallback = sample.expected.answer_type == "fallback"
         produced_fallback = not evidence or not evidence.found
+        first_context = contexts[0] if contexts else None
+        first_metadata = first_context.metadata if first_context else {}
+        source_unit_ok = 1.0 if not answerable else _expected_source_unit_ok(sample, first_metadata)
+        domain_ok = 1.0 if not answerable else _expected_domain_ok(sample, first_metadata)
 
         rows.append(
             {
@@ -92,16 +130,31 @@ def run_retrieval(samples: list[EvaluationSample], *, config_name: str, k: int =
                 "config": config_name,
                 "category": sample.category,
                 "difficulty": sample.difficulty.value,
-                "retrieval_recall_at_5": recall_at_k(expected_docs, retrieved_docs, k),
-                "retrieval_precision_at_5": precision_at_k(expected_docs, retrieved_docs, k),
-                "retrieval_mrr": reciprocal_rank(expected_docs, retrieved_docs),
-                "retrieval_ndcg_at_5": graded_ndcg_at_k(expected_keys, retrieved_keys, k),
+                "answerable": 1.0 if answerable else 0.0,
+                "corpus_gap": 1.0 if sample.corpus_gap else 0.0,
+                "retrieval_recall_at_5": recall_at_k(expected_docs, retrieved_docs, k) if answerable else None,
+                "retrieval_primary_recall_at_5": (
+                    recall_at_k(primary_expected_docs, retrieved_docs, k) if answerable else None
+                ),
+                "retrieval_primary_heading_recall_at_5": (
+                    source_key_recall_at_k(primary_expected_keys, retrieved_keys, k)
+                    if answerable
+                    else None
+                ),
+                "retrieval_precision_at_5": precision_at_k(expected_docs, retrieved_docs, k) if answerable else None,
+                "retrieval_mrr": reciprocal_rank(expected_docs, retrieved_docs) if answerable else None,
+                "retrieval_ndcg_at_5": graded_ndcg_at_k(expected_keys, retrieved_keys, k) if answerable else None,
                 "fallback_accuracy": fallback_accuracy(expected_fallback, produced_fallback),
                 "expected_docs": expected_docs,
+                "primary_expected_docs": primary_expected_docs,
                 "retrieved_docs": retrieved_docs,
                 "retrieved_keys": retrieved_keys,
                 "confidence": evidence.confidence if evidence else 0.0,
                 "retrieved_count": evidence.retrieved_count if evidence else 0,
+                "expected_domain": _expected_domain(sample),
+                "predicted_domain": str(first_metadata.get("taxonomy_domain") or hint.domain or ""),
+                "domain_correct": domain_ok,
+                "source_unit_correct": source_unit_ok,
                 "latency_seconds": latency,
                 "provider_error": 1.0 if error else 0.0,
                 "error": error,
@@ -110,68 +163,23 @@ def run_retrieval(samples: list[EvaluationSample], *, config_name: str, k: int =
     return rows
 
 
-def run_agent(samples: list[EvaluationSample], *, config_name: str = "agent_full") -> list[dict[str, Any]]:
-    from src.agent.executor import SmartCampusAgent
-    from src.core.auth import AuthenticatedUser
-
-    agent = SmartCampusAgent()
-    rows: list[dict[str, Any]] = []
-    for index, sample in enumerate(samples, start=1):
-        print(f"[agent:{config_name}] {index}/{len(samples)} {sample.id}", flush=True)
-        started = time.perf_counter()
-        selected_tool = None
-        error = None
-        result = None
-        try:
-            user = AuthenticatedUser(
-                user_id=sample.user_fixture,
-                role=_role_from_fixture(sample.user_fixture),
-                access_token="eval-token",
-                profile={"id": sample.user_fixture, "role": _role_from_fixture(sample.user_fixture)},
-            )
-            result = agent.answer_query(user=user, message=sample.question, history=sample.history)
-            for step in result.trace or []:
-                if getattr(step, "tool", None):
-                    selected_tool = step.tool
-                    break
-        except Exception as exc:  # pragma: no cover - live provider/db dependent
-            error = type(exc).__name__
-        latency = time.perf_counter() - started
-
-        acceptable = set(sample.expected.acceptable_tools)
-        expected_tool = sample.expected.expected_tool
-        tool_ok = (selected_tool in acceptable) if acceptable else selected_tool is None
-        action = sample.expected.action
-        proposal = getattr(result, "proposal", None) if result else None
-        rows.append(
-            {
-                "sample_id": sample.id,
-                "suite": "agent",
-                "config": config_name,
-                "category": sample.category,
-                "difficulty": sample.difficulty.value,
-                "expected_tool": expected_tool,
-                "selected_tool": selected_tool,
-                "tool_selection_accuracy": 1.0 if tool_ok else 0.0,
-                "proposal_created": 1.0 if proposal else 0.0,
-                "pre_confirm_action_count": 0.0,
-                "answer_type": getattr(result, "answer_type", "error") if result else "error",
-                "latency_seconds": latency,
-                "provider_error": 1.0 if error else 0.0,
-                "error": error,
-                "expected_action": action.model_dump(mode="json") if action else None,
-            }
-        )
-    return rows
+def _expected_domain(sample: EvaluationSample) -> str:
+    if sample.subdomain == "centralized_exam":
+        return "exam"
+    if sample.subdomain == "training_regulation":
+        return "training_regulation"
+    return ""
 
 
-def _role_from_fixture(fixture: str) -> str:
-    if fixture.startswith("lecturer"):
-        return "lecturer"
-    if fixture.startswith("admin"):
-        return "admin"
-    if fixture.startswith("super_admin"):
-        return "super_admin"
-    if fixture.startswith("canteen"):
-        return "canteen_admin"
-    return "student"
+def _expected_domain_ok(sample: EvaluationSample, metadata: dict[str, Any]) -> float:
+    expected = _expected_domain(sample)
+    if not expected:
+        return 1.0
+    return 1.0 if str(metadata.get("taxonomy_domain") or "") == expected else 0.0
+
+
+def _expected_source_unit_ok(sample: EvaluationSample, metadata: dict[str, Any]) -> float:
+    expected_units = {"DAA"} if sample.category == "training_exam" else None
+    if not expected_units:
+        return 1.0
+    return 1.0 if str(metadata.get("source_unit") or "").upper() in expected_units else 0.0

@@ -47,4 +47,8 @@ def test_index_file_chunks_embeds_and_stores(tmp_path):
 
     assert inserted == 1
     assert embedder.calls == 1
+    assert store.upserted[0].metadata["embedding_provider"] == pipeline.config.embedding_provider
+    assert store.upserted[0].metadata["embedding_model"] == pipeline.config.embedding_model
+    assert store.upserted[0].metadata["embedding_dimensions"] == pipeline.config.embedding_dimensions
+    assert store.upserted[0].metadata["embedding_space"].endswith(":v1")
     assert store.upserted[0].heading_path.startswith("Điều 1")

@@ -18,22 +18,25 @@ class Settings(BaseSettings):
 
     documents_dir: str = "D:/Workspace/UIT-document-normalized"
     database_url: str | None = None
-    rag_db_schema: str = "rag"
+    rag_db_schema: str = "rag_training_exam_bge"
 
-    embedding_provider: str = "gemini"
-    embedding_model: str = "gemini-embedding-001"
-    embedding_dimensions: int = 768
+    embedding_provider: str = "local"
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_dimensions: int = 1024
     embedding_batch_size: int = 32
     embedding_request_delay_seconds: float = 0.7
     embedding_device: str | None = None
-    local_embedding_query_prefix: str = "query: "
-    local_embedding_document_prefix: str = "passage: "
+    local_embedding_query_prefix: str = ""
+    local_embedding_document_prefix: str = ""
     gemini_max_retries: int = 8
     gemini_key: str | None = Field(default=None, validation_alias="GEMINI_KEY")
 
-    llm_provider: str = "groq"
-    llm_model: str = "llama-3.1-8b-instant"
+    llm_provider: str = "ollama"
+    llm_model: str = "qwen3:1.7b"
     groq_key: str | None = Field(default=None, validation_alias="GROQ_KEY")
+    ollama_base_url: str = "http://localhost:11434"
+    eval_judge_provider: str = "ollama"
+    eval_judge_model: str = "qwen3:1.7b"
     agent_model: str = "gemini-3.5-flash-lite"
     agent_db_schema: str = "agent"
     agent_actions_enabled: bool = False
@@ -66,6 +69,7 @@ class Settings(BaseSettings):
     # ── Retrieval tuning ──────────────────────────────────────────────────────
     # candidate_k: how many raw candidates to fetch before re-ranking/filtering
     retrieval_candidate_k: int = 30
+    retrieval_max_chunks_per_document: int = 5
     # rag_top_k: final chunks sent to the LLM
     rag_top_k: int = 6
     # minimum retrieval/reranker score to include a chunk
@@ -80,16 +84,24 @@ class Settings(BaseSettings):
     # weight for keyword vs vector rank when merging (1.0 = equal weight)
     hybrid_keyword_weight: float = 1.0
     hybrid_vector_weight: float = 1.0
+    hybrid_phrase_boost_weight: float = 0.15
+    hybrid_domain_boost_weight: float = 0.12
+    hybrid_authority_boost_weight: float = 0.08
 
     # ── Re-ranker ─────────────────────────────────────────────────────────────
-    reranker_enabled: bool = False
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_enabled: bool = True
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
     # minimum reranker score (logit) to keep a chunk after re-ranking
     reranker_min_score: float = -5.0
 
     # ── Answer gating ─────────────────────────────────────────────────────────
     # minimum top-chunk score to call the LLM at all
     answer_min_confidence: float = 0.20
+    answer_min_vector_confidence: float = 0.32
+    answer_min_hybrid_confidence: float = 0.38
+    answer_min_reranker_confidence: float = 0.44
+    answer_min_top_gap: float = 0.03
+    answer_min_lexical_coverage: float = 0.20
 
 
 settings = Settings()

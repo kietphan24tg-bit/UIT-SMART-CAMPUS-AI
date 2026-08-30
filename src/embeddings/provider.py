@@ -1,11 +1,36 @@
 import time
 import re
+from functools import lru_cache
 from typing import Protocol
 
 from google import genai
 from google.genai import types
 
 from src.core.config import Settings
+
+
+@lru_cache(maxsize=4)
+def _load_sentence_transformer(model: str, device: str | None):
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(model, device=device or None)
+
+
+@lru_cache(maxsize=4096)
+def _cached_local_query_embedding(
+    model: str,
+    device: str | None,
+    query_prefix: str,
+    text: str,
+) -> tuple[float, ...]:
+    encoder = _load_sentence_transformer(model, device)
+    vector = encoder.encode(
+        [query_prefix + text],
+        batch_size=1,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+    )[0]
+    return tuple(map(float, vector))
 
 
 class EmbeddingProvider(Protocol):
@@ -122,17 +147,27 @@ class LocalSentenceTransformerEmbeddingProvider:
             ) from exc
 
         self.model_name = model
+        self.device = device
         self.dimensions = dimensions
         self.batch_size = batch_size
         self.query_prefix = query_prefix
         self.document_prefix = document_prefix
-        self.model = SentenceTransformer(model, device=device or None)
+        self.model = _load_sentence_transformer(model, device)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return self._encode([self.document_prefix + text for text in texts])
 
     def embed_query(self, text: str) -> list[float]:
-        return self._encode([self.query_prefix + text])[0]
+        vector = list(
+            _cached_local_query_embedding(
+                self.model_name,
+                self.device,
+                self.query_prefix,
+                text,
+            )
+        )
+        self._validate_dimension(vector)
+        return vector
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -146,11 +181,14 @@ class LocalSentenceTransformerEmbeddingProvider:
         )
         vectors = [list(map(float, vector)) for vector in embeddings]
         for vector in vectors:
-            if len(vector) != self.dimensions:
-                raise ValueError(
-                    f"Local embedding dimension mismatch: expected {self.dimensions}, got {len(vector)}"
-                )
+            self._validate_dimension(vector)
         return vectors
+
+    def _validate_dimension(self, vector: list[float]) -> None:
+        if len(vector) != self.dimensions:
+            raise ValueError(
+                f"Local embedding dimension mismatch: expected {self.dimensions}, got {len(vector)}"
+            )
 
 
 def create_embedding_provider(config: Settings, batch_size: int | None = None) -> EmbeddingProvider:

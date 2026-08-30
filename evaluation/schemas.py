@@ -117,20 +117,48 @@ class EvaluationSample(BaseModel):
 
     @property
     def approved(self) -> bool:
-        reviewers = {
+        approved_reviewers = {
             review.reviewer
             for review in self.reviews
             if review.status is ReviewStatus.APPROVED
         }
-        return len(reviewers) >= 2
+        review_method = str(self.metadata.get("review_method") or "")
+        if review_method == "owner_verified":
+            owner = str(self.metadata.get("owner_reviewer") or "dataset_owner")
+            return bool(self.metadata.get("human_reviewed")) and owner in approved_reviewers
+        return bool(self.metadata.get("human_reviewed")) and len(approved_reviewers) >= 2
+
+    @property
+    def question_group_id(self) -> str:
+        return str(self.metadata.get("question_group_id") or self.id)
+
+    @property
+    def subdomain(self) -> str:
+        return str(self.metadata.get("subdomain") or self.category)
+
+    @property
+    def corpus_gap(self) -> bool:
+        return bool(self.metadata.get("corpus_gap"))
+
+    @property
+    def answerable(self) -> bool:
+        return self.expected.answer_type == "answer" and not self.corpus_gap
 
     @property
     def expected_documents(self) -> list[str]:
         return [source.source_file for source in self.expected.sources]
 
     @property
+    def primary_expected_documents(self) -> list[str]:
+        return [source.source_file for source in self.expected.sources if source.relevance == 2]
+
+    @property
     def expected_source_keys(self) -> dict[str, int]:
         return {source.key: source.relevance for source in self.expected.sources}
+
+    @property
+    def primary_expected_source_keys(self) -> list[str]:
+        return [source.key for source in self.expected.sources if source.relevance == 2]
 
 
 class EvaluationDataset(BaseModel):

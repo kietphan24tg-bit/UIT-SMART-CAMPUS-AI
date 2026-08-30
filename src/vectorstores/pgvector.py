@@ -7,15 +7,30 @@ from psycopg.rows import dict_row
 from src.chunking.fallback_chunker import TextChunk
 from src.documents.loader import sha256_text
 from src.documents.metadata import MarkdownDocument
+from src.retrieval.taxonomy import enrich_metadata
 
 
 class PgVectorStore:
-    def __init__(self, database_url: str, schema: str = "rag", dimensions: int = 768) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        schema: str = "rag",
+        dimensions: int = 768,
+        embedding_provider: str | None = None,
+        embedding_model: str | None = None,
+    ) -> None:
         if not database_url:
             raise ValueError("DATABASE_URL is required for pgvector store")
         self.database_url = database_url
         self.schema = schema
         self.dimensions = dimensions
+        self.embedding_provider = embedding_provider
+        self.embedding_model = embedding_model
+        self.embedding_space = (
+            f"{embedding_provider}:{embedding_model}:v1"
+            if embedding_provider and embedding_model
+            else None
+        )
 
     def ensure_schema(self) -> None:
         schema = self._quoted_schema
@@ -95,6 +110,28 @@ class PgVectorStore:
                 cur.execute(f"CREATE INDEX IF NOT EXISTS documents_category_idx ON {schema}.documents (category)")
                 cur.execute(f"CREATE INDEX IF NOT EXISTS documents_issued_date_idx ON {schema}.documents (issued_date)")
             conn.commit()
+        self.validate_embedding_space()
+
+    def validate_embedding_space(self) -> None:
+        """Reject a schema containing vectors from another configured embedding space."""
+        if not self.embedding_space:
+            return
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT metadata ->> 'embedding_space'
+                    FROM {self._quoted_schema}.document_chunks
+                    WHERE metadata ? 'embedding_space'
+                    """
+                )
+                spaces = {row[0] for row in cur.fetchall() if row[0]}
+        unexpected = spaces - {self.embedding_space}
+        if unexpected:
+            raise ValueError(
+                f"Schema {self.schema!r} contains incompatible embedding spaces: "
+                f"{sorted(unexpected)}; expected {self.embedding_space!r}."
+            )
 
     def ensure_fts_column(self) -> None:
         """One-time migration: add search_vector TSVECTOR generated column + GIN index.
@@ -119,7 +156,13 @@ class PgVectorStore:
                             ALTER TABLE {schema}.document_chunks
                                 ADD COLUMN search_vector tsvector
                                 GENERATED ALWAYS AS (
-                                    to_tsvector('simple', lower(coalesce(content, '')))
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'title', ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(heading_path, ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'taxonomy_aliases', ''))), 'A') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'source_file', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'source_unit', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(metadata ->> 'category', ''))), 'B') ||
+                                    setweight(to_tsvector('simple', lower(coalesce(content, ''))), 'D')
                                 ) STORED;
                         END IF;
                     END $$;
@@ -129,6 +172,45 @@ class PgVectorStore:
                     f"CREATE INDEX IF NOT EXISTS document_chunks_fts_gin ON {schema}.document_chunks USING GIN (search_vector)"
                 )
             conn.commit()
+
+    def backfill_taxonomy_metadata(self) -> int:
+        """Recompute taxonomy fields without changing chunk content or embeddings."""
+        taxonomy_keys = {
+            "taxonomy_version",
+            "taxonomy_domain",
+            "taxonomy_aliases",
+            "source_unit_preference",
+            "authority_rank",
+        }
+        updated = 0
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.metadata, d.source_unit, d.category
+                    FROM {self._quoted_schema}.document_chunks c
+                    JOIN {self._quoted_schema}.documents d ON d.id = c.document_id
+                    """
+                )
+                rows = list(cur.fetchall())
+                for row in rows:
+                    metadata = {
+                        key: value
+                        for key, value in dict(row["metadata"] or {}).items()
+                        if key not in taxonomy_keys
+                    }
+                    metadata = enrich_metadata(
+                        metadata,
+                        source_unit=row.get("source_unit"),
+                        category=row.get("category"),
+                    )
+                    cur.execute(
+                        f"UPDATE {self._quoted_schema}.document_chunks SET metadata = %s::jsonb WHERE id = %s",
+                        (json.dumps(metadata, ensure_ascii=False, default=str), row["id"]),
+                    )
+                    updated += cur.rowcount
+            conn.commit()
+        return updated
 
     def create_ingest_run(self) -> int:
         with self._connect() as conn:
@@ -231,6 +313,7 @@ class PgVectorStore:
                             "page_end": chunk.page_end,
                         }
                     )
+                    metadata = enrich_metadata(metadata, source_unit=metadata.get("source_unit"), category=metadata.get("category"))
                     cur.execute(
                         f"""
                         INSERT INTO {self._quoted_schema}.document_chunks (
@@ -302,8 +385,15 @@ class PgVectorStore:
 
         if filters:
             for key, value in filters.items():
-                clauses.append("c.metadata ->> %s = %s")
-                params.extend([key, str(value)])
+                if key == "source_files":
+                    source_files = [str(item) for item in value] if isinstance(value, (list, tuple, set)) else []
+                    if not source_files:
+                        return []
+                    clauses.append("d.source_file = ANY(%s)")
+                    params.append(source_files)
+                else:
+                    clauses.append("c.metadata ->> %s = %s")
+                    params.extend([key, str(value)])
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
@@ -325,6 +415,38 @@ class PgVectorStore:
                     LIMIT %s
                     """,
                     [params[0], *params[1:-1], params[0], params[-1]],
+                )
+                return list(cur.fetchall())
+
+    def source_catalog(self) -> list[dict[str, Any]]:
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        d.source_file,
+                        d.source_unit,
+                        d.category,
+                        d.document_number,
+                        d.issued_date,
+                        d.effective_date,
+                        d.is_current,
+                        d.chunk_count,
+                        max(c.heading_path) FILTER (WHERE c.heading_path IS NOT NULL) AS sample_heading,
+                        max(c.metadata ->> 'title') FILTER (WHERE c.metadata ? 'title') AS title
+                    FROM {self._quoted_schema}.documents d
+                    LEFT JOIN {self._quoted_schema}.document_chunks c ON c.document_id = d.id
+                    GROUP BY
+                        d.source_file,
+                        d.source_unit,
+                        d.category,
+                        d.document_number,
+                        d.issued_date,
+                        d.effective_date,
+                        d.is_current,
+                        d.chunk_count
+                    ORDER BY d.source_unit NULLS LAST, d.category NULLS LAST, d.source_file
+                    """
                 )
                 return list(cur.fetchall())
 
@@ -352,8 +474,15 @@ class PgVectorStore:
 
         if filters:
             for key, value in filters.items():
-                clauses.append("c.metadata ->> %s = %s")
-                params.extend([key, str(value)])
+                if key == "source_files":
+                    source_files = [str(item) for item in value] if isinstance(value, (list, tuple, set)) else []
+                    if not source_files:
+                        return []
+                    clauses.append("d.source_file = ANY(%s)")
+                    params.append(source_files)
+                else:
+                    clauses.append("c.metadata ->> %s = %s")
+                    params.extend([key, str(value)])
 
         where = f"WHERE {' AND '.join(clauses)}"
         params.append(limit)
@@ -374,7 +503,7 @@ class PgVectorStore:
                     ORDER BY ts_rank DESC
                     LIMIT %s
                     """,
-                    [query, *params[1:-1], query, params[-1]],
+                    [query, *params[:-1], params[-1]],
                 )
                 return list(cur.fetchall())
 
