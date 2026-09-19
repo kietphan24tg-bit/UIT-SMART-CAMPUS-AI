@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     agent_embedding_provider: str = "gemini"
     agent_embedding_model: str = "gemini-embedding-001"
     agent_embedding_dimensions: int = 768
+    # Keep production retrieval lightweight. Research experiments can still
+    # enable the local cross-encoder through RERANKER_ENABLED.
+    agent_reranker_enabled: bool = False
 
     embedding_provider: str = "local"
     embedding_model: str = "BAAI/bge-m3"

@@ -9,7 +9,7 @@ from src.api.schemas import RagQueryRequest, RagQueryResponse
 from src.core.auth import ServiceRequest
 from src.core.config import settings
 from src.core.limits import RateLimitPolicy, guardrail_store
-from src.rag.service import RagService
+from src.rag.service import RagService, application_rag_config
 
 router = APIRouter()
 # Use Uvicorn's configured error handler so production diagnostics reach the
@@ -21,14 +21,15 @@ logger = logging.getLogger("uvicorn.error")
 def query_rag(payload: RagQueryRequest, request: Request, response: Response) -> RagQueryResponse:
     request_id = request.headers.get("x-request-id") or uuid4().hex
     response.headers["X-Request-ID"] = request_id
+    rag_config = application_rag_config(settings)
     logger.info(
         "RAG request start request_id=%s provider=%s model=%s embedding_provider=%s embedding_model=%s reranker=%s",
         request_id,
-        settings.llm_provider,
-        settings.llm_model,
-        settings.embedding_provider,
-        settings.embedding_model,
-        settings.reranker_enabled,
+        rag_config.llm_provider,
+        rag_config.llm_model,
+        rag_config.embedding_provider,
+        rag_config.embedding_model,
+        rag_config.reranker_enabled,
     )
     guardrail_store.enforce_rate_limit(
         "rag:query:service",
@@ -39,7 +40,7 @@ def query_rag(payload: RagQueryRequest, request: Request, response: Response) ->
         ),
     )
     try:
-        return RagService().answer(
+        return RagService(config=rag_config).answer(
             question=payload.question,
             filters=payload.filters,
             top_k=payload.top_k,
