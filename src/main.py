@@ -56,7 +56,11 @@ def _handle_request_validation_error(_: Request, exc: RequestValidationError) ->
 
 def _handle_http_exception(_: Request, exc: HTTPException) -> JSONResponse:
     detail = exc.detail if isinstance(exc.detail, str) else "Request failed."
-    return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers,
+    )
 
 
 app = create_app()
