@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from src.api.schemas import RagQueryRequest, RagQueryResponse
 from src.core.auth import ServiceRequest
@@ -11,11 +12,24 @@ from src.core.limits import RateLimitPolicy, guardrail_store
 from src.rag.service import RagService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+# Use Uvicorn's configured error handler so production diagnostics reach the
+# container log stream even when application loggers are not configured.
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("/query", response_model=RagQueryResponse, dependencies=[ServiceRequest])
-def query_rag(payload: RagQueryRequest) -> RagQueryResponse:
+def query_rag(payload: RagQueryRequest, request: Request, response: Response) -> RagQueryResponse:
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "RAG request start request_id=%s provider=%s model=%s embedding_provider=%s embedding_model=%s reranker=%s",
+        request_id,
+        settings.llm_provider,
+        settings.llm_model,
+        settings.embedding_provider,
+        settings.embedding_model,
+        settings.reranker_enabled,
+    )
     guardrail_store.enforce_rate_limit(
         "rag:query:service",
         RateLimitPolicy(
@@ -37,10 +51,15 @@ def query_rag(payload: RagQueryRequest) -> RagQueryResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_safe_provider_error(exc)) from exc
     except Exception as exc:
-        logger.exception("Unhandled RAG request failure")
+        logger.exception(
+            "Unhandled RAG request failure request_id=%s exception_type=%s",
+            request_id,
+            type(exc).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="RAG backend is temporarily unavailable.",
+            headers={"X-Request-ID": request_id},
         ) from exc
 
 

@@ -300,10 +300,20 @@ class RagService:
                 confidence=evidence.confidence,
             )
 
-        answer_text = self.llm_client.chat(
-            system_prompt=RAG_SYSTEM_PROMPT,
-            user_prompt=build_user_prompt(question, evidence.results),
-        )
+        try:
+            logger.info(
+                "RAG stage=generation provider=%s model=%s retrieved=%d",
+                self.config.llm_provider,
+                self.config.llm_model,
+                evidence.retrieved_count,
+            )
+            answer_text = self.llm_client.chat(
+                system_prompt=RAG_SYSTEM_PROMPT,
+                user_prompt=build_user_prompt(question, evidence.results),
+            )
+        except Exception:
+            logger.exception("RAG stage=generation failed")
+            raise
 
         if self.enable_grounded_fallback and self._looks_like_abstention(answer_text):
             return self._fallback_response(
@@ -314,7 +324,11 @@ class RagService:
 
         citation_validation_dict = None
         if self.enable_citation_validation:
-            val_res = validate_and_clean_citations(answer_text, len(evidence.contexts))
+            try:
+                val_res = validate_and_clean_citations(answer_text, len(evidence.contexts))
+            except Exception:
+                logger.exception("RAG stage=citation_validation failed")
+                raise
             answer_text = val_res.cleaned_answer
             citation_validation_dict = {
                 "total_citations": val_res.total_citations,
@@ -504,6 +518,13 @@ class RagService:
         min_score: float,
     ) -> list[RetrievalResult]:
         try:
+            logger.info(
+                "RAG stage=retrieval provider=%s model=%s schema=%s mode=%s",
+                self.config.embedding_provider,
+                self.config.embedding_model,
+                self.config.rag_db_schema,
+                self.config.retrieval_mode,
+            )
             return self.retriever.retrieve(
                 question=question,
                 filters=filters,
@@ -518,6 +539,9 @@ class RagService:
                 top_k=top_k,
                 min_score=min_score,
             )
+        except Exception:
+            logger.exception("RAG stage=retrieval failed")
+            raise
 
     def _evidence_confidence(self, question: str, results: list[RetrievalResult], hint: QueryHint) -> float:
         top_score = min(max(results[0].score, 0.0), 1.0)
