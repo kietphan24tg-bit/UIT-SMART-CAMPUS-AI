@@ -40,6 +40,9 @@ jobs:
         run: pytest -q
         env:
           PYTHONPATH: .
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+          GEMINI_API_KEY: ci-test-key
+          AI_SERVICE_TOKEN: ci-test-token
 
       - name: Validate Docker Hub configuration
         env:
