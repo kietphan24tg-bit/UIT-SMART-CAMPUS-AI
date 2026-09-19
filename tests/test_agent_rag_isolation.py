@@ -54,7 +54,7 @@ def test_application_rag_config_keeps_research_settings_isolated():
         agent_embedding_provider="gemini",
         agent_embedding_model="gemini-embedding-001",
         agent_embedding_dimensions=768,
-        agent_reranker_enabled=False,
+        agent_reranker_enabled=True,
     )
 
     application = application_rag_config(config)

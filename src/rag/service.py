@@ -216,7 +216,10 @@ def application_rag_config(config: Settings = settings) -> Settings:
             "embedding_provider": config.agent_embedding_provider,
             "embedding_model": config.agent_embedding_model,
             "embedding_dimensions": config.agent_embedding_dimensions,
-            "reranker_enabled": config.agent_reranker_enabled,
+            # The application container is intentionally retrieval-only here.
+            # Local cross-encoder experiments belong to the research config and
+            # can exceed the memory limit of the production service.
+            "reranker_enabled": False,
         }
     )
 
