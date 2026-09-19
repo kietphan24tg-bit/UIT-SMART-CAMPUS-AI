@@ -588,7 +588,10 @@ class SmartCampusAgent:
             if isinstance(item, Citation):
                 parsed.append(item)
             elif isinstance(item, dict):
-                parsed.append(Citation.model_validate(item))
+                try:
+                    parsed.append(Citation.model_validate(item))
+                except ValidationError:
+                    logger.warning("Ignoring malformed RAG citation metadata")
         return parsed
 
     @staticmethod
