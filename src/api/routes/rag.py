@@ -47,9 +47,23 @@ def query_rag(payload: RagQueryRequest, request: Request, response: Response) ->
             include_context=payload.include_context,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="RAG service is not configured.") from exc
+        logger.exception("RAG configuration failure request_id=%s", request_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG service is not configured.",
+            headers={"X-Request-ID": request_id},
+        ) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_safe_provider_error(exc)) from exc
+        logger.exception(
+            "RAG provider failure request_id=%s exception_type=%s",
+            request_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=_safe_provider_error(exc),
+            headers={"X-Request-ID": request_id},
+        ) from exc
     except Exception as exc:
         logger.exception(
             "Unhandled RAG request failure request_id=%s exception_type=%s",
