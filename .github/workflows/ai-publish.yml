@@ -111,9 +111,13 @@ jobs:
       - name: Trigger Coolify deploy
         if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' && env.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
-          curl --fail --show-error --silent --request POST \
+          if ! curl --fail --show-error --silent --request POST \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            "$COOLIFY_DEPLOY_WEBHOOK"
+            "$COOLIFY_DEPLOY_WEBHOOK"; then
+            echo "Bearer-authenticated webhook failed; retrying URL-authenticated webhook"
+            curl --fail --show-error --silent --request POST \
+              "$COOLIFY_DEPLOY_WEBHOOK"
+          fi
         shell: bash
 
       - name: Explain deploy output
