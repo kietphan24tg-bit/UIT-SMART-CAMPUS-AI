@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Literal, get_args, get_origin
 
@@ -12,6 +13,8 @@ from .context import ToolContext
 from .nest_client import NestApiClient, NestApiClientError
 from .operations import ToolOperation
 from .results import ToolError, ToolResult
+
+logger = logging.getLogger(__name__)
 
 
 class ToolArgumentsModel(BaseModel):
@@ -83,6 +86,21 @@ class AgentTool(ABC):
             )
         except NestApiClientError as exc:
             return ToolResult(ok=False, tool=self.name, status="failed", error=exc.error)
+        except Exception:
+            # Tool/provider failures must not escape the Agent route as an
+            # unstructured HTTP 500. Keep the traceback in server logs while
+            # allowing the agent to produce a controlled fallback.
+            logger.exception("Unhandled exception in agent tool %s", self.name)
+            return ToolResult(
+                ok=False,
+                tool=self.name,
+                status="failed",
+                error=ToolError(
+                    code="upstream_error",
+                    message="The requested data source is temporarily unavailable.",
+                    retryable=True,
+                ),
+            )
 
     @abstractmethod
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
