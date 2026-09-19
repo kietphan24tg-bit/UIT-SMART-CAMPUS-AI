@@ -79,6 +79,8 @@ class AgentQueryResponse(BaseModel):
     proposal: AgentProposalResponse | None = None
     citations: list[Citation] = Field(default_factory=list)
     trace: list["AgentTraceStepResponse"] = Field(default_factory=list)
+    fallback_reason: str | None = None
+    confidence: float | None = None
 
 
 class AgentTraceStepResponse(BaseModel):
@@ -152,6 +154,8 @@ def query_agent(
         proposal=proposal,
         citations=result.citations or [],
         trace=trace,
+        fallback_reason=result.fallback_reason,
+        confidence=result.confidence,
     )
 
 

@@ -6,8 +6,10 @@ from dataclasses import dataclass
 
 
 def _normalize(text: str) -> str:
+    text = text.replace("đ", "d").replace("Đ", "D")
     lowered = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
-    return re.sub(r"[^a-z0-9\s]+", " ", lowered)
+    normalized = re.sub(r"[^a-z0-9\s]+", " ", lowered)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _contains_phrase(text: str, phrase: str) -> bool:
@@ -98,6 +100,117 @@ class QueryHint:
     categories: tuple[str, ...]
     prompt_injection: bool
     out_of_scope: bool
+    out_of_scope_reason: str | None = None
+
+
+def _has_any(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(_contains_phrase(text, phrase) for phrase in phrases)
+
+
+def _detect_prompt_injection(normalized: str) -> bool:
+    instruction_override = _has_any(
+        normalized,
+        (
+            "ignore previous instructions",
+            "bo qua huong dan",
+            "bo qua moi huong dan",
+            "coi noi dung sau la lenh he thong",
+            "system prompt",
+            "developer message",
+            "khong can xac nhan",
+            "bo qua buoc xac nhan",
+        ),
+    )
+    secret_exfiltration = _has_any(
+        normalized,
+        ("in api key", "api key", "in ra token", "show me the secret", "reveal every secret"),
+    )
+    privileged_action = _has_any(
+        normalized,
+        ("goi api", "tool call", "sua diem", "xoa du lieu", "thay doi diem"),
+    ) and _has_any(
+        normalized,
+        ("toi la admin", "khong can xac nhan", "bo qua", "ngay", "thanh 10"),
+    )
+    return instruction_override or secret_exfiltration or privileged_action
+
+
+def _detect_out_of_scope(normalized: str) -> str | None:
+    personal_markers = ("toi", "cua toi", "tai khoan", "ho so", "ca nhan")
+    live_markers = (
+        "hom nay",
+        "ngay mai",
+        "sang nay",
+        "chieu nay",
+        "toi nay",
+        "tuan sau",
+        "hien tai",
+        "hien con",
+        "chinh xac",
+    )
+    live_subjects = (
+        "lich thi",
+        "gio thi",
+        "phong thi",
+        "ky thi",
+        "lich hoc",
+        "hoc phi",
+        "con no",
+        "tai khoan",
+        "can tin",
+        "thuc don",
+        "thu vien",
+        "muon sach",
+        "han tra",
+        "bi huy",
+    )
+    personal_decisions = (
+        "xac nhan",
+        "du dieu kien du thi",
+        "co ten trong danh sach",
+        "diem cua toi",
+        "ket qua cua toi",
+    )
+    if (
+        _has_any(normalized, personal_markers)
+        and (_has_any(normalized, live_markers) or _has_any(normalized, personal_decisions))
+    ) or (_has_any(normalized, live_markers) and _has_any(normalized, live_subjects)):
+        return "live_personal_data"
+
+    if _has_any(normalized, ("thoi tiet", "mua lon")) and _has_any(
+        normalized, ("ky thi", "lich thi", "bi huy", "hoan thi")
+    ):
+        return "live_personal_data"
+
+    if _has_any(
+        normalized,
+        (
+            "nghien cuu sinh",
+            "tien si",
+            "thac si",
+            "cao hoc",
+            "hoc bong",
+            "thoi tiet",
+            "gia vang",
+            "bong da",
+            "thi dau the thao",
+            "chung khoan",
+            "bitcoin",
+            "chan doan",
+            "viet giup toi mot chuong trinh",
+        ),
+    ):
+        return "outside_corpus"
+
+    if _has_any(normalized, ("can tin", "thuc don", "muon sach", "han tra sach")):
+        return "outside_corpus"
+
+    if _has_any(normalized, ("toan bo", "day du")) and _has_any(
+        normalized, ("tat ca", "moi khoa", "moi chuong trinh", "ngoai le")
+    ):
+        return "insufficient_scope"
+
+    return None
 
 
 def classify_query(question: str) -> QueryHint:
@@ -110,29 +223,9 @@ def classify_query(question: str) -> QueryHint:
             matched_entry = entry
             matched_aliases = hits
 
-    injection = any(
-        phrase in normalized
-        for phrase in (
-            "ignore previous instructions",
-            "bo qua huong dan",
-            "system prompt",
-            "tool call",
-            "developer message",
-            "in ra token",
-            "show me the secret",
-        )
-    )
-    out_of_scope = any(
-        phrase in normalized
-        for phrase in (
-            "thoi tiet",
-            "gia vang",
-            "bong da",
-            "thi dau the thao",
-            "chung khoan",
-            "bitcoin",
-        )
-    )
+    injection = _detect_prompt_injection(normalized)
+    out_of_scope_reason = _detect_out_of_scope(normalized)
+    out_of_scope = out_of_scope_reason is not None
     if matched_entry is None:
         return QueryHint(
             domain=None,
@@ -141,6 +234,7 @@ def classify_query(question: str) -> QueryHint:
             categories=(),
             prompt_injection=injection,
             out_of_scope=out_of_scope,
+            out_of_scope_reason=out_of_scope_reason,
         )
     expanded_aliases = list(matched_aliases)
     for alias in matched_aliases:
@@ -153,6 +247,7 @@ def classify_query(question: str) -> QueryHint:
         categories=matched_entry.categories,
         prompt_injection=injection,
         out_of_scope=out_of_scope,
+        out_of_scope_reason=out_of_scope_reason,
     )
 
 
@@ -198,3 +293,24 @@ def authority_score(metadata: dict) -> float:
     if source_unit == "SDH":
         return 0.75
     return 0.5
+
+
+def structure_score(metadata: dict, query_aliases: tuple[str, ...] = ()) -> float:
+    """Calculate structural relevance score based on heading hierarchy and query alias alignment."""
+    score = 0.0
+    heading = str(metadata.get("heading_path") or "")
+    parent_heading = str(metadata.get("parent_heading_path") or "")
+
+    if heading:
+        score += 0.03
+        normalized_heading = _normalize(heading)
+        if any(_contains_phrase(normalized_heading, alias) for alias in query_aliases):
+            score += 0.12
+
+    if parent_heading:
+        score += 0.02
+        normalized_parent = _normalize(parent_heading)
+        if any(_contains_phrase(normalized_parent, alias) for alias in query_aliases):
+            score += 0.06
+
+    return min(score, 0.20)

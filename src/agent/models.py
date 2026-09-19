@@ -38,6 +38,8 @@ class AgentQueryResult:
     proposal: ProposalPreview | None = None
     citations: list[Citation] | None = None
     trace: list[AgentTraceStep] | None = None
+    fallback_reason: str | None = None
+    confidence: float | None = None
 
 
 @dataclass(slots=True)

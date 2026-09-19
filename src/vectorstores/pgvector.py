@@ -500,7 +500,7 @@ class PgVectorStore:
                     FROM {self._quoted_schema}.document_chunks c
                     JOIN {self._quoted_schema}.documents d ON d.id = c.document_id
                     {where}
-                    ORDER BY ts_rank DESC
+                    ORDER BY ts_rank DESC, c.id ASC
                     LIMIT %s
                     """,
                     [query, *params[:-1], params[-1]],

@@ -31,6 +31,7 @@ class Retriever:
             embedding_provider=config.embedding_provider,
             embedding_model=config.embedding_model,
         )
+        self._embedding_space_validated = vector_store is not None
 
     def retrieve(
         self,
@@ -39,6 +40,9 @@ class Retriever:
         top_k: int = 8,
         min_score: float = 0.15,
     ) -> list[RetrievalResult]:
+        if not self._embedding_space_validated:
+            self.vector_store.validate_embedding_space()
+            self._embedding_space_validated = True
         embed_query = getattr(self.embedder, "embed_query", None)
         query_vector = embed_query(question) if callable(embed_query) else self.embedder.embed([question])[0]
         rows = self.vector_store.search(query_vector, filters=filters, limit=top_k)

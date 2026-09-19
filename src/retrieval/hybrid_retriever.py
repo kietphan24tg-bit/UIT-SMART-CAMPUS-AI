@@ -10,7 +10,7 @@ from src.core.config import Settings, settings
 from src.embeddings.provider import EmbeddingProvider, create_embedding_provider
 from src.retrieval.citations import score_from_distance
 from src.retrieval.retriever import RetrievalResult
-from src.retrieval.taxonomy import QueryHint, authority_score, classify_query, enrich_metadata
+from src.retrieval.taxonomy import QueryHint, authority_score, classify_query, enrich_metadata, structure_score
 from src.vectorstores.pgvector import PgVectorStore
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ class HybridRetriever:
             embedding_provider=config.embedding_provider,
             embedding_model=config.embedding_model,
         )
+        self._embedding_space_validated = vector_store is not None
 
     def retrieve(
         self,
@@ -49,11 +50,29 @@ class HybridRetriever:
         top_k: int | None = None,
         min_score: float | None = None,
     ) -> list[RetrievalResult]:
+        if not self._embedding_space_validated:
+            self.vector_store.validate_embedding_space()
+            self._embedding_space_validated = True
         candidate_limit = candidate_k if candidate_k is not None else self.config.retrieval_candidate_k
         top_limit = top_k if top_k is not None else self.config.rag_top_k
         min_limit = min_score if min_score is not None else self.config.retrieval_min_score
         filter_current = self.config.retrieval_filter_current
         hint = classify_query(question)
+
+        retrieval_mode = getattr(self.config, "retrieval_mode", "hybrid").lower().strip()
+        if not self.config.hybrid_search_enabled and retrieval_mode != "fts_only":
+            retrieval_mode = "vector"
+
+        if retrieval_mode == "fts_only":
+            return self._retrieve_fts_only(
+                question=question,
+                hint=hint,
+                filters=filters,
+                candidate_limit=candidate_limit,
+                top_limit=top_limit,
+                min_limit=min_limit,
+                filter_current=filter_current,
+            )
 
         embed_query = getattr(self.embedder, "embed_query", None)
         query_vector: list[float] = (
@@ -69,7 +88,7 @@ class HybridRetriever:
         )
 
         keyword_rows: list[dict] = []
-        if self.config.hybrid_search_enabled:
+        if self.config.hybrid_search_enabled and retrieval_mode != "vector":
             try:
                 keyword_rows = self.vector_store.keyword_search(
                     self._keyword_query(question, hint),
@@ -80,7 +99,7 @@ class HybridRetriever:
             except Exception:
                 logger.warning("keyword_search failed; falling back to vector-only retrieval", exc_info=True)
 
-        fused = self._fuse_rows(question, hint, vector_rows, keyword_rows)
+        fused = self._fuse_rows(question, hint, vector_rows, keyword_rows, filters=filters, mode=retrieval_mode)
 
         results: list[RetrievalResult] = []
         chunks_per_document: dict[str, int] = {}
@@ -110,12 +129,94 @@ class HybridRetriever:
                 break
         return results
 
+    def _retrieve_fts_only(
+        self,
+        question: str,
+        hint: QueryHint,
+        filters: dict | None,
+        candidate_limit: int,
+        top_limit: int,
+        min_limit: float,
+        filter_current: bool,
+    ) -> list[RetrievalResult]:
+        keyword_rows: list[dict] = []
+        try:
+            keyword_rows = self.vector_store.keyword_search(
+                self._keyword_query(question, hint),
+                filters=filters,
+                limit=candidate_limit,
+                filter_current=filter_current,
+            )
+        except Exception:
+            logger.warning("FTS search failed in fts_only mode", exc_info=True)
+
+        fused = self._score_fts_rows(question, hint, keyword_rows, filters=filters)
+
+        results: list[RetrievalResult] = []
+        chunks_per_document: dict[str, int] = {}
+        for fused_row in fused:
+            if fused_row.score < min_limit:
+                continue
+            source_file = str(fused_row.row.get("source_file") or "")
+            if source_file:
+                document_count = chunks_per_document.get(source_file, 0)
+                if document_count >= self.config.retrieval_max_chunks_per_document:
+                    continue
+                chunks_per_document[source_file] = document_count + 1
+            metadata = self._build_metadata(fused_row.row)
+            raw = dict(fused_row.row)
+            raw["score_kind"] = fused_row.score_kind
+            raw["fts_score"] = fused_row.score
+            results.append(
+                RetrievalResult(
+                    content=fused_row.row["content"],
+                    metadata=metadata,
+                    distance=float(fused_row.row.get("distance") or 0.0),
+                    score=fused_row.score,
+                    raw=raw,
+                )
+            )
+            if len(results) >= top_limit:
+                break
+        return results
+
+    def _score_fts_rows(
+        self,
+        question: str,
+        hint: QueryHint,
+        keyword_rows: list[dict],
+        filters: dict | None = None,
+    ) -> list[FusedRow]:
+        if not keyword_rows:
+            return []
+
+        max_ts_rank = max((float(row.get("ts_rank") or 0.0) for row in keyword_rows), default=0.0)
+        boosted: list[FusedRow] = []
+        for row in keyword_rows:
+            ts_rank = float(row.get("ts_rank") or 0.0)
+            base_score = (ts_rank / max_ts_rank) if max_ts_rank > 0 else 0.0
+            boost = self._calculate_boost(question, hint, row, filters=filters)
+            ranking_score = base_score + boost
+            final_score = min(1.0, max(0.0, ranking_score))
+            boosted.append(
+                FusedRow(
+                    row=row,
+                    score=final_score,
+                    score_kind="fts_only",
+                    ranking_score=ranking_score,
+                )
+            )
+        boosted.sort(key=lambda item: (-item.ranking_score, int(item.row.get("id") or 0)))
+        return boosted
+
     def _fuse_rows(
         self,
         question: str,
         hint: QueryHint,
         vector_rows: list[dict],
         keyword_rows: list[dict],
+        filters: dict | None = None,
+        mode: str = "hybrid",
     ) -> list[FusedRow]:
         if keyword_rows:
             fused_scores = self._reciprocal_rank_fusion(vector_rows, keyword_rows)
@@ -129,7 +230,7 @@ class HybridRetriever:
 
         boosted: list[FusedRow] = []
         for row, base_score in fused_scores:
-            ranking_score = base_score + self._soft_boost(question, hint, row)
+            ranking_score = base_score + self._calculate_boost(question, hint, row, filters=filters)
             final_score = min(1.0, max(0.0, ranking_score))
             boosted.append(
                 FusedRow(
@@ -139,8 +240,65 @@ class HybridRetriever:
                     ranking_score=ranking_score,
                 )
             )
-        boosted.sort(key=lambda item: item.ranking_score, reverse=True)
+        boosted.sort(key=lambda item: (-item.ranking_score, int(item.row.get("id") or 0)))
         return boosted
+
+    def _calculate_boost(
+        self,
+        question: str,
+        hint: QueryHint,
+        row: dict,
+        filters: dict | None = None,
+    ) -> float:
+        use_structure_auth = (
+            getattr(self.config, "structure_authority_scoring_enabled", False)
+            or getattr(self.config, "retrieval_mode", "hybrid").lower().strip() == "structure_authority"
+        )
+        if use_structure_auth:
+            return self._structure_authority_boost(question, hint, row, filters=filters)
+        return self._soft_boost(question, hint, row)
+
+    def _structure_authority_boost(
+        self,
+        question: str,
+        hint: QueryHint,
+        row: dict,
+        filters: dict | None = None,
+    ) -> float:
+        metadata = self._build_metadata(row)
+        boost = 0.0
+
+        # Structure score component
+        boost += structure_score(metadata, query_aliases=hint.aliases)
+
+        # Authority score component
+        auth_weight = getattr(self.config, "authority_boost_weight", 0.10)
+        boost += authority_score(metadata) * auth_weight
+
+        # Recency / Current document status boost
+        is_current_str = str(metadata.get("is_current") or "").lower()
+        curr_weight = getattr(self.config, "current_status_boost_weight", 0.05)
+        if is_current_str == "true":
+            boost += curr_weight
+        elif is_current_str == "false":
+            boost -= 0.10
+
+        # Phrase match boost
+        if any(self._phrase_in_row(alias, row) for alias in hint.aliases):
+            boost += self.config.hybrid_phrase_boost_weight
+
+        # Soft domain hints (only applied when NO explicit filter is supplied)
+        if not filters:
+            if hint.domain and metadata.get("taxonomy_domain") == hint.domain:
+                boost += self.config.hybrid_domain_boost_weight
+            if hint.source_units and str(metadata.get("source_unit") or "").upper() in {
+                unit.upper() for unit in hint.source_units
+            }:
+                boost += self.config.hybrid_domain_boost_weight / 2
+            if self._query_mentions_category(question, metadata):
+                boost += 0.04
+
+        return min(max(boost, -0.20), 0.40)
 
     def _soft_boost(self, question: str, hint: QueryHint, row: dict) -> float:
         metadata = self._build_metadata(row)

@@ -18,7 +18,17 @@ class Settings(BaseSettings):
 
     documents_dir: str = "D:/Workspace/UIT-document-normalized"
     database_url: str | None = None
+    # Research/evaluation corpus.  This must never be the Agent's implicit corpus.
     rag_db_schema: str = "rag_training_exam_bge"
+    # Application corpus used by the Agent policy tool.  Keep this separate from
+    # the held-out training_exam schema so production behaviour cannot change the
+    # research benchmark or expose a benchmark-only corpus.
+    agent_rag_db_schema: str = "rag_local"
+    # The legacy full UIT corpus was embedded with Gemini and 768 dimensions.
+    # Agent retrieval has its own embedding contract; research remains BGE-M3.
+    agent_embedding_provider: str = "gemini"
+    agent_embedding_model: str = "gemini-embedding-001"
+    agent_embedding_dimensions: int = 768
 
     embedding_provider: str = "local"
     embedding_model: str = "BAAI/bge-m3"
@@ -76,6 +86,7 @@ class Settings(BaseSettings):
     retrieval_min_score: float = 0.15
     # only return chunks where is_current = 'true' (set False to include all)
     retrieval_filter_current: bool = True
+    retrieval_mode: str = "hybrid"
 
     # ── Hybrid search (vector + PostgreSQL FTS + RRF) ─────────────────────────
     hybrid_search_enabled: bool = True
@@ -87,6 +98,12 @@ class Settings(BaseSettings):
     hybrid_phrase_boost_weight: float = 0.15
     hybrid_domain_boost_weight: float = 0.12
     hybrid_authority_boost_weight: float = 0.08
+    structure_authority_scoring_enabled: bool = False
+    structure_boost_heading_weight: float = 0.12
+    structure_boost_parent_weight: float = 0.06
+    authority_boost_weight: float = 0.10
+    current_status_boost_weight: float = 0.05
+    answer_min_fts_confidence: float = 0.30
 
     # ── Re-ranker ─────────────────────────────────────────────────────────────
     reranker_enabled: bool = True

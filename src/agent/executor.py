@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from uuid import uuid4
 
 from google import genai
@@ -26,6 +27,7 @@ from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser
 from src.core.config import settings
 from src.core.safety import fit_public_payload, limit_text
+from src.retrieval.taxonomy import classify_query
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +114,42 @@ class SmartCampusAgent:
 
             function_calls = list(response.function_calls or [])
             if not function_calls:
+                if self._is_explicit_out_of_scope(normalized_message) and not rag_citations:
+                    return self._simple_answer(
+                        "Mình chưa đủ căn cứ để xử lý câu hỏi này trong phạm vi Smart Campus.",
+                        trace=[
+                            *trace,
+                            AgentTraceStep(
+                                type="analysis",
+                                label="Câu hỏi nằm ngoài phạm vi hỗ trợ",
+                                status="failed",
+                            ),
+                        ],
+                        request_id=request_id,
+                        answer_type="fallback",
+                        fallback_reason="out_of_scope",
+                    )
                 raw_text = (response.text or "").strip() or self._fallback_answer()
                 text = limit_text(
                     self._validate_citations(raw_text, len(rag_citations)),
                     settings.agent_max_answer_chars,
                 )
                 citations = self._used_citations(text, rag_citations)
+                if rag_citations and not citations:
+                    return self._simple_answer(
+                        "Mình chưa đủ căn cứ để trả lời chắc chắn vì câu trả lời chưa có trích dẫn hợp lệ.",
+                        trace=[
+                            *trace,
+                            AgentTraceStep(
+                                type="answer",
+                                label="Thiếu trích dẫn evidence",
+                                status="failed",
+                            ),
+                        ],
+                        request_id=request_id,
+                        answer_type="fallback",
+                        fallback_reason="missing_citation",
+                    )
                 self._audit(
                     event_type="agent_answer",
                     request_id=request_id,
@@ -202,6 +234,8 @@ class SmartCampusAgent:
                             "Mình chưa tìm thấy đủ căn cứ trong bộ tài liệu đã index để trả lời chắc chắn cho câu hỏi này.",
                             trace=[*trace, AgentTraceStep(type="tool", label=tool.display_name, status="failed", tool=tool.name)],
                             request_id=request_id,
+                            answer_type="fallback",
+                            fallback_reason=self._rag_fallback_reason(result),
                         )
                     rag_citations = self._rag_citations(result)
                 trace.append(
@@ -645,20 +679,50 @@ class SmartCampusAgent:
         *,
         trace: list[AgentTraceStep] | None = None,
         request_id: str,
+        answer_type: str = "answer",
+        fallback_reason: str | None = None,
+        confidence: float | None = None,
     ) -> AgentQueryResult:
         return AgentQueryResult(
-            answer_type="answer",
+            answer_type=answer_type,
             answer=limit_text(answer, settings.agent_max_answer_chars),
             citations=[],
             trace=trace or [AgentTraceStep(type="analysis", label="Đã phân tích yêu cầu", status="completed")],
+            fallback_reason=fallback_reason,
+            confidence=confidence,
         )
 
     def _timed_out_answer(self, trace: list[AgentTraceStep]) -> AgentQueryResult:
         return AgentQueryResult(
-            answer_type="answer",
+            answer_type="fallback",
             answer="Tôi cần dừng lại để tránh xử lý quá lâu trong một lượt. Bạn vui lòng hỏi cụ thể hơn hoặc thử lại sau.",
             citations=[],
             trace=[*trace, AgentTraceStep(type="analysis", label="Vượt quá thời gian xử lý", status="failed")],
+            fallback_reason="timeout",
+        )
+
+    @staticmethod
+    def _rag_fallback_reason(result: ToolResult) -> str:
+        data = result.data if isinstance(result.data, dict) else {}
+        return str(data.get("fallback_reason") or "no_evidence")
+
+    @staticmethod
+    def _is_explicit_out_of_scope(message: str) -> bool:
+        hint = classify_query(message)
+        if hint.out_of_scope and hint.out_of_scope_reason != "live_personal_data":
+            return True
+        normalized = unicodedata.normalize("NFKD", message).encode("ascii", "ignore").decode("ascii").lower()
+        return any(
+            phrase in normalized
+            for phrase in (
+                "bai tho",
+                "lam tho",
+                "viet mot bai",
+                "thoi tiet o paris",
+                "thoi tiet hom nay",
+                "gia vang",
+                "bitcoin",
+            )
         )
 
     @staticmethod

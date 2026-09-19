@@ -40,6 +40,8 @@ class RagQueryResponse(BaseModel):
     retrieved_count: int = 0
     answer_type: str = "knowledge"
     contexts: list[RagContext] | None = None
+    fallback_reason: str | None = None
+    citation_validation: dict[str, Any] | None = None
 
 
 class RagEvidenceResponse(BaseModel):
@@ -48,6 +50,9 @@ class RagEvidenceResponse(BaseModel):
     confidence: float = 0.0
     retrieved_count: int = 0
     contexts: list[RagContext] = Field(default_factory=list)
+    fallback_reason: str | None = None
+    top_score: float | None = None
+    top_gap: float | None = None
 
 
 class IngestRebuildResponse(BaseModel):

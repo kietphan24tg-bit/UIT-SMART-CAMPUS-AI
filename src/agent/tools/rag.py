@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from src.rag.service import RagService
+from src.core.config import settings
 
 from .base import AgentTool, ToolArgumentsModel
 from .context import ToolContext
@@ -30,7 +31,18 @@ class SearchUniversityPoliciesTool(AgentTool):
     retry_policy = "once_transient"
 
     def __init__(self, rag_service: RagService | None = None) -> None:
-        self.rag_service = rag_service
+        # Agent policy retrieval must use the application corpus. Evaluation
+        # injects a fake/service explicitly and remains isolated from this path.
+        self.rag_service = rag_service or RagService(
+            config=settings.model_copy(
+                update={
+                    "rag_db_schema": settings.agent_rag_db_schema,
+                    "embedding_provider": settings.agent_embedding_provider,
+                    "embedding_model": settings.agent_embedding_model,
+                    "embedding_dimensions": settings.agent_embedding_dimensions,
+                }
+            )
+        )
 
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
         del context

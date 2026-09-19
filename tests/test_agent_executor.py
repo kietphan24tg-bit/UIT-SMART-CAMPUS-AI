@@ -7,11 +7,11 @@ from types import SimpleNamespace
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from src.agent.executor import SmartCampusAgent
+from src.agent.executor import ProposalConflictError, ProposalExpiredError, ProposalForbiddenError, ProposalNotFoundError, SmartCampusAgent
 from src.agent.proposals import ToolProposal
 from src.agent.tools import ToolContext, ToolOperation, ToolRegistry
 from src.agent.tools.base import AgentTool, ToolArgumentsModel
-from src.agent.tools.results import ToolResult
+from src.agent.tools.results import ToolError, ToolResult
 from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser
 
@@ -35,6 +35,7 @@ class ReadTool(AgentTool):
 
     def __init__(self) -> None:
         self.calls = 0
+        self.outcome: ToolResult | None = None
 
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
         del context, arguments
@@ -58,7 +59,7 @@ class ActionTool(AgentTool):
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
         del context, arguments
         self.calls += 1
-        return ToolResult(ok=True, tool=self.name, status="success", data={"ok": True})
+        return self.outcome or ToolResult(ok=True, tool=self.name, status="success", data={"ok": True})
 
 
 class RagTool(AgentTool):
@@ -166,6 +167,42 @@ class FakeStore:
             confirmed_at=None,
             executed_at=None,
         )
+        return self.created
+
+    def get_for_user(self, proposal_id: str, user_id: str) -> ToolProposal | None:
+        if not self.created or self.created.id != proposal_id or self.created.user_id != user_id:
+            return None
+        return self.created
+
+    def expire_pending(self, proposal_id: str, user_id: str) -> ToolProposal | None:
+        if not self.created or self.created.id != proposal_id or self.created.user_id != user_id:
+            return None
+        self.created.status = "expired"
+        return self.created
+
+    def claim_pending_for_execution(self, proposal_id: str, user_id: str, role: str) -> ToolProposal | None:
+        if (
+            not self.created
+            or self.created.id != proposal_id
+            or self.created.user_id != user_id
+            or self.created.role != role
+            or self.created.status != "pending"
+            or self.created.is_expired
+        ):
+            return None
+        self.created.status = "executing"
+        self.created.confirmed_at = datetime.now(UTC)
+        return self.created
+
+    def arguments_hash_matches(self, proposal: ToolProposal) -> bool:
+        return proposal.arguments_hash == "hash-1"
+
+    def mark_result(self, proposal_id: str, *, status: str, result=None, error=None) -> ToolProposal:
+        assert self.created and self.created.id == proposal_id
+        self.created.status = status
+        self.created.result = result
+        self.created.error = error
+        self.created.executed_at = datetime.now(UTC)
         return self.created
 
 
@@ -302,11 +339,42 @@ def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
     result = agent.answer_query(user=_user(), message="Cau hoi ngoai pham vi")
 
-    assert result.answer_type == "answer"
+    assert result.answer_type == "fallback"
+    assert result.fallback_reason == "no_evidence"
     assert "chưa tìm thấy đủ căn cứ" in result.answer
     assert result.citations == []
     assert rag_tool.calls == 1
     assert len(client.models.calls) == 1
+
+
+def test_executor_falls_back_when_rag_answer_has_no_citation(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = RagTool(found=True)
+    registry.register(rag_tool)
+    client = FakeClient([
+        _response_with_call("search_university_policies", {}),
+        _response_with_text("Dieu kien du thi duoc quy dinh trong van ban."),
+    ])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Dieu kien du thi la gi?")
+
+    assert result.answer_type == "fallback"
+    assert result.fallback_reason == "missing_citation"
+    assert result.citations == []
+
+
+def test_executor_marks_explicit_out_of_scope_as_fallback(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    client = FakeClient([_response_with_text("Day la mot bai tho ve mua thu.")])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Hãy viết một bài thơ về mùa thu.")
+
+    assert result.answer_type == "fallback"
+    assert result.fallback_reason == "out_of_scope"
 
 
 def test_executor_builds_contents_from_history_before_current_message(monkeypatch):
@@ -331,6 +399,75 @@ def test_executor_builds_contents_from_history_before_current_message(monkeypatc
     assert contents[0].parts[0].text == "Lich SE104?"
     assert contents[1].parts[0].text == "SE104 hoc thu ba."
     assert contents[2].parts[0].text == "Con tuan sau thi sao?"
+
+
+def _action_agent(monkeypatch, *, outcome: ToolResult | None = None):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    action_tool = ActionTool()
+    action_tool.outcome = outcome
+    registry = ToolRegistry()
+    registry.register(action_tool)
+    store = FakeStore()
+    client = FakeClient([_response_with_call("cancel_room_booking", {"id": "rb-1"})])
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
+    result = agent.answer_query(user=_user(), message="Huy dat phong rb-1", session_id="s1")
+    assert result.answer_type == "confirmation_required"
+    assert store.created is not None
+    return agent, action_tool, store
+
+
+def test_action_confirmation_replay_is_rejected(monkeypatch):
+    agent, action_tool, store = _action_agent(monkeypatch)
+
+    first = agent.confirm_proposal(user=_user(), proposal_id=store.created.id)
+    assert first.status == "executed"
+    assert action_tool.calls == 1
+
+    try:
+        agent.confirm_proposal(user=_user(), proposal_id=store.created.id)
+    except ProposalConflictError:
+        pass
+    else:
+        raise AssertionError("A replayed confirmation must be rejected")
+    assert action_tool.calls == 1
+
+
+def test_action_expiry_and_wrong_user_are_rejected(monkeypatch):
+    agent, action_tool, store = _action_agent(monkeypatch)
+    store.created.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    try:
+        agent.confirm_proposal(user=_user(), proposal_id=store.created.id)
+    except ProposalExpiredError:
+        pass
+    else:
+        raise AssertionError("An expired proposal must be rejected")
+    assert action_tool.calls == 0
+
+    agent, action_tool, store = _action_agent(monkeypatch)
+    wrong_user = AuthenticatedUser(user_id="u2", role="student", access_token="token-2", profile={"id": "u2", "role": "student"})
+    try:
+        agent.confirm_proposal(user=wrong_user, proposal_id=store.created.id)
+    except (ProposalConflictError, ProposalForbiddenError, ProposalNotFoundError):
+        pass
+    else:
+        raise AssertionError("A wrong-user confirmation must be rejected")
+    assert action_tool.calls == 0
+
+
+def test_action_timeout_is_marked_execution_unknown(monkeypatch):
+    timeout = ToolResult(
+        ok=False,
+        tool="cancel_room_booking",
+        status="failed",
+        error=ToolError(code="timeout", message="upstream timeout", retryable=True),
+    )
+    agent, action_tool, store = _action_agent(monkeypatch, outcome=timeout)
+
+    result = agent.confirm_proposal(user=_user(), proposal_id=store.created.id)
+
+    assert result.status == "execution_unknown"
+    assert action_tool.calls == 1
 
 
 def test_executor_does_not_create_action_from_history_only(monkeypatch):
