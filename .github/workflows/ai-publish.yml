@@ -37,7 +37,18 @@ jobs:
           pip install -e .
 
       - name: Run tests
-        run: pytest -q
+        run: >-
+          pytest -q
+          tests/test_agent_*.py
+          tests/test_chunking.py
+          tests/test_documents_loader.py
+          tests/test_guardrails.py
+          tests/test_hybrid_retriever.py
+          tests/test_main.py
+          tests/test_pgvector_store.py
+          tests/test_pipeline.py
+          tests/test_rag_service.py
+          tests/test_retrieval.py
         env:
           PYTHONPATH: .
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
