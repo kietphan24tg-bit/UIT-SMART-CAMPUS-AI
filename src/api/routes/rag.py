@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.schemas import RagQueryRequest, RagQueryResponse
@@ -9,6 +11,7 @@ from src.core.limits import RateLimitPolicy, guardrail_store
 from src.rag.service import RagService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/query", response_model=RagQueryResponse, dependencies=[ServiceRequest])
@@ -33,6 +36,12 @@ def query_rag(payload: RagQueryRequest) -> RagQueryResponse:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="RAG service is not configured.") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_safe_provider_error(exc)) from exc
+    except Exception as exc:
+        logger.exception("Unhandled RAG request failure")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="RAG backend is temporarily unavailable.",
+        ) from exc
 
 
 def _safe_provider_error(exc: RuntimeError) -> str:
