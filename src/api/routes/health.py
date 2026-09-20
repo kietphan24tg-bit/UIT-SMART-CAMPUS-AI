@@ -60,6 +60,10 @@ def readiness() -> dict:
         },
         "actions_ready": bool(
             not settings.agent_actions_enabled
-            or (database_ok and (redis_ok or not settings.redis_url))
+            or (
+                database_ok
+                and (redis_ok or not settings.redis_url)
+                and bool(settings.agent_enabled_action_tools.strip())
+            )
         ),
     }

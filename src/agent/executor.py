@@ -567,7 +567,8 @@ class SmartCampusAgent:
             for value in settings.agent_enabled_action_tools.split(",")
             if value.strip()
         }
-        if allowlist and tool.name not in allowlist:
+        # Fail closed: the global switch must not enable every mutation tool.
+        if not allowlist or tool.name not in allowlist:
             return False
         return True
 
