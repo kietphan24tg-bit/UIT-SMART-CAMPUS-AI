@@ -53,11 +53,13 @@ interface FastAgentProposal {
 }
 
 interface FastAgentQueryResponse {
-  answer_type: 'answer' | 'confirmation_required' | 'fallback';
+  answer_type: 'answer' | 'clarification' | 'confirmation_required' | 'fallback';
   answer: string;
   proposal?: FastAgentProposal | null;
   citations?: FastAgentCitation[];
   trace?: FastAgentTraceStep[];
+  fallback_reason?: string | null;
+  confidence?: number | null;
 }
 
 interface FastProposalStatusResponse {
@@ -92,11 +94,13 @@ export interface AgentQueryHistoryMessage {
 }
 
 export interface AgentQueryMappedResponse {
-  answerType: 'answer' | 'confirmation_required' | 'fallback';
+  answerType: 'answer' | 'clarification' | 'confirmation_required' | 'fallback';
   answer: string;
   citations: ChatbotCitation[];
   trace: AgentTraceStep[];
   proposal: AgentProposal | null;
+  fallbackReason?: string | null;
+  confidence?: number | null;
 }
 
 export interface AgentProposalStatus {
@@ -170,6 +174,8 @@ export class AiAgentService {
         tool: item.tool ?? null,
       })),
       proposal: response.proposal ? this.mapProposal(response.proposal) : null,
+      fallbackReason: response.fallback_reason ?? null,
+      confidence: response.confidence ?? null,
     };
   }
 
@@ -337,7 +343,14 @@ export class AiAgentService {
       case HttpStatus.GONE:
         return new GoneException(message);
       case HttpStatus.TOO_MANY_REQUESTS:
-        return new HttpException(message, HttpStatus.TOO_MANY_REQUESTS);
+        return new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message,
+            retryAfterSeconds: this.retryAfterSeconds(axiosError),
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       case HttpStatus.BAD_GATEWAY:
         return new BadGatewayException('AI service returned an invalid response.');
       case HttpStatus.SERVICE_UNAVAILABLE:
@@ -370,6 +383,12 @@ export class AiAgentService {
       }
     }
     return 'AI service request failed.';
+  }
+
+  private retryAfterSeconds(error: AxiosError): number | null {
+    const value = error.response?.headers?.['retry-after'];
+    const parsed = Number.parseInt(Array.isArray(value) ? value[0] : String(value ?? ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 
   private normalizeBaseUrl(value: string): string {

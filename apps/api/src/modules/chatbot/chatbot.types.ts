@@ -23,6 +23,7 @@ export type ChatbotAnswerType =
   | 'knowledge'
   | 'fallback'
   | 'answer'
+  | 'clarification'
   | 'confirmation_required';
 export type ChatbotSummaryScope = 'today' | 'work' | 'ops';
 export type ChatbotActionKind = 'navigate';

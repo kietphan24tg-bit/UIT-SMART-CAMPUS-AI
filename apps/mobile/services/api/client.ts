@@ -14,7 +14,7 @@ type RetryableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
 };
 
-export type ApiClientErrorCode = 'NETWORK_UNAVAILABLE' | 'SESSION_INVALIDATED';
+export type ApiClientErrorCode = 'NETWORK_UNAVAILABLE' | 'SESSION_INVALIDATED' | 'RATE_LIMITED';
 
 export type RefreshAccessTokenResult =
   | {
@@ -28,7 +28,12 @@ export type RefreshAccessTokenResult =
 
 type ApiClientError = Error & {
   appCode?: ApiClientErrorCode;
+  retryAfterSeconds?: number;
 };
+
+export function isRateLimitError(error: unknown): error is ApiClientError {
+  return hasApiClientErrorCode(error, 'RATE_LIMITED');
+}
 
 function getMetroHost() {
   type ConstantsLike = {
@@ -174,6 +179,23 @@ function createSessionInvalidatedClientError(error?: unknown) {
     ),
     'SESSION_INVALIDATED',
   );
+}
+
+function createRateLimitClientError(error: AxiosError) {
+  const localized = createLocalizedError(
+    error.response?.data ?? error,
+    'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
+  ) as ApiClientError;
+  const data = error.response?.data;
+  const retryAfterSeconds =
+    data && typeof data === 'object' && 'retryAfterSeconds' in data
+      ? Number(data.retryAfterSeconds)
+      : Number(error.response?.headers?.['retry-after']);
+  localized.appCode = 'RATE_LIMITED';
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    localized.retryAfterSeconds = retryAfterSeconds;
+  }
+  return localized;
 }
 
 async function buildStoredAuthDebugPayload() {
@@ -373,6 +395,10 @@ apiClient.interceptors.response.use(
           ),
         );
       }
+    }
+
+    if (error.response?.status === 429) {
+      return Promise.reject(createRateLimitClientError(error));
     }
 
     if (isUnavailableError(error)) {

@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, isRateLimitError } from './client';
 
 export interface ChatbotAction {
   label: string;
@@ -25,7 +25,7 @@ export interface ChatbotAnswerResponse {
   confidence: number;
   intent: string;
   domain: string;
-  answerType: 'live' | 'summary' | 'knowledge' | 'fallback';
+  answerType: 'live' | 'summary' | 'knowledge' | 'clarification' | 'fallback';
 }
 
 export interface ChatbotQueryResponse {
@@ -38,7 +38,13 @@ export interface ChatbotQueryResponse {
   confidence: number;
   intent: string;
   domain: string;
-  answerType: 'live' | 'summary' | 'knowledge' | 'fallback';
+  answerType: 'live' | 'summary' | 'knowledge' | 'clarification' | 'fallback';
+}
+
+const MAX_AGENT_RATE_LIMIT_RETRIES = 1;
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 export interface ChatbotSessionRecord {
@@ -124,7 +130,17 @@ export function buildChatbotActionsFromDeepLinks(deepLinks: string[] | unknown):
 
 export const chatbotApi = {
   query: async (payload: { message: string; sessionId?: string }) => {
-    return (await apiClient.post('/chatbot/query', payload)) as ChatbotQueryResponse;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return (await apiClient.post('/chatbot/query', payload)) as ChatbotQueryResponse;
+      } catch (error) {
+        if (!isRateLimitError(error) || attempt >= MAX_AGENT_RATE_LIMIT_RETRIES) {
+          throw error;
+        }
+        const delaySeconds = Math.min(error.retryAfterSeconds ?? 1, 30);
+        await wait(delaySeconds * 1000);
+      }
+    }
   },
 
   getSummary: async (scope: 'today' | 'work' | 'ops') => {

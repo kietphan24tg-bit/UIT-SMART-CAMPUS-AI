@@ -97,6 +97,31 @@ describe('AiAgentService', () => {
     });
   });
 
+  it('forwards upstream Retry-After metadata for bounded client backoff', async () => {
+    requestMock.mockRejectedValue({
+      response: {
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        headers: { 'retry-after': '30' },
+        data: { detail: 'Too many concurrent requests for this user.' },
+      },
+    });
+
+    const service = new AiAgentService(createConfig());
+    await expect(
+      service.query('Bearer user-jwt', 'student' as never, {
+        message: 'Lich hoc hom nay',
+        sessionId: 'session-1',
+        history: [],
+      }),
+    ).rejects.toMatchObject({
+      status: HttpStatus.TOO_MANY_REQUESTS,
+      response: {
+        message: 'Too many concurrent requests for this user.',
+        retryAfterSeconds: 30,
+      },
+    });
+  });
+
   it('rejects malformed authorization headers before making upstream request', async () => {
     const service = new AiAgentService(createConfig());
 
