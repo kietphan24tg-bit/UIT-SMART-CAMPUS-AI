@@ -314,6 +314,32 @@ def test_executor_creates_proposal_for_action_without_executing_tool(monkeypatch
     assert "rb-1" not in result.trace[-1].label
 
 
+def test_executor_retries_when_model_asks_for_text_confirmation_instead_of_calling_action(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", "cancel_room_booking")
+    monkeypatch.setattr("src.agent.executor.settings.agent_confirmation_ttl_seconds", 300)
+
+    action_tool = ActionTool()
+    registry = ToolRegistry()
+    registry.register(action_tool)
+    store = FakeStore()
+    client = FakeClient(
+        [
+            _response_with_text("Bạn có muốn xác nhận hủy đặt phòng rb-1 không?"),
+            _response_with_call("cancel_room_booking", {"id": "rb-1"}),
+        ]
+    )
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
+    result = agent.answer_query(user=_user(), message="Hủy đặt phòng rb-1", session_id="s-retry")
+
+    assert len(client.models.calls) == 2
+    assert result.answer_type == "confirmation_required"
+    assert result.proposal is not None
+    assert result.proposal.tool == "cancel_room_booking"
+    assert action_tool.calls == 0
+
+
 def test_executor_action_flag_without_tool_allowlist_fails_closed(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
     monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", "")

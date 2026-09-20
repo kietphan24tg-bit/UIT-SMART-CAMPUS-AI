@@ -93,6 +93,7 @@ class SmartCampusAgent:
         rag_calls = 0
         rag_citations: list[Citation] = []
         seen_fingerprints: set[str] = set()
+        action_routing_retry_used = False
 
         for _ in range(settings.agent_max_tool_steps):
             if time.monotonic() >= deadline:
@@ -114,6 +115,31 @@ class SmartCampusAgent:
 
             function_calls = list(response.function_calls or [])
             if not function_calls:
+                raw_text = (response.text or "").strip()
+                if (
+                    not action_routing_retry_used
+                    and self._looks_like_unrouted_action_confirmation(normalized_message, raw_text)
+                ):
+                    action_routing_retry_used = True
+                    contents.extend(
+                        [
+                            self._response_content(response),
+                            types.Content(
+                                role="user",
+                                parts=[
+                                    types.Part.from_text(
+                                        text=(
+                                            "Yêu cầu gốc đã thể hiện rõ một hành động. "
+                                            "Không hỏi xác nhận bằng văn bản; hãy gọi đúng một tool hành động "
+                                            "với các tham số đã có để hệ thống tạo đề xuất xác nhận. "
+                                            "Nếu thực sự thiếu tham số bắt buộc thì chỉ hỏi làm rõ tham số đó."
+                                        )
+                                    )
+                                ],
+                            ),
+                        ]
+                    )
+                    continue
                 if self._is_explicit_out_of_scope(normalized_message) and not rag_citations:
                     return self._simple_answer(
                         "Mình chưa đủ căn cứ để xử lý câu hỏi này trong phạm vi Smart Campus.",
@@ -129,7 +155,7 @@ class SmartCampusAgent:
                         answer_type="fallback",
                         fallback_reason="out_of_scope",
                     )
-                raw_text = (response.text or "").strip() or self._fallback_answer()
+                raw_text = raw_text or self._fallback_answer()
                 text = limit_text(
                     self._validate_citations(raw_text, len(rag_citations)),
                     settings.agent_max_answer_chars,
@@ -729,6 +755,37 @@ class SmartCampusAgent:
                 "bitcoin",
             )
         )
+
+    @staticmethod
+    def _looks_like_unrouted_action_confirmation(message: str, response_text: str) -> bool:
+        def _normalize(value: str) -> str:
+            return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+
+        normalized_message = _normalize(message)
+        normalized_response = _normalize(response_text)
+        asks_for_confirmation = any(
+            phrase in normalized_response
+            for phrase in ("ban co muon", "ban co chac", "xac nhan")
+        )
+        has_action_intent = any(
+            phrase in normalized_message
+            for phrase in (
+                "dang ky",
+                "huy",
+                "tao",
+                "cap nhat",
+                "xoa",
+                "thanh toan",
+                "dat phong",
+                "gui",
+                "diem danh",
+                "sos",
+                "gia han",
+                "bat dau",
+                "dung",
+            )
+        )
+        return asks_for_confirmation and has_action_intent
 
     @staticmethod
     def _fallback_answer() -> str:
