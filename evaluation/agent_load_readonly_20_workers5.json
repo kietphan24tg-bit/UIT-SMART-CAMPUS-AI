@@ -1,0 +1,161 @@
+{
+  "mode": "production_readonly_concurrent",
+  "requested": 20,
+  "workers": 5,
+  "completed": 20,
+  "success_count": 3,
+  "error_count": 17,
+  "wall_clock_ms": 16362.83,
+  "p50_ms": 2395.68,
+  "p95_ms": 13053.78,
+  "min_ms": 860.81,
+  "max_ms": 13053.78,
+  "rows": [
+    {
+      "index": 1,
+      "status": 429,
+      "latency_ms": 9280.23,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 2,
+      "status": 200,
+      "latency_ms": 11064.48,
+      "answer_type": "answer",
+      "tools": [
+        "get_current_schedule"
+      ]
+    },
+    {
+      "index": 3,
+      "status": 200,
+      "latency_ms": 10566.66,
+      "answer_type": "answer",
+      "tools": [
+        "get_current_schedule"
+      ]
+    },
+    {
+      "index": 4,
+      "status": 200,
+      "latency_ms": 13053.78,
+      "answer_type": "answer",
+      "tools": [
+        "get_current_schedule"
+      ]
+    },
+    {
+      "index": 5,
+      "status": 429,
+      "latency_ms": 6568.14,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 6,
+      "status": 429,
+      "latency_ms": 2636.96,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 7,
+      "status": 429,
+      "latency_ms": 2208.9,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 8,
+      "status": 429,
+      "latency_ms": 2025.14,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 9,
+      "status": 429,
+      "latency_ms": 860.81,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 10,
+      "status": 429,
+      "latency_ms": 2515.31,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 11,
+      "status": 429,
+      "latency_ms": 1453.28,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 12,
+      "status": 429,
+      "latency_ms": 1098.87,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 13,
+      "status": 429,
+      "latency_ms": 1426.95,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 14,
+      "status": 429,
+      "latency_ms": 2618.3,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 15,
+      "status": 429,
+      "latency_ms": 1124.76,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 16,
+      "status": 429,
+      "latency_ms": 2319.93,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 17,
+      "status": 429,
+      "latency_ms": 900.85,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 18,
+      "status": 429,
+      "latency_ms": 2556.51,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 19,
+      "status": 429,
+      "latency_ms": 1392.1,
+      "answer_type": null,
+      "tools": []
+    },
+    {
+      "index": 20,
+      "status": 429,
+      "latency_ms": 2395.68,
+      "answer_type": null,
+      "tools": []
+    }
+  ]
+}

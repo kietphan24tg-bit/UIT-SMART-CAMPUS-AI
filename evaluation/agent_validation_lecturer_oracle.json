@@ -1,0 +1,83 @@
+{
+  "semantic": [
+    {
+      "role": "lecturer",
+      "kind": "schedule",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_current_schedule"
+      ],
+      "latency_ms": 9216.82,
+      "oracle_leaf_count": 56,
+      "answer_value_matches": 38,
+      "match_rate": 0.679
+    },
+    {
+      "role": "lecturer",
+      "kind": "grades",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_lecturer_grade_sections"
+      ],
+      "latency_ms": 9932.63,
+      "oracle_leaf_count": 90,
+      "answer_value_matches": 34,
+      "match_rate": 0.378
+    },
+    {
+      "role": "lecturer",
+      "kind": "attendance",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_lecturer_attendance_sections",
+        "get_lecturer_attendance_history"
+      ],
+      "latency_ms": 12767.31,
+      "oracle_leaf_count": 66,
+      "answer_value_matches": 10,
+      "match_rate": 0.152
+    }
+  ],
+  "ambiguous": [],
+  "leakage": [],
+  "repeat": [
+    {
+      "run": 1,
+      "status": 200,
+      "latency_ms": 14866.39,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 2,
+      "status": 200,
+      "latency_ms": 18506.81,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 3,
+      "status": 200,
+      "latency_ms": 15218.68,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    }
+  ],
+  "login": {
+    "student": 200,
+    "lecturer": 200,
+    "admin": 200
+  }
+}

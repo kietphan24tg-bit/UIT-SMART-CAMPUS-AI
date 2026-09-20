@@ -1,0 +1,73 @@
+{
+  "requested": 6,
+  "completed": 6,
+  "success_count": 6,
+  "rows": [
+    {
+      "run": 1,
+      "status": 200,
+      "latency_ms": 17928.16,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 1,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 2,
+      "status": 200,
+      "latency_ms": 15612.75,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 3,
+      "status": 200,
+      "latency_ms": 15530.47,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 4,
+      "status": 200,
+      "latency_ms": 15321.14,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 5,
+      "status": 200,
+      "latency_ms": 15347.4,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 6,
+      "status": 200,
+      "latency_ms": 15065.97,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    }
+  ]
+}

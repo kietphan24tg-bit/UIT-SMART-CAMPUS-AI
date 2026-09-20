@@ -1,0 +1,255 @@
+{
+  "semantic": [
+    {
+      "role": "student",
+      "kind": "schedule",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_current_schedule"
+      ],
+      "latency_ms": 9920.98,
+      "oracle_leaf_count": 45,
+      "answer_value_matches": 29,
+      "match_rate": 0.644
+    },
+    {
+      "role": "student",
+      "kind": "grades",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_current_grades"
+      ],
+      "latency_ms": 9084.39,
+      "oracle_leaf_count": 42,
+      "answer_value_matches": 13,
+      "match_rate": 0.31
+    },
+    {
+      "role": "student",
+      "kind": "attendance",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_my_attendance_history"
+      ],
+      "latency_ms": 9670.22,
+      "oracle_leaf_count": 39,
+      "answer_value_matches": 11,
+      "match_rate": 0.282
+    },
+    {
+      "role": "lecturer",
+      "kind": "schedule",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_current_schedule"
+      ],
+      "latency_ms": 11647.89,
+      "oracle_leaf_count": 56,
+      "answer_value_matches": 36,
+      "match_rate": 0.643
+    },
+    {
+      "role": "lecturer",
+      "kind": "grades",
+      "agent_status": 200,
+      "oracle_status": 404,
+      "tool": [
+        "get_lecturer_grade_sections"
+      ],
+      "latency_ms": 9671.07,
+      "oracle_leaf_count": 3,
+      "answer_value_matches": 0,
+      "match_rate": 0.0
+    },
+    {
+      "role": "lecturer",
+      "kind": "attendance",
+      "agent_status": 200,
+      "oracle_status": 404,
+      "tool": [
+        "get_lecturer_attendance_sections",
+        "get_lecturer_attendance_history"
+      ],
+      "latency_ms": 14201.52,
+      "oracle_leaf_count": 3,
+      "answer_value_matches": 0,
+      "match_rate": 0.0
+    },
+    {
+      "role": "admin",
+      "kind": "schedule",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_current_schedule"
+      ],
+      "latency_ms": 8292.92,
+      "oracle_leaf_count": 8,
+      "answer_value_matches": 2,
+      "match_rate": 0.25
+    },
+    {
+      "role": "admin",
+      "kind": "canteen",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "get_canteen_catalog"
+      ],
+      "latency_ms": 14195.21,
+      "oracle_leaf_count": 78,
+      "answer_value_matches": 0,
+      "match_rate": 0.0
+    },
+    {
+      "role": "admin",
+      "kind": "buildings",
+      "agent_status": 200,
+      "oracle_status": 200,
+      "tool": [
+        "list_buildings"
+      ],
+      "latency_ms": 8109.23,
+      "oracle_leaf_count": 21,
+      "answer_value_matches": 16,
+      "match_rate": 0.762
+    }
+  ],
+  "ambiguous": [
+    {
+      "role": "student",
+      "status": 200,
+      "latency_ms": 9028.9,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "tools": [
+        "get_current_schedule"
+      ]
+    },
+    {
+      "role": "student",
+      "status": 200,
+      "latency_ms": 9867.71,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "tools": [
+        "get_current_schedule"
+      ]
+    },
+    {
+      "role": "student",
+      "status": 200,
+      "latency_ms": 8302.52,
+      "answer_type": "answer",
+      "fallback_reason": null,
+      "tools": [
+        "get_my_attendance_history"
+      ]
+    },
+    {
+      "role": "student",
+      "status": 200,
+      "latency_ms": 9062.89,
+      "answer_type": "fallback",
+      "fallback_reason": "no_evidence",
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "role": "student",
+      "status": 200,
+      "latency_ms": 1505.3,
+      "answer_type": "fallback",
+      "fallback_reason": "outside_corpus",
+      "tools": [
+        "search_university_policies"
+      ]
+    }
+  ],
+  "leakage": [
+    {
+      "source_role": "student",
+      "target_role": "lecturer",
+      "shared_leaf_count": 0,
+      "source_empty": false,
+      "target_empty": false
+    },
+    {
+      "source_role": "student",
+      "target_role": "admin",
+      "shared_leaf_count": 2,
+      "source_empty": false,
+      "target_empty": false
+    },
+    {
+      "source_role": "lecturer",
+      "target_role": "student",
+      "shared_leaf_count": 0,
+      "source_empty": false,
+      "target_empty": false
+    },
+    {
+      "source_role": "lecturer",
+      "target_role": "admin",
+      "shared_leaf_count": 0,
+      "source_empty": false,
+      "target_empty": false
+    },
+    {
+      "source_role": "admin",
+      "target_role": "student",
+      "shared_leaf_count": 2,
+      "source_empty": false,
+      "target_empty": false
+    },
+    {
+      "source_role": "admin",
+      "target_role": "lecturer",
+      "shared_leaf_count": 0,
+      "source_empty": false,
+      "target_empty": false
+    }
+  ],
+  "repeat": [
+    {
+      "run": 1,
+      "status": 200,
+      "latency_ms": 16798.22,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 2,
+      "status": 200,
+      "latency_ms": 15605.99,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    },
+    {
+      "run": 3,
+      "status": 200,
+      "latency_ms": 15595.46,
+      "answer_type": "answer",
+      "citation_count": 2,
+      "tools": [
+        "search_university_policies"
+      ]
+    }
+  ],
+  "login": {
+    "student": 200,
+    "lecturer": 200,
+    "admin": 200
+  }
+}
