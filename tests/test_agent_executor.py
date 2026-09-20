@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from threading import Barrier, Lock, Thread
 from types import SimpleNamespace
 
 from google.genai import types
@@ -206,6 +207,18 @@ class FakeStore:
         return self.created
 
 
+class ConcurrentFakeStore(FakeStore):
+    """Fixture equivalent of the database's atomic pending-to-executing claim."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.claim_lock = Lock()
+
+    def claim_pending_for_execution(self, proposal_id: str, user_id: str, role: str) -> ToolProposal | None:
+        with self.claim_lock:
+            return super().claim_pending_for_execution(proposal_id, user_id, role)
+
+
 def _user(role: str = "student") -> AuthenticatedUser:
     return AuthenticatedUser(user_id="u1", role=role, access_token="token-1", profile={"id": "u1", "role": role})
 
@@ -252,6 +265,23 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
         ("answer", "completed"),
     ]
     assert result.trace[1].tool == "get_current_schedule"
+
+
+def test_executor_returns_clarification_when_required_tool_argument_is_missing(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    action_tool = ActionTool()
+    registry = ToolRegistry()
+    registry.register(action_tool)
+    client = FakeClient([_response_with_call("cancel_room_booking", {})])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Hủy đặt phòng giúp tôi", session_id="s-clarify")
+
+    assert result.answer_type == "clarification"
+    assert result.proposal is None
+    assert action_tool.calls == 0
+    assert result.trace is not None
+    assert result.trace[-1].status == "failed"
 
 
 def test_executor_creates_proposal_for_action_without_executing_tool(monkeypatch):
@@ -401,19 +431,43 @@ def test_executor_builds_contents_from_history_before_current_message(monkeypatc
     assert contents[2].parts[0].text == "Con tuan sau thi sao?"
 
 
-def _action_agent(monkeypatch, *, outcome: ToolResult | None = None):
+def _action_agent(monkeypatch, *, outcome: ToolResult | None = None, store: FakeStore | None = None):
     monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
     action_tool = ActionTool()
     action_tool.outcome = outcome
     registry = ToolRegistry()
     registry.register(action_tool)
-    store = FakeStore()
+    store = store or FakeStore()
     client = FakeClient([_response_with_call("cancel_room_booking", {"id": "rb-1"})])
     agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
     result = agent.answer_query(user=_user(), message="Huy dat phong rb-1", session_id="s1")
     assert result.answer_type == "confirmation_required"
     assert store.created is not None
     return agent, action_tool, store
+
+
+def test_concurrent_confirmation_claims_proposal_once(monkeypatch):
+    agent, action_tool, store = _action_agent(monkeypatch, store=ConcurrentFakeStore())
+    barrier = Barrier(2)
+    outcomes = []
+
+    def confirm() -> None:
+        barrier.wait()
+        try:
+            outcomes.append(agent.confirm_proposal(user=_user(), proposal_id=store.created.id))
+        except ProposalConflictError:
+            outcomes.append("conflict")
+
+    threads = [Thread(target=confirm) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(outcomes) == 2
+    assert sum(item != "conflict" for item in outcomes) == 1
+    assert sum(item == "conflict" for item in outcomes) == 1
+    assert action_tool.calls == 1
 
 
 def test_action_confirmation_replay_is_rejected(monkeypatch):

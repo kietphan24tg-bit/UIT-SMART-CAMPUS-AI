@@ -194,3 +194,39 @@ def test_action_tool_requires_allowed_role_and_posts_body():
     assert rag_result.ok is True
     assert rag_result.data["found"] is True
     assert rag_result.data["contexts"][0]["index"] == 1
+
+
+def test_read_tool_preserves_role_unique_structured_payload_without_cross_user_data():
+    role_payloads = {
+        "student-token": {"userId": "student-fixture-001", "items": [{"courseCode": "SE101"}]},
+        "lecturer-token": {"userId": "lecturer-fixture-001", "items": [{"courseCode": "SE202"}]},
+        "admin-token": {"userId": "admin-fixture-001", "items": [{"courseCode": "SE303"}]},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        token = request.headers["authorization"].removeprefix("Bearer ")
+        return httpx.Response(200, json={"data": role_payloads[token]})
+
+    registry = build_tool_registry(
+        nest_client=NestApiClient(
+            base_url="http://nest.test",
+            api_prefix="/api/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+        rag_service=FakeRagService(),
+    )
+
+    results = {
+        role: registry.get("get_current_schedule").execute(
+            ToolContext(user_id=f"{role}-fixture-001", role=role, access_token=f"{role}-token", request_id=f"req-{role}"),
+            {},
+        )
+        for role in ("student", "lecturer", "admin")
+    }
+
+    for role, result in results.items():
+        assert result.ok is True
+        assert result.data == role_payloads[f"{role}-token"]
+        assert result.data["userId"] == f"{role}-fixture-001"
+        other_roles = [other for other in results if other != role]
+        assert all(results[other].data["userId"] != result.data["userId"] for other in other_roles)

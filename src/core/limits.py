@@ -62,6 +62,7 @@ class GuardrailStore:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Retry later.",
+                headers={"Retry-After": str(policy.window_seconds)},
             )
 
     @contextmanager
@@ -70,9 +71,11 @@ class GuardrailStore:
         try:
             current = self._increment_concurrency(key, ttl_seconds=max(int(settings.agent_total_timeout_seconds), 30))
             if current > limit:
+                retry_after_seconds = max(int(settings.agent_total_timeout_seconds), 1)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Too many concurrent requests for this user.",
+                    headers={"Retry-After": str(retry_after_seconds)},
                 )
             claimed = True
             yield

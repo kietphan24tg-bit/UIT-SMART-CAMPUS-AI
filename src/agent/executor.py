@@ -187,6 +187,7 @@ class SmartCampusAgent:
                     "Tôi chưa đủ thông tin để thực hiện yêu cầu này. Bạn vui lòng nói rõ hơn giúp tôi.",
                     trace=[*trace, AgentTraceStep(type="analysis", label="Thiếu thông tin cần thiết", status="failed")],
                     request_id=request_id,
+                    answer_type="clarification",
                 )
 
             if context.role not in tool.allowed_roles:
