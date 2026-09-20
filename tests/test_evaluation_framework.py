@@ -71,6 +71,10 @@ def test_training_exam_manifest_and_documents_are_consistent():
 
 def test_training_exam_corpus_passes_technical_quality_gates(tmp_path):
     manifest = load_corpus_manifest(CORPUS_DIR / "manifest.json")
+    source_root = Path(str(manifest.payload.get("source_root") or ""))
+    if not source_root.is_dir():
+        pytest.skip("Normalized source corpus is external to the repository")
+
     report = validate_corpus(manifest, CORPUS_DIR / "authority_matrix.json")
     json_path, markdown_path = write_corpus_quality_report(report, tmp_path)
 

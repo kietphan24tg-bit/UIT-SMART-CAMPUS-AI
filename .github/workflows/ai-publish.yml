@@ -16,6 +16,7 @@ env:
 jobs:
   staging:
     name: Build, Test, Publish AI Image
+    if: ${{ github.repository == 'kietphan24tg-bit/UIT-SMART-CAMPUS-AI' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
