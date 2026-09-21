@@ -35,6 +35,14 @@ AGENT_HISTORY_LIMIT = 10
 AGENT_HISTORY_MAX_CHARS = 16_000
 
 
+class AgentProviderError(RuntimeError):
+    """A transient upstream model failure that should be visible to callers."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class SmartCampusAgent:
     def __init__(
         self,
@@ -105,8 +113,11 @@ class SmartCampusAgent:
                     contents=contents,
                     config=self._generation_config(user.role),
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Agent generation failed")
+                provider_status = getattr(exc, "code", None)
+                if isinstance(provider_status, int) and provider_status in {408, 429, 500, 502, 503, 504}:
+                    raise AgentProviderError(provider_status, "Gemini provider request failed") from exc
                 return self._simple_answer(
                     "Tôi chưa thể xử lý yêu cầu này ổn định lúc này. Bạn vui lòng thử lại sau.",
                     trace=trace,

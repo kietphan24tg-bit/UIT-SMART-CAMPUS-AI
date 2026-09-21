@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.agent.executor import (
+    AgentProviderError,
     ProposalConflictError,
     ProposalExpiredError,
     ProposalForbiddenError,
@@ -120,12 +121,15 @@ def query_agent(
         f"agent:concurrency:{current_user.user_id}",
         settings.agent_max_concurrent_requests_per_user,
     ):
-        result = agent.answer_query(
-            user=current_user,
-            message=req.message.strip(),
-            session_id=req.session_id,
-            history=[item.model_dump() for item in (req.history or [])],
-        )
+        try:
+            result = agent.answer_query(
+                user=current_user,
+                message=req.message.strip(),
+                session_id=req.session_id,
+                history=[item.model_dump() for item in (req.history or [])],
+            )
+        except AgentProviderError as exc:
+            raise HTTPException(status_code=exc.status_code, detail="AI provider temporarily unavailable.") from exc
     proposal = None
     if result.proposal is not None:
         proposal = AgentProposalResponse(
