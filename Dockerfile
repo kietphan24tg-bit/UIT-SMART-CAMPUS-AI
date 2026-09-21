@@ -16,6 +16,9 @@ RUN python -m pip install --upgrade pip \
 COPY src ./src
 COPY scripts ./scripts
 
+# Fail the production image build if transient provider errors are not surfaced.
+RUN test "$(grep -c AgentProviderError src/agent/executor.py)" -gt 0
+
 RUN pip install --no-cache-dir .
 
 USER app
