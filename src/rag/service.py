@@ -211,9 +211,10 @@ def create_chat_client(config: Settings) -> ChatClient:
 def application_rag_config(config: Settings = settings) -> Settings:
     """Return the production corpus/model contract used by the Agent.
 
-    The direct RAG endpoint and the Agent policy tool must use the same cloud
-    model contract. Keeping the direct endpoint on a separate provider made
-    production behaviour depend on an unrelated Groq/Ollama configuration.
+    The direct RAG endpoint and the Agent policy tool must use the same
+    configured chat-model contract. Embeddings remain explicitly pinned to the
+    Agent retrieval provider/model, so changing chat providers does not change
+    the vector index contract.
     """
     return config.model_copy(
         update={
@@ -221,8 +222,8 @@ def application_rag_config(config: Settings = settings) -> Settings:
             "embedding_provider": config.agent_embedding_provider,
             "embedding_model": config.agent_embedding_model,
             "embedding_dimensions": config.agent_embedding_dimensions,
-            "llm_provider": "gemini",
-            "llm_model": config.agent_model,
+            "llm_provider": config.llm_provider,
+            "llm_model": config.llm_model,
             # The application container is intentionally retrieval-only here.
             # Local cross-encoder experiments belong to the research config and
             # can exceed the memory limit of the production service.

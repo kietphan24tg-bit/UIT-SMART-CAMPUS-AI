@@ -55,6 +55,8 @@ def test_application_rag_config_keeps_research_settings_isolated():
         agent_embedding_model="gemini-embedding-001",
         agent_embedding_dimensions=768,
         agent_reranker_enabled=True,
+        llm_provider="groq",
+        llm_model="openai/gpt-oss-20b",
     )
 
     application = application_rag_config(config)
@@ -63,8 +65,8 @@ def test_application_rag_config_keeps_research_settings_isolated():
     assert application.embedding_provider == "gemini"
     assert application.embedding_model == "gemini-embedding-001"
     assert application.embedding_dimensions == 768
-    assert application.llm_provider == "gemini"
-    assert application.llm_model == config.agent_model
+    assert application.llm_provider == "groq"
+    assert application.llm_model == "openai/gpt-oss-20b"
     assert application.reranker_enabled is False
     assert config.rag_db_schema == "rag_training_exam_bge"
     assert config.reranker_enabled is True
