@@ -7,10 +7,14 @@ import time
 import unicodedata
 from uuid import uuid4
 
-from google import genai
-from google.genai import types
 from pydantic import BaseModel, ValidationError
 
+from src.agent.model_client import (
+    AgentModelClient,
+    AgentModelUpstreamError,
+    agent_orchestration_contract,
+    create_agent_model_client,
+)
 from src.agent.models import AgentProposalExecutionResult, AgentQueryResult, AgentTraceStep, ProposalPreview
 from src.agent.prompt import AGENT_SYSTEM_PROMPT
 from src.agent.proposals import (
@@ -47,14 +51,13 @@ class SmartCampusAgent:
     def __init__(
         self,
         *,
-        client: genai.Client | None = None,
+        client: AgentModelClient | None = None,
         registry: ToolRegistry | None = None,
         proposal_store: ProposalStore | None = None,
     ) -> None:
-        self.client = client or genai.Client(
-            api_key=settings.gemini_key,
-            http_options=types.HttpOptions(timeout=int(settings.agent_llm_timeout_seconds * 1000)),
-        )
+        # Build the configured provider lazily so application startup and
+        # fixture-only tests do not require provider credentials.
+        self.client = client
         self.registry = registry or build_tool_registry()
         self.proposal_store = proposal_store or ProposalStore()
 
@@ -89,7 +92,7 @@ class SmartCampusAgent:
             request_id=request_id,
             session_id=session_id,
         )
-        contents: list[types.Content] = self._build_contents(normalized_history, normalized_message)
+        messages = self._build_messages(normalized_history, normalized_message)
         trace = [
             AgentTraceStep(
                 type="analysis",
@@ -108,23 +111,30 @@ class SmartCampusAgent:
                 return self._timed_out_answer(trace)
 
             try:
-                response = self.client.models.generate_content(
-                    model=settings.agent_model,
-                    contents=contents,
-                    config=self._generation_config(user.role),
+                if self.client is None:
+                    self.client = create_agent_model_client(settings)
+                _, orchestration_model = agent_orchestration_contract(settings)
+                response = self.client.generate(
+                    model=orchestration_model,
+                    system_prompt=AGENT_SYSTEM_PROMPT,
+                    messages=messages,
+                    tools=self.registry.definitions_for_role(user.role),
                 )
+            except AgentModelUpstreamError as exc:
+                logger.exception("Agent generation failed")
+                raise AgentProviderError(exc.status_code, "Agent model provider request failed") from exc
             except Exception as exc:
                 logger.exception("Agent generation failed")
-                provider_status = getattr(exc, "code", None)
+                provider_status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
                 if isinstance(provider_status, int) and provider_status in {408, 429, 500, 502, 503, 504}:
-                    raise AgentProviderError(provider_status, "Gemini provider request failed") from exc
+                    raise AgentProviderError(provider_status, "Agent model provider request failed") from exc
                 return self._simple_answer(
                     "Tôi chưa thể xử lý yêu cầu này ổn định lúc này. Bạn vui lòng thử lại sau.",
                     trace=trace,
                     request_id=request_id,
                 )
 
-            function_calls = list(response.function_calls or [])
+            function_calls = list(response.tool_calls)
             if not function_calls:
                 raw_text = (response.text or "").strip()
                 if (
@@ -132,22 +142,18 @@ class SmartCampusAgent:
                     and self._looks_like_unrouted_action_confirmation(normalized_message, raw_text)
                 ):
                     action_routing_retry_used = True
-                    contents.extend(
+                    messages.extend(
                         [
-                            self._response_content(response),
-                            types.Content(
-                                role="user",
-                                parts=[
-                                    types.Part.from_text(
-                                        text=(
-                                            "Yêu cầu gốc đã thể hiện rõ một hành động. "
-                                            "Không hỏi xác nhận bằng văn bản; hãy gọi đúng một tool hành động "
-                                            "với các tham số đã có để hệ thống tạo đề xuất xác nhận. "
-                                            "Nếu thực sự thiếu tham số bắt buộc thì chỉ hỏi làm rõ tham số đó."
-                                        )
-                                    )
-                                ],
-                            ),
+                            response.assistant_message,
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Yêu cầu gốc đã thể hiện rõ một hành động. "
+                                    "Không hỏi xác nhận bằng văn bản; hãy gọi đúng một tool hành động "
+                                    "với các tham số đã có để hệ thống tạo đề xuất xác nhận. "
+                                    "Nếu thực sự thiếu tham số bắt buộc thì chỉ hỏi làm rõ tham số đó."
+                                ),
+                            },
                         ]
                     )
                     continue
@@ -218,7 +224,7 @@ class SmartCampusAgent:
                 )
 
             try:
-                validated = tool.validate_arguments(dict(call.args or {}))
+                validated = tool.validate_arguments(dict(call.arguments))
             except (ValidationError, ValueError):
                 return self._simple_answer(
                     "Tôi chưa đủ thông tin để thực hiện yêu cầu này. Bạn vui lòng nói rõ hơn giúp tôi.",
@@ -293,18 +299,19 @@ class SmartCampusAgent:
                     error_code=result.error.code if result.error else None,
                     metadata={"tool": tool.name},
                 )
-                contents.extend(
+                messages.extend(
                     [
-                        self._response_content(response),
-                        types.Content(
-                            role="user",
-                            parts=[
-                                types.Part.from_function_response(
-                                    name=call.name,
-                                    response={"tool_result": tool.to_llm_result(result)},
-                                )
-                            ],
-                        ),
+                        response.assistant_message,
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "name": call.name,
+                            "content": json.dumps(
+                                {"tool_result": tool.to_llm_result(result)},
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            ),
+                        },
                     ]
                 )
                 continue
@@ -539,32 +546,6 @@ class SmartCampusAgent:
             trace=[*trace, AgentTraceStep(type="confirmation", label=tool.display_name, status="pending", tool=tool.name)],
         )
 
-    def _generation_config(self, role: str) -> types.GenerateContentConfig:
-        declarations = [
-            types.FunctionDeclaration(
-                name=definition["name"],
-                description=definition["description"],
-                parameters_json_schema=definition["parameters"],
-            )
-            for definition in self.registry.definitions_for_role(role)
-        ]
-        tools = [types.Tool(function_declarations=declarations)] if declarations else None
-        return types.GenerateContentConfig(
-            system_instruction=AGENT_SYSTEM_PROMPT,
-            tools=tools,
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            tool_config=types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(mode="AUTO")
-            ),
-            temperature=0.2,
-        )
-
-    @staticmethod
-    def _response_content(response: types.GenerateContentResponse) -> types.Content:
-        if response.candidates and response.candidates[0].content:
-            return response.candidates[0].content
-        return types.Content(role="model", parts=[])
-
     def _find_user_proposal(self, *, user: AuthenticatedUser, proposal_id: str) -> ToolProposal | None:
         if not self.proposal_store.available:
             return None
@@ -574,7 +555,7 @@ class SmartCampusAgent:
         try:
             return self.registry.get(tool_name)
         except KeyError:
-            logger.warning("Gemini selected unknown tool '%s'", tool_name)
+            logger.warning("Agent model selected unknown tool '%s'", tool_name)
             return None
 
     def _execute_read_tool(
@@ -652,13 +633,12 @@ class SmartCampusAgent:
             return []
         return [citation for citation in citations if citation.index in used_indices]
 
-    def _build_contents(self, history: list[dict[str, str]], message: str) -> list[types.Content]:
-        contents: list[types.Content] = []
+    def _build_messages(self, history: list[dict[str, str]], message: str) -> list[dict[str, object]]:
+        messages: list[dict[str, object]] = []
         for item in history:
-            role = "model" if item["role"] == "assistant" else "user"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=item["content"])]))
-        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message)]))
-        return contents
+            messages.append({"role": item["role"], "content": item["content"]})
+        messages.append({"role": "user", "content": message})
+        return messages
 
     def _normalize_history(self, history: list[dict[str, str]] | None) -> list[dict[str, str]]:
         if not history:

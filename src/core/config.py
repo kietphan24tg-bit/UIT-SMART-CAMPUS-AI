@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     eval_judge_provider: str = "ollama"
     eval_judge_model: str = "qwen3:1.7b"
+    # Defaults to the configured application chat provider/model. These optional
+    # overrides let orchestration be changed independently without changing RAG.
+    agent_orchestration_provider: str | None = None
+    agent_orchestration_model: str | None = None
     agent_model: str = "gemini-3.5-flash-lite"
     agent_db_schema: str = "agent"
     agent_actions_enabled: bool = False

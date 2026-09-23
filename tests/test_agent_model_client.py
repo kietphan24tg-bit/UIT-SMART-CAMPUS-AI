@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+import httpx
+import pytest
+
+from src.agent.model_client import (
+    AgentModelUpstreamError,
+    GroqAgentModelClient,
+    agent_orchestration_contract,
+    create_agent_model_client,
+)
+
+
+def test_groq_client_sends_openai_tools_and_parses_tool_call() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-123",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "get_current_schedule",
+                                        "arguments": '{"week":2}',
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(handler),
+    )
+    result = client.generate(
+        model="openai/gpt-oss-20b",
+        system_prompt="system",
+        messages=[{"role": "user", "content": "Lich hoc tuan sau?"}],
+        tools=[
+            {
+                "name": "get_current_schedule",
+                "description": "Read the schedule.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"week": {"type": "integer"}},
+                },
+            }
+        ],
+    )
+
+    assert captured["model"] == "openai/gpt-oss-20b"
+    assert captured["messages"][0] == {"role": "system", "content": "system"}
+    assert captured["tools"][0]["type"] == "function"
+    assert captured["tools"][0]["function"]["parameters"]["type"] == "object"
+    assert captured["parallel_tool_calls"] is False
+    assert result.tool_calls[0].id == "call-123"
+    assert result.tool_calls[0].name == "get_current_schedule"
+    assert result.tool_calls[0].arguments == {"week": 2}
+
+
+@pytest.mark.parametrize("provider_status", [429, 500, 502, 503, 504])
+def test_groq_client_preserves_transient_provider_status(provider_status: int) -> None:
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(provider_status, request=request, json={"error": "upstream"})
+        ),
+    )
+
+    with pytest.raises(AgentModelUpstreamError) as caught:
+        client.generate(model="model", system_prompt="system", messages=[], tools=[])
+
+    assert caught.value.status_code == provider_status
+
+
+def test_groq_client_maps_timeout_to_504() -> None:
+    def timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=0.01,
+        transport=httpx.MockTransport(timeout),
+    )
+
+    with pytest.raises(AgentModelUpstreamError) as caught:
+        client.generate(model="model", system_prompt="system", messages=[], tools=[])
+
+    assert caught.value.status_code == 504
+
+
+def test_agent_orchestration_defaults_to_application_llm_contract() -> None:
+    config = SimpleNamespace(
+        agent_orchestration_provider=None,
+        agent_orchestration_model=None,
+        llm_provider="groq",
+        llm_model="openai/gpt-oss-20b",
+    )
+
+    assert agent_orchestration_contract(config) == ("groq", "openai/gpt-oss-20b")
+
+
+def test_agent_orchestration_supports_explicit_override() -> None:
+    config = SimpleNamespace(
+        agent_orchestration_provider="groq",
+        agent_orchestration_model="openai/gpt-oss-120b",
+        llm_provider="ollama",
+        llm_model="qwen3:1.7b",
+    )
+
+    assert agent_orchestration_contract(config) == ("groq", "openai/gpt-oss-120b")
+
+
+def test_unsupported_orchestration_provider_fails_as_503() -> None:
+    config = SimpleNamespace(
+        agent_orchestration_provider=None,
+        agent_orchestration_model=None,
+        llm_provider="ollama",
+        llm_model="qwen3:1.7b",
+    )
+
+    with pytest.raises(AgentModelUpstreamError) as caught:
+        create_agent_model_client(config)
+
+    assert caught.value.status_code == 503

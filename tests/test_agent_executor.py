@@ -3,15 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Barrier, Lock, Thread
-from types import SimpleNamespace
+from typing import Any
 
-from google.genai import types
+import pytest
 from pydantic import BaseModel, Field
 
 from src.agent.executor import ProposalConflictError, ProposalExpiredError, ProposalForbiddenError, ProposalNotFoundError, SmartCampusAgent
+from src.agent.model_client import AgentModelResponse, AgentToolCall
 from src.agent.proposals import ToolProposal
-from src.agent.tools import ToolContext, ToolOperation, ToolRegistry
+from src.agent.tools import ToolContext, ToolOperation, ToolRegistry, build_tool_catalog
 from src.agent.tools.base import AgentTool, ToolArgumentsModel
+from src.agent.tools.nest_client import NestApiClient
 from src.agent.tools.results import ToolError, ToolResult
 from src.api.schemas import Citation
 from src.core.auth import AuthenticatedUser
@@ -117,19 +119,14 @@ class RagTool(AgentTool):
         )
 
 
-class FakeModels:
+class FakeClient:
     def __init__(self, responses: list[object]) -> None:
         self.responses = list(responses)
         self.calls: list[dict] = []
 
-    def generate_content(self, **kwargs):
+    def generate(self, **kwargs):
         self.calls.append(kwargs)
         return self.responses.pop(0)
-
-
-class FakeClient:
-    def __init__(self, responses: list[object]) -> None:
-        self.models = FakeModels(responses)
 
 
 @dataclass
@@ -206,6 +203,12 @@ class FakeStore:
         self.created.executed_at = datetime.now(UTC)
         return self.created
 
+    def mark_rejected(self, proposal_id: str, user_id: str) -> ToolProposal | None:
+        if not self.created or self.created.id != proposal_id or self.created.user_id != user_id:
+            return None
+        self.created.status = "rejected"
+        return self.created
+
 
 class ConcurrentFakeStore(FakeStore):
     """Fixture equivalent of the database's atomic pending-to-executing claim."""
@@ -223,16 +226,75 @@ def _user(role: str = "student") -> AuthenticatedUser:
     return AuthenticatedUser(user_id="u1", role=role, access_token="token-1", profile={"id": "u1", "role": role})
 
 
-def _response_with_call(name: str, args: dict) -> object:
-    return SimpleNamespace(
+def _response_with_call(name: str, args: dict, *, call_id: str = "call-1") -> AgentModelResponse:
+    return AgentModelResponse(
         text="",
-        function_calls=[SimpleNamespace(name=name, args=args)],
-        candidates=[SimpleNamespace(content=types.Content(role="model", parts=[]))],
+        tool_calls=(AgentToolCall(id=call_id, name=name, arguments=args),),
+        assistant_message={
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": "{}"},
+                }
+            ],
+        },
     )
 
 
-def _response_with_text(text: str) -> object:
-    return SimpleNamespace(text=text, function_calls=[], candidates=[SimpleNamespace(content=types.Content(role="model", parts=[]))])
+def _response_with_text(text: str) -> AgentModelResponse:
+    return AgentModelResponse(
+        text=text,
+        tool_calls=(),
+        assistant_message={"role": "assistant", "content": text},
+    )
+
+
+def _sample_schema_value(schema: dict[str, Any]) -> Any:
+    if "enum" in schema:
+        return schema["enum"][0]
+    for branch in schema.get("anyOf", []):
+        if branch.get("type") != "null":
+            return _sample_schema_value(branch)
+    value_type = schema.get("type")
+    if value_type == "string":
+        return "value"
+    if value_type == "integer":
+        return max(1, schema.get("minimum", 1))
+    if value_type == "number":
+        return 1.0
+    if value_type == "boolean":
+        return True
+    if value_type == "array":
+        return [_sample_schema_value(schema.get("items", {"type": "string"}))]
+    if value_type == "object":
+        return {
+            name: _sample_schema_value(field_schema)
+            for name, field_schema in schema.get("properties", {}).items()
+            if name in schema.get("required", [])
+        }
+    return "value"
+
+
+def _exposed_mutation_tools() -> list[AgentTool]:
+    return [
+        tool
+        for tool in build_tool_catalog(nest_client=NestApiClient())
+        if tool.operation_type is not ToolOperation.READ and tool.should_expose_to_llm()
+    ]
+
+
+def _action_message(tool: AgentTool, arguments: dict[str, Any]) -> str:
+    verb = {
+        ToolOperation.CREATE: "Tao",
+        ToolOperation.UPDATE: "Cap nhat",
+        ToolOperation.DELETE: "Xoa",
+        ToolOperation.PAYMENT: "Thanh toan",
+        ToolOperation.EMERGENCY: "SOS",
+    }[tool.operation_type]
+    return f"{verb} thao tac {tool.name} voi tham so {arguments}."
 
 
 def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
@@ -254,10 +316,11 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
     assert result.answer_type == "answer"
     assert "Mon 1-3" in result.answer
     assert read_tool.calls == 1
-    assert len(client.models.calls) == 2
-    follow_up_contents = client.models.calls[1]["contents"]
-    assert follow_up_contents[-1].role == "user"
-    assert follow_up_contents[-1].parts[0].function_response is not None
+    assert len(client.calls) == 2
+    follow_up_messages = client.calls[1]["messages"]
+    assert follow_up_messages[-1]["role"] == "tool"
+    assert follow_up_messages[-1]["tool_call_id"] == "call-1"
+    assert "tool_result" in follow_up_messages[-1]["content"]
     assert result.trace is not None
     assert [(step.type, step.status) for step in result.trace] == [
         ("analysis", "completed"),
@@ -314,6 +377,74 @@ def test_executor_creates_proposal_for_action_without_executing_tool(monkeypatch
     assert "rb-1" not in result.trace[-1].label
 
 
+def test_every_exposed_mutation_tool_creates_a_safe_proposal_and_rejects_replay(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    monkeypatch.setattr("src.agent.executor.settings.agent_confirmation_ttl_seconds", 300)
+
+    tools = _exposed_mutation_tools()
+    assert len(tools) == 46
+
+    for tool in tools:
+        schema = tool.input_model.model_json_schema()
+        arguments = {
+            name: _sample_schema_value(field_schema)
+            for name, field_schema in schema.get("properties", {}).items()
+            if name in schema.get("required", [])
+        }
+        monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", tool.name)
+        registry = ToolRegistry()
+        registry.register(tool)
+        store = FakeStore()
+        client = FakeClient([_response_with_call(tool.name, arguments)])
+        user = _user(next(iter(tool.allowed_roles)))
+        agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
+
+        result = agent.answer_query(
+            user=user,
+            message=_action_message(tool, arguments),
+            session_id=f"matrix-{tool.name}",
+        )
+
+        assert result.answer_type == "confirmation_required", tool.name
+        assert result.proposal is not None, tool.name
+        assert result.proposal.tool == tool.name
+        assert result.proposal.operation == tool.operation_type.value
+        assert result.proposal.risk_level == tool.risk_level
+        assert store.created is not None
+        assert store.created.arguments == arguments
+        assert agent.reject_proposal(user=user, proposal_id=store.created.id).status == "rejected"
+        with pytest.raises(ProposalConflictError):
+            agent.confirm_proposal(user=user, proposal_id=store.created.id)
+
+
+def test_every_exposed_mutation_tool_rejects_a_role_outside_its_allowlist(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+
+    for tool in _exposed_mutation_tools():
+        schema = tool.input_model.model_json_schema()
+        arguments = {
+            name: _sample_schema_value(field_schema)
+            for name, field_schema in schema.get("properties", {}).items()
+            if name in schema.get("required", [])
+        }
+        monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", tool.name)
+        registry = ToolRegistry()
+        registry.register(tool)
+        store = FakeStore()
+        client = FakeClient([_response_with_call(tool.name, arguments)])
+        agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
+
+        result = agent.answer_query(
+            user=_user("guest"),
+            message=_action_message(tool, arguments),
+            session_id=f"forbidden-{tool.name}",
+        )
+
+        assert result.proposal is None, tool.name
+        assert store.created is None, tool.name
+        assert "quyền" in result.answer.lower() or "quyen" in result.answer.lower(), tool.name
+
+
 def test_executor_retries_when_model_asks_for_text_confirmation_instead_of_calling_action(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
     monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", "cancel_room_booking")
@@ -333,7 +464,7 @@ def test_executor_retries_when_model_asks_for_text_confirmation_instead_of_calli
     agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
     result = agent.answer_query(user=_user(), message="Hủy đặt phòng rb-1", session_id="s-retry")
 
-    assert len(client.models.calls) == 2
+    assert len(client.calls) == 2
     assert result.answer_type == "confirmation_required"
     assert result.proposal is not None
     assert result.proposal.tool == "cancel_room_booking"
@@ -368,13 +499,13 @@ def test_executor_rejects_multiple_tool_calls_safely(monkeypatch):
     registry.register(ActionTool())
     client = FakeClient(
         [
-            SimpleNamespace(
+            AgentModelResponse(
                 text="",
-                function_calls=[
-                    SimpleNamespace(name="get_current_schedule", args={}),
-                    SimpleNamespace(name="cancel_room_booking", args={"id": "rb-1"}),
-                ],
-                candidates=[SimpleNamespace(content=types.Content(role="model", parts=[]))],
+                tool_calls=(
+                    AgentToolCall(id="call-1", name="get_current_schedule", arguments={}),
+                    AgentToolCall(id="call-2", name="cancel_room_booking", arguments={"id": "rb-1"}),
+                ),
+                assistant_message={"role": "assistant", "content": None},
             )
         ]
     )
@@ -422,7 +553,7 @@ def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     assert "chưa tìm thấy đủ căn cứ" in result.answer
     assert result.citations == []
     assert rag_tool.calls == 1
-    assert len(client.models.calls) == 1
+    assert len(client.calls) == 1
 
 
 def test_executor_falls_back_when_rag_answer_has_no_citation(monkeypatch):
@@ -455,7 +586,7 @@ def test_executor_marks_explicit_out_of_scope_as_fallback(monkeypatch):
     assert result.fallback_reason == "out_of_scope"
 
 
-def test_executor_builds_contents_from_history_before_current_message(monkeypatch):
+def test_executor_builds_messages_from_history_before_current_message(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
     registry = ToolRegistry()
     client = FakeClient([_response_with_text("Da hieu ngu canh.")])
@@ -472,11 +603,11 @@ def test_executor_builds_contents_from_history_before_current_message(monkeypatc
     )
 
     assert result.answer_type == "answer"
-    contents = client.models.calls[0]["contents"]
-    assert [item.role for item in contents] == ["user", "model", "user"]
-    assert contents[0].parts[0].text == "Lich SE104?"
-    assert contents[1].parts[0].text == "SE104 hoc thu ba."
-    assert contents[2].parts[0].text == "Con tuan sau thi sao?"
+    messages = client.calls[0]["messages"]
+    assert [item["role"] for item in messages] == ["user", "assistant", "user"]
+    assert messages[0]["content"] == "Lich SE104?"
+    assert messages[1]["content"] == "SE104 hoc thu ba."
+    assert messages[2]["content"] == "Con tuan sau thi sao?"
 
 
 def _action_agent(monkeypatch, *, outcome: ToolResult | None = None, store: FakeStore | None = None):
