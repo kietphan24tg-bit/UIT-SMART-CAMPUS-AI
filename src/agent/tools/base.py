@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import unicodedata
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Literal, get_args, get_origin
 
@@ -119,9 +120,9 @@ class AgentTool(ABC):
     def allows_action_for_message(self, message: str, arguments: BaseModel) -> bool:
         if self.operation_type is ToolOperation.READ:
             return True
-        normalized = " ".join(message.lower().split())
+        normalized = _normalize_action_text(message)
         patterns = self.action_intent_patterns or self._default_action_intent_patterns(arguments)
-        return any(pattern in normalized for pattern in patterns)
+        return any(_normalize_action_text(pattern) in normalized for pattern in patterns)
 
     def summarize_arguments(self, arguments: BaseModel) -> str:
         cleaned = self.sanitize_arguments(arguments)
@@ -298,8 +299,19 @@ _DEFAULT_RISK_LEVELS: dict[ToolOperation, Literal["low", "medium", "high", "crit
 
 _ACTION_KEYWORDS: dict[ToolOperation, tuple[str, ...]] = {
     ToolOperation.CREATE: ("tao", "tạo", "dang ky", "đăng ký", "them", "thêm", "dat", "đặt", "gui", "gửi"),
-    ToolOperation.UPDATE: ("cap nhat", "cập nhật", "doi", "đổi", "huy", "hủy", "xac nhan", "xác nhận", "stop", "bat dau", "bắt đầu", "gia han", "gia hạn", "resolve"),
+    ToolOperation.UPDATE: ("cap nhat", "cập nhật", "doi", "đổi", "huy", "hủy", "xac nhan", "xác nhận", "stop", "bat dau", "bắt đầu", "gia han", "gia hạn", "resolve", "danh dau"),
     ToolOperation.DELETE: ("xoa", "xóa", "huy", "hủy", "go", "gỡ", "remove"),
     ToolOperation.PAYMENT: ("thanh toan", "thanh toán", "pay", "momo", "sepay"),
     ToolOperation.EMERGENCY: ("sos", "khan cap", "khẩn cấp", "cuu", "cứu", "checkin", "diem danh", "điểm danh"),
 }
+
+
+def _normalize_action_text(value: str) -> str:
+    value = value.replace("đ", "d").replace("Đ", "D")
+    return " ".join(
+        unicodedata.normalize("NFKD", value)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .lower()
+        .split()
+    )

@@ -269,6 +269,25 @@ def test_registry_narrows_explicit_mark_all_notifications_action():
     assert names == {"mark_all_notifications_read"}
 
 
+def test_mark_all_notifications_accepts_vietnamese_action_intent():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"data": {}})
+            )
+        ),
+        rag_service=FakeRagService(),
+    )
+    tool = registry.get("mark_all_notifications_read")
+    arguments = tool.validate_arguments({})
+
+    assert tool.allows_action_for_message(
+        "Đánh dấu tất cả thông báo của tôi là đã đọc.",
+        arguments,
+    )
+    assert not tool.allows_action_for_message("Xem thông báo của tôi.", arguments)
+
+
 def test_every_exposed_tool_is_reachable_through_a_domain_shortlist():
     registry = build_tool_registry(
         nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),
