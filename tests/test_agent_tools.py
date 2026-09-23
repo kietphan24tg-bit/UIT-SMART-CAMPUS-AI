@@ -41,6 +41,16 @@ class FakeRagService:
         return FakeRagResponse()
 
 
+class CapturingRagService(FakeRagService):
+    def __init__(self) -> None:
+        self.top_k: int | None = None
+
+    def retrieve_evidence(self, question: str, top_k: int | None = None):
+        del question
+        self.top_k = top_k
+        return FakeRagResponse()
+
+
 def _catalog():
     return build_tool_catalog(nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {"ok": True}}))), rag_service=FakeRagService())
 
@@ -88,6 +98,31 @@ def test_tool_catalog_has_unique_names_and_metadata():
             assert tool.requires_confirmation is False
         else:
             assert tool.requires_confirmation is True
+
+
+def test_rag_tool_defaults_to_three_contexts_for_synthesis():
+    rag_service = CapturingRagService()
+    registry = build_tool_registry(
+        nest_client=NestApiClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"data": {}})
+            )
+        ),
+        rag_service=rag_service,
+    )
+
+    result = registry.get("search_university_policies").execute(
+        ToolContext(
+            user_id="u1",
+            role="student",
+            access_token="token",
+            request_id="req-rag",
+        ),
+        {"query": "dieu kien du thi"},
+    )
+
+    assert result.ok is True
+    assert rag_service.top_k == 3
 
 
 def test_every_nest_tool_can_build_request_from_required_arguments():

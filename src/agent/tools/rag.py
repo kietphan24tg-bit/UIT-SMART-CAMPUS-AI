@@ -40,7 +40,9 @@ class SearchUniversityPoliciesTool(AgentTool):
         rag_service = self.rag_service or RagService()
         response = rag_service.retrieve_evidence(
             question=arguments.query,
-            top_k=arguments.top_k,
+            # Three contexts keep the synthesis prompt below Groq's free-tier
+            # token budget while preserving enough evidence for citations.
+            top_k=arguments.top_k or 3,
         )
         return ToolResult(
             ok=True,
