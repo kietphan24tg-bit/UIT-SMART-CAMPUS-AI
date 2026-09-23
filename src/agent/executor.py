@@ -139,7 +139,7 @@ class SmartCampusAgent:
                 raw_text = (response.text or "").strip()
                 if (
                     not action_routing_retry_used
-                    and self._looks_like_unrouted_action_confirmation(normalized_message, raw_text)
+                    and self._should_retry_unrouted_action(normalized_message, raw_text)
                 ):
                     action_routing_retry_used = True
                     messages.extend(
@@ -748,35 +748,41 @@ class SmartCampusAgent:
         )
 
     @staticmethod
-    def _looks_like_unrouted_action_confirmation(message: str, response_text: str) -> bool:
+    def _should_retry_unrouted_action(message: str, response_text: str) -> bool:
         def _normalize(value: str) -> str:
+            value = value.replace("đ", "d").replace("Đ", "D")
             return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
 
-        normalized_message = _normalize(message)
+        normalized_message = " ".join(_normalize(message).split())
         normalized_response = _normalize(response_text)
         asks_for_confirmation = any(
             phrase in normalized_response
             for phrase in ("ban co muon", "ban co chac", "xac nhan")
         )
-        has_action_intent = any(
-            phrase in normalized_message
-            for phrase in (
-                "dang ky",
-                "huy",
-                "tao",
-                "cap nhat",
-                "xoa",
-                "thanh toan",
-                "dat phong",
-                "gui",
-                "diem danh",
-                "sos",
-                "gia han",
-                "bat dau",
-                "dung",
-            )
+        action_phrases = (
+            "dang ky",
+            "huy",
+            "tao",
+            "cap nhat",
+            "xoa",
+            "thanh toan",
+            "dat phong",
+            "gui",
+            "diem danh",
+            "check-in",
+            "sos",
+            "gia han",
+            "bat dau",
+            "dung",
+            "danh dau",
         )
-        return asks_for_confirmation and has_action_intent
+        has_action_intent = any(phrase in normalized_message for phrase in action_phrases)
+        imperative_action = any(
+            normalized_message.startswith(prefix)
+            for phrase in action_phrases
+            for prefix in (phrase, f"toi muon {phrase}", f"vui long {phrase}")
+        )
+        return has_action_intent and (asks_for_confirmation or imperative_action)
 
     @staticmethod
     def _fallback_answer() -> str:

@@ -471,6 +471,43 @@ def test_executor_retries_when_model_asks_for_text_confirmation_instead_of_calli
     assert action_tool.calls == 0
 
 
+def test_executor_retries_when_model_answers_an_explicit_action_without_calling_tool(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
+    monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", "cancel_room_booking")
+    monkeypatch.setattr("src.agent.executor.settings.agent_confirmation_ttl_seconds", 300)
+
+    action_tool = ActionTool()
+    registry = ToolRegistry()
+    registry.register(action_tool)
+    store = FakeStore()
+    client = FakeClient(
+        [
+            _response_with_text("Tôi đã ghi nhận yêu cầu."),
+            _response_with_call("cancel_room_booking", {"id": "rb-1"}),
+        ]
+    )
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=store)
+    result = agent.answer_query(
+        user=_user(),
+        message="Hủy đặt phòng rb-1",
+        session_id="s-explicit-action-retry",
+    )
+
+    assert len(client.calls) == 2
+    assert result.answer_type == "confirmation_required"
+    assert result.proposal is not None
+    assert result.proposal.tool == "cancel_room_booking"
+    assert action_tool.calls == 0
+
+
+def test_unrouted_action_retry_normalizes_vietnamese_d_stroke():
+    assert SmartCampusAgent._should_retry_unrouted_action(
+        "Đánh dấu tất cả thông báo là đã đọc.",
+        "Tôi đã ghi nhận.",
+    )
+
+
 def test_executor_action_flag_without_tool_allowlist_fails_closed(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_actions_enabled", True)
     monkeypatch.setattr("src.agent.executor.settings.agent_enabled_action_tools", "")
