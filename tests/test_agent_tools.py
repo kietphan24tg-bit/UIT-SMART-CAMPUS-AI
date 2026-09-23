@@ -175,6 +175,70 @@ def test_registry_hides_tools_with_opaque_payload_schema_from_llm():
     assert "create_canteen_product" not in admin_definitions
 
 
+def test_registry_shortlists_tools_by_business_domain():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),
+        rag_service=FakeRagService(),
+    )
+
+    names = {
+        item["name"]
+        for item in registry.definitions_for_query(
+            "student",
+            "Đăng ký lớp học phần SE104.N21 cho tôi.",
+        )
+    }
+
+    assert "register_class_section" in names
+    assert "search_university_policies" in names
+    assert "create_canteen_momo_payment" not in names
+    assert "create_parking_momo_payment" not in names
+    assert len(names) < len(registry.definitions_for_role("student"))
+
+
+def test_registry_keeps_ambiguous_payment_domains_available():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),
+        rag_service=FakeRagService(),
+    )
+
+    names = {
+        item["name"]
+        for item in registry.definitions_for_query("student", "Tôi muốn thanh toán bằng MoMo.")
+    }
+
+    assert "create_canteen_momo_payment" in names
+    assert "create_parking_momo_payment" in names
+
+
+def test_every_exposed_tool_is_reachable_through_a_domain_shortlist():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),
+        rag_service=FakeRagService(),
+    )
+    roles = ("student", "lecturer", "canteen_admin", "admin", "super_admin")
+    domain_queries = (
+        "Đăng ký học phần, xem lịch học và điểm.",
+        "Kiểm tra điểm danh chuyên cần.",
+        "Xem căn tin và đơn hàng căn tin.",
+        "Tìm sách thư viện và khoản mượn.",
+        "Xem phòng học, tòa nhà và đặt phòng.",
+        "Xem thông báo và sự kiện.",
+        "Xem bãi xe, phương tiện, SOS và báo cháy.",
+        "Xem hồ sơ, tài khoản và người dùng.",
+        "Tìm học liệu.",
+        "Tra cứu quy chế và thủ tục.",
+    )
+
+    reached: set[str] = set()
+    for role in roles:
+        for query in domain_queries:
+            reached.update(item["name"] for item in registry.definitions_for_query(role, query))
+
+    expected = {tool.name for tool in registry.all() if tool.should_expose_to_llm()}
+    assert reached == expected
+
+
 def test_rag_tool_definition_is_retrieval_only():
     registry = build_tool_registry(
         nest_client=NestApiClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"data": {}}))),

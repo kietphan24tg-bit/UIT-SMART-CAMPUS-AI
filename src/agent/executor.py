@@ -118,7 +118,7 @@ class SmartCampusAgent:
                     model=orchestration_model,
                     system_prompt=AGENT_SYSTEM_PROMPT,
                     messages=messages,
-                    tools=self.registry.definitions_for_role(user.role),
+                    tools=self.registry.definitions_for_query(user.role, normalized_message),
                 )
             except AgentModelUpstreamError as exc:
                 logger.exception("Agent generation failed")
