@@ -225,7 +225,7 @@ def test_registry_shortlists_tools_by_business_domain():
     }
 
     assert "register_class_section" in names
-    assert "search_university_policies" in names
+    assert "search_university_policies" not in names
     assert "create_canteen_momo_payment" not in names
     assert "create_parking_momo_payment" not in names
     assert "get_current_schedule" not in names
@@ -246,6 +246,27 @@ def test_registry_keeps_ambiguous_payment_domains_available():
 
     assert "create_canteen_momo_payment" in names
     assert "create_parking_momo_payment" in names
+
+
+def test_registry_narrows_explicit_mark_all_notifications_action():
+    registry = build_tool_registry(
+        nest_client=NestApiClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"data": {}})
+            )
+        ),
+        rag_service=FakeRagService(),
+    )
+
+    names = {
+        item["name"]
+        for item in registry.definitions_for_query(
+            "student",
+            "Đánh dấu tất cả thông báo của tôi là đã đọc.",
+        )
+    }
+
+    assert names == {"mark_all_notifications_read"}
 
 
 def test_every_exposed_tool_is_reachable_through_a_domain_shortlist():

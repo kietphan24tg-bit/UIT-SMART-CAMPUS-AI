@@ -43,6 +43,7 @@ class AgentModelClient(Protocol):
         system_prompt: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
+        require_tool_call: bool = False,
     ) -> AgentModelResponse:
         ...
 
@@ -68,6 +69,7 @@ class GroqAgentModelClient:
         system_prompt: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
+        require_tool_call: bool = False,
     ) -> AgentModelResponse:
         if not self.api_key:
             raise AgentModelUpstreamError(503, "GROQ_KEY is not configured")
@@ -94,7 +96,7 @@ class GroqAgentModelClient:
                         }
                         for definition in tools
                     ],
-                    "tool_choice": "auto",
+                    "tool_choice": "required" if require_tool_call else "auto",
                     # The Agent deliberately executes at most one tool per step.
                     "parallel_tool_calls": False,
                 }

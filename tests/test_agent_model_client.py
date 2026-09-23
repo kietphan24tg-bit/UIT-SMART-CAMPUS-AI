@@ -76,6 +76,56 @@ def test_groq_client_sends_openai_tools_and_parses_tool_call() -> None:
     assert result.tool_calls[0].arguments == {"week": 2}
 
 
+def test_groq_client_can_require_a_tool_call() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-required",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "mark_all_notifications_read",
+                                        "arguments": "{}",
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(handler),
+    )
+    client.generate(
+        model="openai/gpt-oss-20b",
+        system_prompt="system",
+        messages=[{"role": "user", "content": "mark all notifications read"}],
+        tools=[
+            {
+                "name": "mark_all_notifications_read",
+                "description": "Mark all notifications as read.",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ],
+        require_tool_call=True,
+    )
+
+    assert captured["tool_choice"] == "required"
+
+
 @pytest.mark.parametrize("provider_status", [429, 500, 502, 503, 504])
 def test_groq_client_preserves_transient_provider_status(provider_status: int) -> None:
     client = GroqAgentModelClient(

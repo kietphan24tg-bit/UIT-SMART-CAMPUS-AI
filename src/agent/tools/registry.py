@@ -97,6 +97,44 @@ def _matches_academic_intent(tool_name: str, normalized_message: str) -> bool:
     return True
 
 
+def _is_explicit_action_request(normalized_message: str) -> bool:
+    message = normalized_message.strip()
+    action_phrases = (
+        "dang ky",
+        "huy",
+        "tao",
+        "cap nhat",
+        "xoa",
+        "thanh toan",
+        "dat phong",
+        "gui",
+        "diem danh",
+        "check-in",
+        "sos",
+        "gia han",
+        "bat dau",
+        "dung",
+        "danh dau",
+    )
+    starts_with_action = any(
+        message.startswith(prefix)
+        for phrase in action_phrases
+        for prefix in (phrase, f"toi muon {phrase}", f"vui long {phrase}")
+    )
+    return starts_with_action and not any(
+        read_phrase in message
+        for read_phrase in (" xem ", " la gi", " nhu the nao", " huong dan")
+    )
+
+
+def _matches_domain_intent(domain: str, tool_name: str, normalized_message: str) -> bool:
+    if domain == "notifications" and "danh dau tat ca" in normalized_message:
+        return tool_name == "mark_all_notifications_read"
+    if domain == "room" and "huy" in normalized_message and "dat phong" in normalized_message:
+        return tool_name == "cancel_room_booking"
+    return True
+
+
 class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, AgentTool] = {}
@@ -129,11 +167,18 @@ class ToolRegistry:
         domains = set(_query_domains(message))
         domains.add("policy")
         normalized_message = f" {_ascii_text(message)} "
+        explicit_action = _is_explicit_action_request(normalized_message)
         return [
             tool.to_llm_definition()
             for tool in self.for_role(role)
             if tool.should_expose_to_llm()
+            and (not explicit_action or tool.operation_type.value != "read")
             and _tool_domain(tool.name) in domains
+            and _matches_domain_intent(
+                _tool_domain(tool.name),
+                tool.name,
+                normalized_message,
+            )
             and (
                 _tool_domain(tool.name) != "academic"
                 or _matches_academic_intent(tool.name, normalized_message)

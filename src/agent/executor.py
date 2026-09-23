@@ -105,6 +105,7 @@ class SmartCampusAgent:
         rag_citations: list[Citation] = []
         seen_fingerprints: set[str] = set()
         action_routing_retry_used = False
+        require_tool_call = False
 
         for _ in range(settings.agent_max_tool_steps):
             if time.monotonic() >= deadline:
@@ -119,6 +120,7 @@ class SmartCampusAgent:
                     system_prompt=AGENT_SYSTEM_PROMPT,
                     messages=messages,
                     tools=self.registry.definitions_for_query(user.role, normalized_message),
+                    require_tool_call=require_tool_call,
                 )
             except AgentModelUpstreamError as exc:
                 logger.exception("Agent generation failed")
@@ -142,6 +144,7 @@ class SmartCampusAgent:
                     and self._should_retry_unrouted_action(normalized_message, raw_text)
                 ):
                     action_routing_retry_used = True
+                    require_tool_call = True
                     messages.extend(
                         [
                             response.assistant_message,
