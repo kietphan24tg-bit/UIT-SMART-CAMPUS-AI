@@ -40,7 +40,7 @@ _DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 def _ascii_text(value: str) -> str:
-    value = value.replace("đ", "d").replace("Đ", "D")
+    value = value.replace("\u0111", "d").replace("\u0110", "D")
     return " ".join(
         unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower().split()
     )
@@ -78,6 +78,25 @@ def _query_domains(message: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(matched[:2]))
 
 
+def _matches_academic_intent(tool_name: str, normalized_message: str) -> bool:
+    if any(keyword in normalized_message for keyword in ("diem", "bang diem", "ket qua hoc tap")):
+        return "grade" in tool_name
+    if any(
+        keyword in normalized_message
+        for keyword in ("lich hoc", "lich giang", "thoi khoa bieu", "hom nay hoc", "tiet hoc", "schedule")
+    ):
+        return "schedule" in tool_name
+    if any(keyword in normalized_message for keyword in ("dang ky", "rut mon", "hoc phan", "lop hoc")):
+        return tool_name in {
+            "get_available_class_sections",
+            "get_my_registrations",
+            "register_class_section",
+            "drop_registration",
+            "list_class_sections",
+        }
+    return True
+
+
 class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, AgentTool] = {}
@@ -109,10 +128,16 @@ class ToolRegistry:
         """
         domains = set(_query_domains(message))
         domains.add("policy")
+        normalized_message = f" {_ascii_text(message)} "
         return [
             tool.to_llm_definition()
             for tool in self.for_role(role)
-            if tool.should_expose_to_llm() and _tool_domain(tool.name) in domains
+            if tool.should_expose_to_llm()
+            and _tool_domain(tool.name) in domains
+            and (
+                _tool_domain(tool.name) != "academic"
+                or _matches_academic_intent(tool.name, normalized_message)
+            )
         ]
 
     def all(self) -> list[AgentTool]:

@@ -69,6 +69,8 @@ def test_groq_client_sends_openai_tools_and_parses_tool_call() -> None:
     assert captured["tools"][0]["type"] == "function"
     assert captured["tools"][0]["function"]["parameters"]["type"] == "object"
     assert captured["parallel_tool_calls"] is False
+    assert captured["reasoning_effort"] == "low"
+    assert captured["max_completion_tokens"] == 600
     assert result.tool_calls[0].id == "call-123"
     assert result.tool_calls[0].name == "get_current_schedule"
     assert result.tool_calls[0].arguments == {"week": 2}
@@ -88,6 +90,28 @@ def test_groq_client_preserves_transient_provider_status(provider_status: int) -
         client.generate(model="model", system_prompt="system", messages=[], tools=[])
 
     assert caught.value.status_code == provider_status
+
+
+def test_groq_client_retries_one_rate_limit_within_timeout_budget() -> None:
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429, request=request, headers={"Retry-After": "0"})
+        return httpx.Response(200, request=request, json={"choices": [{"message": {"content": "ok"}}]})
+
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = client.generate(model="openai/gpt-oss-20b", system_prompt="system", messages=[], tools=[])
+
+    assert call_count == 2
+    assert result.text == "ok"
 
 
 def test_groq_client_maps_timeout_to_504() -> None:

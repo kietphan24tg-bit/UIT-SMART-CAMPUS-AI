@@ -193,6 +193,8 @@ def test_registry_shortlists_tools_by_business_domain():
     assert "search_university_policies" in names
     assert "create_canteen_momo_payment" not in names
     assert "create_parking_momo_payment" not in names
+    assert "get_current_schedule" not in names
+    assert len(names) <= 6
     assert len(names) < len(registry.definitions_for_role("student"))
 
 
@@ -219,6 +221,7 @@ def test_every_exposed_tool_is_reachable_through_a_domain_shortlist():
     roles = ("student", "lecturer", "canteen_admin", "admin", "super_admin")
     domain_queries = (
         "Đăng ký học phần, xem lịch học và điểm.",
+        "Xem danh sách học kỳ.",
         "Kiểm tra điểm danh chuyên cần.",
         "Xem căn tin và đơn hàng căn tin.",
         "Tìm sách thư viện và khoản mượn.",

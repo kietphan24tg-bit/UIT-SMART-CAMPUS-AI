@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
@@ -75,8 +76,10 @@ class GroqAgentModelClient:
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}, *messages],
             "temperature": 0.2,
-            "max_completion_tokens": 1200,
+            "max_completion_tokens": 600,
         }
+        if model.startswith(("openai/gpt-oss-", "qwen/")):
+            payload["reasoning_effort"] = "low"
         if tools:
             payload.update(
                 {
@@ -98,17 +101,29 @@ class GroqAgentModelClient:
             )
 
         try:
+            deadline = time.monotonic() + self.timeout_seconds
             with httpx.Client(timeout=self.timeout_seconds, transport=self.transport) as client:
-                response = client.post(
-                    GROQ_CHAT_COMPLETIONS_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
-                response.raise_for_status()
-                body = response.json()
+                for attempt in range(2):
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise httpx.ReadTimeout("Groq request timed out")
+                    response = client.post(
+                        GROQ_CHAT_COMPLETIONS_URL,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=remaining,
+                    )
+                    retry_after = _retry_after_seconds(response)
+                    if response.status_code == 429 and attempt == 0 and retry_after is not None:
+                        if retry_after < deadline - time.monotonic():
+                            time.sleep(retry_after)
+                            continue
+                    response.raise_for_status()
+                    body = response.json()
+                    break
         except httpx.TimeoutException as exc:
             raise AgentModelUpstreamError(504, "Groq request timed out") from exc
         except httpx.HTTPStatusError as exc:
@@ -165,6 +180,16 @@ class GroqAgentModelClient:
             tool_calls=tuple(parsed_calls),
             assistant_message=assistant_message,
         )
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    value = response.headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        return None
 
 
 def agent_orchestration_contract(config: Settings) -> tuple[str, str]:
