@@ -12,6 +12,7 @@ env:
   RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
   COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
   COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+  AI_ADMIN_TOKEN: ${{ secrets.AI_ADMIN_TOKEN }}
 
 jobs:
   staging:
@@ -75,6 +76,10 @@ jobs:
             echo "Missing COOLIFY_API_TOKEN"
             exit 1
           fi
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ] && [ -n "$COOLIFY_DEPLOY_WEBHOOK" ] && [ -z "$AI_ADMIN_TOKEN" ]; then
+            echo "Missing AI_ADMIN_TOKEN"
+            exit 1
+          fi
         shell: bash
 
       - name: Set up Docker Buildx
@@ -107,6 +112,35 @@ jobs:
         if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
           curl --fail --show-error --silent --request POST "$RENDER_DEPLOY_HOOK_URL"
+        shell: bash
+
+      - name: Configure AI admin token in Coolify
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' && env.COOLIFY_DEPLOY_WEBHOOK != '' }}
+        run: |
+          COOLIFY_BASE_URL="$(python -c 'import sys; from urllib.parse import urlsplit; value=urlsplit(sys.argv[1]); print(f"{value.scheme}://{value.netloc}")' "$COOLIFY_DEPLOY_WEBHOOK")"
+          COOLIFY_APP_UUID="$(python -c 'import sys; from urllib.parse import parse_qs, urlsplit; print(parse_qs(urlsplit(sys.argv[1]).query).get("uuid", [""])[0])' "$COOLIFY_DEPLOY_WEBHOOK")"
+          test -n "$COOLIFY_BASE_URL"
+          test -n "$COOLIFY_APP_UUID"
+
+          ENVS_FILE="$(mktemp)"
+          trap 'rm -f "$ENVS_FILE"' EXIT
+          curl --fail --show-error --silent \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
+            --output "$ENVS_FILE"
+
+          PAYLOAD="$(jq -nc --arg value "$AI_ADMIN_TOKEN" '{key:"AI_ADMIN_TOKEN",value:$value,is_preview:false,is_literal:true,is_shown_once:true}')"
+          if jq -e '.[]? | select(.key == "AI_ADMIN_TOKEN")' "$ENVS_FILE" >/dev/null; then
+            METHOD=PATCH
+          else
+            METHOD=POST
+          fi
+          curl --fail --show-error --silent --request "$METHOD" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD" \
+            "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
+            >/dev/null
         shell: bash
 
       - name: Trigger Coolify deploy
