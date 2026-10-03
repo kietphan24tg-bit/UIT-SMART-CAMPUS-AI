@@ -18,5 +18,10 @@ def test_routes_latest_grade_without_confusing_course_with_food() -> None:
 
 def test_does_not_force_unrelated_course_or_policy_queries() -> None:
     assert route_personal_read_intent("Hôm nay canteen có món gì?") is None
-    assert route_personal_read_intent("Quy chế tính điểm môn học là gì?") is None
-    assert route_personal_read_intent("Quy định và cách tính GPA của UIT là gì?") is None
+    assert route_personal_read_intent("Quy chế tính điểm môn học là gì?") == "search_university_policies"
+    assert route_personal_read_intent("Quy định và cách tính GPA của UIT là gì?") == "search_university_policies"
+
+
+def test_routes_exam_regulation_questions_to_rag() -> None:
+    assert route_personal_read_intent("Điều kiện dự thi kết thúc học phần là gì?") == "search_university_policies"
+    assert route_personal_read_intent("Quy trình tổ chức thi như thế nào?") == "search_university_policies"

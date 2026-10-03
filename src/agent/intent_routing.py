@@ -15,8 +15,20 @@ def route_personal_read_intent(message: str) -> str | None:
 
     text = _normalize_vietnamese(message)
 
-    if any(phrase in text for phrase in ("quy che", "quy dinh", "cong thuc", "cach tinh")):
-        return None
+    policy_phrases = (
+        "quy che",
+        "quy dinh",
+        "dieu kien du thi",
+        "duoc du thi",
+        "du thi ket thuc hoc phan",
+        "thi ket thuc hoc phan",
+        "to chuc thi",
+        "quy trinh thi",
+        "cong thuc",
+        "cach tinh",
+    )
+    if any(phrase in text for phrase in policy_phrases):
+        return "search_university_policies"
 
     if "gpa" in text or "diem trung binh tich luy" in text:
         return "get_grade_summary"
