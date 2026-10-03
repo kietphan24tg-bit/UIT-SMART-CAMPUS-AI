@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from src.agent.executor import ProposalConflictError, ProposalExpiredError, ProposalForbiddenError, ProposalNotFoundError, SmartCampusAgent
-from src.agent.model_client import AgentModelResponse, AgentToolCall
+from src.agent.model_client import AgentModelResponse, AgentModelUpstreamError, AgentToolCall
 from src.agent.proposals import ToolProposal
 from src.agent.tools import ToolContext, ToolOperation, ToolRegistry, build_tool_catalog
 from src.agent.tools.base import AgentTool, ToolArgumentsModel
@@ -25,6 +25,10 @@ class EmptyInput(ToolArgumentsModel):
 
 class IdInput(ToolArgumentsModel):
     id: str = Field(min_length=1)
+
+
+class QueryInput(ToolArgumentsModel):
+    query: str = Field(min_length=1)
 
 
 class ReadTool(AgentTool):
@@ -96,7 +100,7 @@ class RagTool(AgentTool):
     name = "search_university_policies"
     display_name = "search university policies"
     description = "Search indexed university policies."
-    input_model = EmptyInput
+    input_model = QueryInput
     allowed_roles = frozenset({"student"})
     operation_type = ToolOperation.READ
     requires_confirmation = False
@@ -153,7 +157,10 @@ class FakeClient:
 
     def generate(self, **kwargs):
         self.calls.append(kwargs)
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 @dataclass
@@ -706,7 +713,7 @@ def test_executor_uses_rag_evidence_and_returns_citations(monkeypatch):
     rag_tool = RagTool(found=True)
     registry.register(rag_tool)
     client = FakeClient([
-        _response_with_call("search_university_policies", {}),
+        _response_with_call("search_university_policies", {"query": "Dieu kien du thi la gi?"}),
         _response_with_text("Dieu kien du thi duoc neu trong Dieu 5 [1] [9]"),
     ])
 
@@ -721,12 +728,32 @@ def test_executor_uses_rag_evidence_and_returns_citations(monkeypatch):
     assert rag_tool.calls == 1
 
 
+def test_executor_answers_routed_policy_from_evidence_without_model_provider(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = RagTool(found=True)
+    registry.register(rag_tool)
+    client = FakeClient([])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Dieu kien du thi ket thuc hoc phan la gi?")
+
+    assert result.answer_type == "answer"
+    assert result.fallback_reason is None
+    assert result.citations is not None
+    assert len(result.citations) == 1
+    assert result.citations[0].index == 1
+    assert "Dieu 5 quy dinh dieu kien du thi. [1]" in result.answer
+    assert rag_tool.calls == 1
+    assert client.calls == []
+
+
 def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
     registry = ToolRegistry()
     rag_tool = RagTool(found=False)
     registry.register(rag_tool)
-    client = FakeClient([_response_with_call("search_university_policies", {})])
+    client = FakeClient([_response_with_call("search_university_policies", {"query": "Cau hoi ngoai pham vi"})])
 
     agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
     result = agent.answer_query(user=_user(), message="Cau hoi ngoai pham vi")
@@ -739,22 +766,44 @@ def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):
     assert len(client.calls) == 1
 
 
-def test_executor_falls_back_when_rag_answer_has_no_citation(monkeypatch):
+def test_executor_uses_grounded_evidence_when_rag_answer_has_no_citation(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
     registry = ToolRegistry()
     rag_tool = RagTool(found=True)
     registry.register(rag_tool)
     client = FakeClient([
-        _response_with_call("search_university_policies", {}),
+        _response_with_call("search_university_policies", {"query": "Hoc vu nay duoc quy dinh the nao?"}),
         _response_with_text("Dieu kien du thi duoc quy dinh trong van ban."),
     ])
 
     agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
-    result = agent.answer_query(user=_user(), message="Dieu kien du thi la gi?")
+    result = agent.answer_query(user=_user(), message="Hoc vu nay duoc quy dinh the nao?")
 
-    assert result.answer_type == "fallback"
-    assert result.fallback_reason == "missing_citation"
-    assert result.citations == []
+    assert result.answer_type == "answer"
+    assert result.fallback_reason is None
+    assert result.citations is not None
+    assert len(result.citations) == 1
+    assert "Dieu 5 quy dinh dieu kien du thi. [1]" in result.answer
+
+
+def test_executor_uses_grounded_evidence_when_provider_fails_after_rag(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = RagTool(found=True)
+    registry.register(rag_tool)
+    client = FakeClient([
+        _response_with_call("search_university_policies", {"query": "Hoc vu nay duoc quy dinh the nao?"}),
+        AgentModelUpstreamError(429, "provider quota reached"),
+    ])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Hoc vu nay duoc quy dinh the nao?")
+
+    assert result.answer_type == "answer"
+    assert result.fallback_reason is None
+    assert result.citations is not None
+    assert len(result.citations) == 1
+    assert "Dieu 5 quy dinh dieu kien du thi. [1]" in result.answer
 
 
 def test_executor_marks_explicit_out_of_scope_as_fallback(monkeypatch):

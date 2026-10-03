@@ -110,6 +110,7 @@ class SmartCampusAgent:
         read_calls = 0
         rag_calls = 0
         rag_citations: list[Citation] = []
+        rag_result: ToolResult | None = None
         seen_fingerprints: set[str] = set()
         action_routing_retry_used = False
         require_tool_call = False
@@ -138,6 +139,20 @@ class SmartCampusAgent:
                     fallback_reason="tool_unavailable",
                 )
 
+        # Policy intent is already resolved deterministically. Calling the
+        # orchestration model only to select the same tool adds a second
+        # provider request and makes policy answers fail under provider quota.
+        # Return a concise extractive answer from the retrieved evidence so the
+        # citation cannot be dropped by a later model-generation step.
+        if mandatory_tool_name == "search_university_policies":
+            return self._answer_policy_from_evidence(
+                user=user,
+                context=context,
+                message=normalized_message,
+                trace=trace,
+                deadline=deadline,
+            )
+
         for _ in range(settings.agent_max_tool_steps):
             if time.monotonic() >= deadline:
                 return self._timed_out_answer(trace)
@@ -156,11 +171,23 @@ class SmartCampusAgent:
                 )
             except AgentModelUpstreamError as exc:
                 logger.exception("Agent generation failed")
+                if rag_result is not None:
+                    return self._grounded_rag_answer(
+                        rag_result,
+                        trace=trace,
+                        request_id=request_id,
+                    )
                 raise AgentProviderError(exc.status_code, "Agent model provider request failed") from exc
             except Exception as exc:
                 logger.exception("Agent generation failed")
                 provider_status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
                 if isinstance(provider_status, int) and provider_status in {408, 429, 500, 502, 503, 504}:
+                    if rag_result is not None:
+                        return self._grounded_rag_answer(
+                            rag_result,
+                            trace=trace,
+                            request_id=request_id,
+                        )
                     raise AgentProviderError(provider_status, "Agent model provider request failed") from exc
                 return self._simple_answer(
                     "Tôi chưa thể xử lý yêu cầu này ổn định lúc này. Bạn vui lòng thử lại sau.",
@@ -217,6 +244,12 @@ class SmartCampusAgent:
                 )
                 citations = self._used_citations(text, rag_citations)
                 if rag_citations and not citations:
+                    if rag_result is not None:
+                        return self._grounded_rag_answer(
+                            rag_result,
+                            trace=trace,
+                            request_id=request_id,
+                        )
                     return self._simple_answer(
                         "Mình chưa đủ căn cứ để trả lời chắc chắn vì câu trả lời chưa có trích dẫn hợp lệ.",
                         trace=[
@@ -327,6 +360,7 @@ class SmartCampusAgent:
                             answer_type="fallback",
                             fallback_reason=self._rag_fallback_reason(result),
                         )
+                    rag_result = result
                     rag_citations = self._rag_citations(result)
                 trace.append(
                     AgentTraceStep(
@@ -604,6 +638,160 @@ class SmartCampusAgent:
             logger.warning("Agent model selected unknown tool '%s'", tool_name)
             return None
 
+    def _answer_policy_from_evidence(
+        self,
+        *,
+        user: AuthenticatedUser,
+        context: ToolContext,
+        message: str,
+        trace: list[AgentTraceStep],
+        deadline: float,
+    ) -> AgentQueryResult:
+        tool = self._get_tool("search_university_policies")
+        if tool is None or context.role not in tool.allowed_roles:
+            return self._simple_answer(
+                "Tài khoản hiện tại không có quyền tra cứu tài liệu quy chế.",
+                trace=[
+                    *trace,
+                    AgentTraceStep(
+                        type="tool",
+                        label="Tra cứu quy chế UIT",
+                        status="failed",
+                        tool="search_university_policies",
+                    ),
+                ],
+                request_id=context.request_id,
+                answer_type="fallback",
+                fallback_reason="tool_unavailable",
+            )
+
+        try:
+            validated = tool.validate_arguments({"query": message})
+        except (ValidationError, ValueError):
+            return self._simple_answer(
+                "Mình chưa đủ thông tin để tra cứu quy chế. Bạn vui lòng nêu câu hỏi cụ thể hơn.",
+                trace=trace,
+                request_id=context.request_id,
+                answer_type="clarification",
+                fallback_reason="invalid_policy_query",
+            )
+
+        result = self._execute_read_tool(tool, context, validated, deadline)
+        tool_trace = [
+            *trace,
+            AgentTraceStep(
+                type="tool",
+                label=tool.display_name,
+                status="completed" if result.ok else "failed",
+                tool=tool.name,
+            ),
+        ]
+        self._audit(
+            event_type="tool_read",
+            request_id=context.request_id,
+            user=user,
+            tool=tool,
+            status="success" if result.ok else "failed",
+            error_code=result.error.code if result.error else None,
+            metadata={"tool": tool.name, "routing": "deterministic_policy"},
+        )
+
+        if not result.ok:
+            return self._simple_answer(
+                "Mình chưa thể tra cứu tài liệu quy chế ổn định lúc này. Bạn vui lòng thử lại sau.",
+                trace=tool_trace,
+                request_id=context.request_id,
+                answer_type="fallback",
+                fallback_reason="tool_unavailable",
+            )
+        if not self._rag_result_found(result):
+            return self._simple_answer(
+                "Mình chưa tìm thấy đủ căn cứ trong bộ tài liệu đã index để trả lời chắc chắn cho câu hỏi này.",
+                trace=tool_trace,
+                request_id=context.request_id,
+                answer_type="fallback",
+                fallback_reason=self._rag_fallback_reason(result),
+                confidence=self._rag_confidence(result),
+            )
+
+        grounded = self._grounded_rag_answer(
+            result,
+            trace=tool_trace,
+            request_id=context.request_id,
+        )
+        self._audit(
+            event_type="agent_answer",
+            request_id=context.request_id,
+            user=user,
+            status="success" if grounded.answer_type == "answer" else "failed",
+            metadata={
+                "trace_steps": len(grounded.trace or []),
+                "routing": "deterministic_policy",
+                "citations": len(grounded.citations or []),
+            },
+        )
+        return grounded
+
+    def _grounded_rag_answer(
+        self,
+        result: ToolResult,
+        *,
+        trace: list[AgentTraceStep],
+        request_id: str,
+    ) -> AgentQueryResult:
+        data = result.data if isinstance(result.data, dict) else {}
+        citations = self._rag_citations(result)
+        citation_by_index = {
+            citation.index: citation
+            for citation in citations
+            if citation.index is not None
+        }
+        contexts = data.get("contexts") or []
+        answer_lines: list[str] = []
+        used_citations: list[Citation] = []
+
+        for item in contexts:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("index")
+            content = item.get("content")
+            if not isinstance(index, int) or index not in citation_by_index:
+                continue
+            if not isinstance(content, str) or not content.strip():
+                continue
+            excerpt = re.sub(r"\s+", " ", content).strip()
+            excerpt = limit_text(excerpt, 1_400)
+            answer_lines.append(f"- {excerpt} [{index}]")
+            used_citations.append(citation_by_index[index])
+            if len(answer_lines) >= 3:
+                break
+
+        if not answer_lines:
+            return self._simple_answer(
+                "Mình chưa đủ căn cứ để trả lời chắc chắn vì evidence chưa có trích dẫn hợp lệ.",
+                trace=[
+                    *trace,
+                    AgentTraceStep(type="answer", label="Thiếu trích dẫn evidence", status="failed"),
+                ],
+                request_id=request_id,
+                answer_type="fallback",
+                fallback_reason="missing_citation",
+                confidence=self._rag_confidence(result),
+            )
+
+        answer = "Theo tài liệu UIT được truy xuất:\n" + "\n".join(answer_lines)
+        return AgentQueryResult(
+            answer_type="answer",
+            answer=limit_text(answer, settings.agent_max_answer_chars),
+            citations=used_citations,
+            trace=[
+                *trace,
+                AgentTraceStep(type="answer", label="Đã trích xuất câu trả lời từ evidence", status="completed"),
+            ],
+            fallback_reason=None,
+            confidence=self._rag_confidence(result),
+        )
+
     def _execute_read_tool(
         self,
         tool: AgentTool,
@@ -740,6 +928,14 @@ class SmartCampusAgent:
     def _rag_result_found(result: ToolResult) -> bool:
         data = result.data if isinstance(result.data, dict) else {}
         return bool(data.get("found"))
+
+    @staticmethod
+    def _rag_confidence(result: ToolResult) -> float | None:
+        data = result.data if isinstance(result.data, dict) else {}
+        value = data.get("confidence")
+        if isinstance(value, (int, float)):
+            return float(value)
+        return None
 
     @staticmethod
     def _rag_citations(result: ToolResult) -> list[Citation]:
