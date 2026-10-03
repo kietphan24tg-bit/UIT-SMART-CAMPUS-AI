@@ -141,6 +141,17 @@ jobs:
             --data "$PAYLOAD" \
             "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
             >/dev/null
+
+          IMAGE_PAYLOAD="$(jq -nc \
+            --arg name "$IMAGE_NAME" \
+            --arg tag "$STAGING_TAG" \
+            '{docker_registry_image_name:$name,docker_registry_image_tag:$tag}')"
+          curl --fail --show-error --silent --request PATCH \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$IMAGE_PAYLOAD" \
+            "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID" \
+            >/dev/null
         shell: bash
 
       - name: Trigger Coolify deploy
