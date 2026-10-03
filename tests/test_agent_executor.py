@@ -46,6 +46,33 @@ class ReadTool(AgentTool):
         return self.outcome or ToolResult(ok=True, tool=self.name, status="success", data={"items": ["Mon 1-3"]})
 
 
+class GradesTool(AgentTool):
+    name = "get_all_grades"
+    display_name = "get all grades"
+    description = "Read all grades."
+    input_model = EmptyInput
+    allowed_roles = frozenset({"student"})
+    operation_type = ToolOperation.READ
+    requires_confirmation = False
+
+    def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
+        del context, arguments
+        return ToolResult(
+            ok=True,
+            tool=self.name,
+            status="success",
+            data=[
+                {
+                    "semester": "HK1",
+                    "grades": [
+                        {"course": "Old", "totalScore": 7.0, "updatedAt": "2026-09-01T00:00:00Z"},
+                        {"course": "New", "totalScore": 9.0, "updatedAt": "2026-10-02T00:00:00Z"},
+                    ],
+                }
+            ],
+        )
+
+
 class ActionTool(AgentTool):
     name = "cancel_room_booking"
     display_name = "cancel room booking"
@@ -330,6 +357,49 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
         ("answer", "completed"),
     ]
     assert result.trace[1].tool == "get_current_schedule"
+
+
+def test_executor_requires_exact_tool_for_current_schedule(monkeypatch):
+    registry = ToolRegistry()
+    registry.register(ReadTool())
+    registry.register(RagTool())
+    client = FakeClient([
+        _response_with_call("get_current_schedule", {}),
+        _response_with_text("Tuần này bạn có lịch học."),
+    ])
+
+    result = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore()).answer_query(
+        user=_user(),
+        message="Tuần này tôi học môn gì?",
+    )
+
+    assert result.answer_type == "answer"
+    assert [tool["name"] for tool in client.calls[0]["tools"]] == ["get_current_schedule"]
+    assert client.calls[0]["required_tool_name"] == "get_current_schedule"
+    assert client.calls[1]["required_tool_name"] is None
+
+
+def test_executor_scopes_latest_grade_before_sending_result_to_model(monkeypatch):
+    registry = ToolRegistry()
+    registry.register(GradesTool())
+    registry.register(RagTool())
+    client = FakeClient([
+        _response_with_call("get_all_grades", {}),
+        _response_with_text("Môn mới có điểm là New."),
+    ])
+
+    result = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore()).answer_query(
+        user=_user(),
+        message="Môn mới có điểm là môn nào?",
+    )
+
+    assert result.answer_type == "answer"
+    assert [tool["name"] for tool in client.calls[0]["tools"]] == ["get_all_grades"]
+    assert client.calls[0]["required_tool_name"] == "get_all_grades"
+    tool_payload = client.calls[1]["messages"][-1]["content"]
+    assert '"course":"New"' in tool_payload
+    assert '"course":"Old"' not in tool_payload
+    assert '"kind":"latest_updated"' in tool_payload
 
 
 def test_executor_filters_today_schedule_before_sending_result_to_model(monkeypatch):

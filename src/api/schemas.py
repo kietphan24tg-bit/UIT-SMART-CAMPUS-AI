@@ -16,6 +16,7 @@ class RagQueryRequest(BaseModel):
 class Citation(BaseModel):
     index: int | None = None
     source_file: str
+    source_url: str | None = None
     source_unit: str | None = None
     category: str | None = None
     heading_path: str | None = None

@@ -26,6 +26,7 @@ def citation_from_result(result: dict, index: int | None = None) -> Citation:
     return Citation(
         index=index,
         source_file=result.get("source_file") or metadata.get("source_file") or "unknown",
+        source_url=result.get("source_url") or metadata.get("source_url"),
         source_unit=result.get("source_unit") or metadata.get("source_unit"),
         category=result.get("category") or metadata.get("category"),
         heading_path=result.get("heading_path") or metadata.get("heading_path"),

@@ -71,3 +71,17 @@ def test_format_citations_deduplicates_sources():
 
     assert len(citations) == 1
     assert citations[0].score == score_from_distance(0.2)
+
+
+def test_format_citations_preserves_source_url_from_metadata():
+    citations = format_citations(
+        [
+            {
+                "source_file": "quy-che.pdf",
+                "metadata": {"source_url": "https://daa.uit.edu.vn/quy-che.pdf"},
+                "distance": 0.1,
+            }
+        ]
+    )
+
+    assert citations[0].source_url == "https://daa.uit.edu.vn/quy-che.pdf"

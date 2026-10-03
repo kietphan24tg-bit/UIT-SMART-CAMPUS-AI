@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
 
+from src.agent.intent_routing import route_personal_read_intent
 from src.agent.model_client import (
     AgentModelClient,
     AgentModelUpstreamError,
@@ -112,6 +113,30 @@ class SmartCampusAgent:
         seen_fingerprints: set[str] = set()
         action_routing_retry_used = False
         require_tool_call = False
+        mandatory_tool_name = route_personal_read_intent(normalized_message)
+        exposed_tool_definitions = self.registry.definitions_for_query(user.role, normalized_message)
+        if mandatory_tool_name:
+            exposed_tool_definitions = [
+                definition
+                for definition in self.registry.definitions_for_role(user.role)
+                if definition["name"] == mandatory_tool_name
+            ]
+            if not exposed_tool_definitions:
+                return self._simple_answer(
+                    "Tài khoản hiện tại không có quyền tra cứu loại dữ liệu này.",
+                    trace=[
+                        *trace,
+                        AgentTraceStep(
+                            type="analysis",
+                            label="Không có công cụ bắt buộc phù hợp với quyền hiện tại",
+                            status="failed",
+                            tool=mandatory_tool_name,
+                        ),
+                    ],
+                    request_id=request_id,
+                    answer_type="fallback",
+                    fallback_reason="tool_unavailable",
+                )
 
         for _ in range(settings.agent_max_tool_steps):
             if time.monotonic() >= deadline:
@@ -125,8 +150,9 @@ class SmartCampusAgent:
                     model=orchestration_model,
                     system_prompt=system_prompt,
                     messages=messages,
-                    tools=self.registry.definitions_for_query(user.role, normalized_message),
+                    tools=exposed_tool_definitions,
                     require_tool_call=require_tool_call,
+                    required_tool_name=mandatory_tool_name if not seen_fingerprints else None,
                 )
             except AgentModelUpstreamError as exc:
                 logger.exception("Agent generation failed")
@@ -143,6 +169,9 @@ class SmartCampusAgent:
                 )
 
             function_calls = list(response.tool_calls)
+            if mandatory_tool_name and not seen_fingerprints:
+                if len(function_calls) != 1 or function_calls[0].name != mandatory_tool_name:
+                    raise AgentProviderError(502, "Agent model violated the mandatory tool routing contract")
             if not function_calls:
                 raw_text = (response.text or "").strip()
                 if (
@@ -281,6 +310,8 @@ class SmartCampusAgent:
                         message=normalized_message,
                         now=current_time,
                     )
+                if mandatory_tool_name == "get_all_grades" and tool.name == "get_all_grades":
+                    result = self._scope_latest_grade_result(result)
                 if tool.name == "search_university_policies":
                     if not result.ok:
                         return self._simple_answer(
@@ -632,6 +663,54 @@ class SmartCampusAgent:
                         "dayOfWeek": day_of_week,
                     },
                 }
+            }
+        )
+
+    @staticmethod
+    def _scope_latest_grade_result(result: ToolResult) -> ToolResult:
+        """Keep only the most recently updated published grade record."""
+
+        if not result.ok or not isinstance(result.data, list):
+            return result
+
+        candidates: list[tuple[str, dict, dict]] = []
+        for semester in result.data:
+            if not isinstance(semester, dict):
+                continue
+            grades = semester.get("grades")
+            if not isinstance(grades, list):
+                continue
+            for grade in grades:
+                if not isinstance(grade, dict):
+                    continue
+                updated_at = grade.get("updatedAt")
+                has_published_score = any(
+                    grade.get(field) is not None
+                    for field in (
+                        "totalScore",
+                        "gradePoint",
+                        "letterGrade",
+                        "midterm",
+                        "finalExam",
+                        "assignment",
+                    )
+                )
+                if isinstance(updated_at, str) and updated_at and has_published_score:
+                    candidates.append((updated_at, semester, grade))
+
+        if not candidates:
+            return result
+
+        _, semester, latest_grade = max(candidates, key=lambda item: item[0])
+        return result.model_copy(
+            update={
+                "data": [
+                    {
+                        **semester,
+                        "grades": [latest_grade],
+                        "gradeScope": {"kind": "latest_updated"},
+                    }
+                ]
             }
         )
 

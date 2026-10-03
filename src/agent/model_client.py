@@ -44,6 +44,7 @@ class AgentModelClient(Protocol):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         require_tool_call: bool = False,
+        required_tool_name: str | None = None,
     ) -> AgentModelResponse:
         ...
 
@@ -70,6 +71,7 @@ class GroqAgentModelClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         require_tool_call: bool = False,
+        required_tool_name: str | None = None,
     ) -> AgentModelResponse:
         if not self.api_key:
             raise AgentModelUpstreamError(503, "GROQ_KEY is not configured")
@@ -83,6 +85,15 @@ class GroqAgentModelClient:
         if model.startswith(("openai/gpt-oss-", "qwen/")):
             payload["reasoning_effort"] = "low"
         if tools:
+            available_tool_names = {definition["name"] for definition in tools}
+            if required_tool_name and required_tool_name not in available_tool_names:
+                raise ValueError(f"Required tool is not available: {required_tool_name}")
+            tool_choice: str | dict[str, Any] = "required" if require_tool_call else "auto"
+            if required_tool_name:
+                tool_choice = {
+                    "type": "function",
+                    "function": {"name": required_tool_name},
+                }
             payload.update(
                 {
                     "tools": [
@@ -96,7 +107,7 @@ class GroqAgentModelClient:
                         }
                         for definition in tools
                     ],
-                    "tool_choice": "required" if require_tool_call else "auto",
+                    "tool_choice": tool_choice,
                     # The Agent deliberately executes at most one tool per step.
                     "parallel_tool_calls": False,
                 }

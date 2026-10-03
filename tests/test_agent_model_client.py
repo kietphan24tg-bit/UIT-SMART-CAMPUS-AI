@@ -126,6 +126,56 @@ def test_groq_client_can_require_a_tool_call() -> None:
     assert captured["tool_choice"] == "required"
 
 
+def test_groq_client_can_require_a_specific_tool() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-specific",
+                                    "type": "function",
+                                    "function": {"name": "get_grade_summary", "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = GroqAgentModelClient(
+        api_key="test-key",
+        timeout_seconds=5,
+        transport=httpx.MockTransport(handler),
+    )
+    client.generate(
+        model="openai/gpt-oss-20b",
+        system_prompt="system",
+        messages=[{"role": "user", "content": "GPA hiện tại?"}],
+        tools=[
+            {
+                "name": "get_grade_summary",
+                "description": "Read GPA.",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ],
+        required_tool_name="get_grade_summary",
+    )
+
+    assert captured["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "get_grade_summary"},
+    }
+
+
 @pytest.mark.parametrize("provider_status", [429, 500, 502, 503, 504])
 def test_groq_client_preserves_transient_provider_status(provider_status: int) -> None:
     client = GroqAgentModelClient(
