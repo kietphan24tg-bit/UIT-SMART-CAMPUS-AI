@@ -254,6 +254,10 @@ class PgVectorStore:
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::date, NULLIF(%s, '')::date,
                             %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, now())
                     ON CONFLICT (sha256) DO UPDATE SET
+                        source_path = EXCLUDED.source_path,
+                        source_url = EXCLUDED.source_url,
+                        source_unit = EXCLUDED.source_unit,
+                        category = EXCLUDED.category,
                         content_hash = EXCLUDED.content_hash,
                         metadata = EXCLUDED.metadata,
                         chunk_count = EXCLUDED.chunk_count,
