@@ -146,13 +146,47 @@ jobs:
       - name: Trigger Coolify deploy
         if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' && env.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
-          if ! curl --fail --show-error --silent --request POST \
+          COOLIFY_BASE_URL="$(python -c 'import sys; from urllib.parse import urlsplit; value=urlsplit(sys.argv[1]); print(f"{value.scheme}://{value.netloc}")' "$COOLIFY_DEPLOY_WEBHOOK")"
+          COOLIFY_APP_UUID="$(python -c 'import sys; from urllib.parse import parse_qs, urlsplit; print(parse_qs(urlsplit(sys.argv[1]).query).get("uuid", [""])[0])' "$COOLIFY_DEPLOY_WEBHOOK")"
+          test -n "$COOLIFY_BASE_URL"
+          test -n "$COOLIFY_APP_UUID"
+
+          DEPLOY_RESPONSE="$(mktemp)"
+          DEPLOY_STATUS="$(mktemp)"
+          trap 'rm -f "$DEPLOY_RESPONSE" "$DEPLOY_STATUS"' EXIT
+
+          curl --fail --show-error --silent --request POST \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            "$COOLIFY_DEPLOY_WEBHOOK"; then
-            echo "Bearer-authenticated webhook failed; retrying URL-authenticated webhook"
-            curl --fail --show-error --silent --request POST \
-              "$COOLIFY_DEPLOY_WEBHOOK"
-          fi
+            -H "Accept: application/json" \
+            "$COOLIFY_BASE_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=true" \
+            --output "$DEPLOY_RESPONSE"
+
+          DEPLOYMENT_UUID="$(jq -er '.deployments[0].deployment_uuid' "$DEPLOY_RESPONSE")"
+          echo "Coolify deployment queued: $DEPLOYMENT_UUID"
+
+          for attempt in $(seq 1 60); do
+            curl --fail --show-error --silent \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Accept: application/json" \
+              "$COOLIFY_BASE_URL/api/v1/deployments/$DEPLOYMENT_UUID" \
+              --output "$DEPLOY_STATUS"
+
+            STATUS="$(jq -r '.status // "unknown"' "$DEPLOY_STATUS")"
+            echo "Coolify deployment status ($attempt/60): $STATUS"
+            case "$STATUS" in
+              finished)
+                exit 0
+                ;;
+              failed|cancelled|cancelled-by-user|error)
+                jq '{status, updated_at}' "$DEPLOY_STATUS"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+
+          echo "Timed out waiting for Coolify deployment"
+          exit 1
         shell: bash
 
       - name: Explain deploy output
