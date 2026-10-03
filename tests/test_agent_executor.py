@@ -150,6 +150,41 @@ class RagTool(AgentTool):
         )
 
 
+class NoisyRagTool(RagTool):
+    def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
+        del context, arguments
+        self.calls += 1
+        citations = [
+            Citation(index=1, source_file="master-admissions.pdf", heading_path="Dang ky du thi"),
+            Citation(index=2, source_file="undergrad-exam.pdf", heading_path="Dieu 4. Dieu kien du thi"),
+            Citation(index=3, source_file="exam-process.pdf", heading_path="Quy trinh ban giao bai thi"),
+        ]
+        contents = [
+            "Thi sinh cao hoc nop ho so dang ky du thi.",
+            "Sinh vien co dang ky mon hoc hop le va dong hoc phi day du duoc du thi.",
+            "Can bo coi thi ban giao danh sach du thi sau ca thi.",
+        ]
+        return ToolResult(
+            ok=True,
+            tool=self.name,
+            status="success",
+            data={
+                "found": True,
+                "confidence": 0.91,
+                "retrieved_count": 3,
+                "citations": [citation.model_dump(exclude_none=True) for citation in citations],
+                "contexts": [
+                    {
+                        "index": citation.index,
+                        "content": content,
+                        "citation": citation.model_dump(exclude_none=True),
+                    }
+                    for citation, content in zip(citations, contents, strict=True)
+                ],
+            },
+        )
+
+
 class FakeClient:
     def __init__(self, responses: list[object]) -> None:
         self.responses = list(responses)
@@ -746,6 +781,24 @@ def test_executor_answers_routed_policy_from_evidence_without_model_provider(mon
     assert "Dieu 5 quy dinh dieu kien du thi. [1]" in result.answer
     assert rag_tool.calls == 1
     assert client.calls == []
+
+
+def test_executor_selects_the_most_relevant_policy_context(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    registry = ToolRegistry()
+    rag_tool = NoisyRagTool(found=True)
+    registry.register(rag_tool)
+    client = FakeClient([])
+
+    agent = SmartCampusAgent(client=client, registry=registry, proposal_store=FakeStore())
+    result = agent.answer_query(user=_user(), message="Dieu kien du thi ket thuc hoc phan la gi?")
+
+    assert result.answer_type == "answer"
+    assert result.citations is not None
+    assert [citation.source_file for citation in result.citations] == ["undergrad-exam.pdf"]
+    assert "dang ky mon hoc hop le" in result.answer
+    assert "cao hoc" not in result.answer
+    assert "ban giao danh sach" not in result.answer
 
 
 def test_executor_returns_fallback_when_rag_has_no_evidence(monkeypatch):

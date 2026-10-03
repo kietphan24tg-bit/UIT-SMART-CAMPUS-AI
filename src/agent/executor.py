@@ -174,6 +174,7 @@ class SmartCampusAgent:
                 if rag_result is not None:
                     return self._grounded_rag_answer(
                         rag_result,
+                        query=normalized_message,
                         trace=trace,
                         request_id=request_id,
                     )
@@ -185,6 +186,7 @@ class SmartCampusAgent:
                     if rag_result is not None:
                         return self._grounded_rag_answer(
                             rag_result,
+                            query=normalized_message,
                             trace=trace,
                             request_id=request_id,
                         )
@@ -247,6 +249,7 @@ class SmartCampusAgent:
                     if rag_result is not None:
                         return self._grounded_rag_answer(
                             rag_result,
+                            query=normalized_message,
                             trace=trace,
                             request_id=request_id,
                         )
@@ -716,6 +719,7 @@ class SmartCampusAgent:
 
         grounded = self._grounded_rag_answer(
             result,
+            query=message,
             trace=tool_trace,
             request_id=context.request_id,
         )
@@ -736,6 +740,7 @@ class SmartCampusAgent:
         self,
         result: ToolResult,
         *,
+        query: str,
         trace: list[AgentTraceStep],
         request_id: str,
     ) -> AgentQueryResult:
@@ -747,10 +752,9 @@ class SmartCampusAgent:
             if citation.index is not None
         }
         contexts = data.get("contexts") or []
-        answer_lines: list[str] = []
-        used_citations: list[Citation] = []
+        candidates: list[tuple[float, int, str, Citation]] = []
 
-        for item in contexts:
+        for position, item in enumerate(contexts):
             if not isinstance(item, dict):
                 continue
             index = item.get("index")
@@ -761,12 +765,11 @@ class SmartCampusAgent:
                 continue
             excerpt = re.sub(r"\s+", " ", content).strip()
             excerpt = limit_text(excerpt, 1_400)
-            answer_lines.append(f"- {excerpt} [{index}]")
-            used_citations.append(citation_by_index[index])
-            if len(answer_lines) >= 3:
-                break
+            citation = citation_by_index[index]
+            score = self._policy_context_score(query, excerpt, citation.heading_path or "")
+            candidates.append((score, -position, f"- {excerpt} [{index}]", citation))
 
-        if not answer_lines:
+        if not candidates:
             return self._simple_answer(
                 "Mình chưa đủ căn cứ để trả lời chắc chắn vì evidence chưa có trích dẫn hợp lệ.",
                 trace=[
@@ -779,11 +782,12 @@ class SmartCampusAgent:
                 confidence=self._rag_confidence(result),
             )
 
-        answer = "Theo tài liệu UIT được truy xuất:\n" + "\n".join(answer_lines)
+        _, _, answer_line, citation = max(candidates, key=lambda item: (item[0], item[1]))
+        answer = "Theo tài liệu UIT được truy xuất:\n" + answer_line
         return AgentQueryResult(
             answer_type="answer",
             answer=limit_text(answer, settings.agent_max_answer_chars),
-            citations=used_citations,
+            citations=[citation],
             trace=[
                 *trace,
                 AgentTraceStep(type="answer", label="Đã trích xuất câu trả lời từ evidence", status="completed"),
@@ -791,6 +795,34 @@ class SmartCampusAgent:
             fallback_reason=None,
             confidence=self._rag_confidence(result),
         )
+
+    @staticmethod
+    def _policy_context_score(query: str, content: str, heading: str) -> float:
+        def _normalize(value: str) -> str:
+            value = value.replace("đ", "d").replace("Đ", "D")
+            normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+            return " ".join(re.findall(r"[a-z0-9]+", normalized.lower()))
+
+        normalized_query = _normalize(query)
+        normalized_heading = _normalize(heading)
+        normalized_content = _normalize(content)
+        stop_words = {"cho", "cua", "khi", "la", "gi", "nao", "mot", "cac", "the", "voi"}
+        query_tokens = {
+            token
+            for token in normalized_query.split()
+            if len(token) >= 2 and token not in stop_words
+        }
+        heading_tokens = set(normalized_heading.split())
+        content_tokens = set(normalized_content.split())
+        score = (len(query_tokens & heading_tokens) * 4.0) + len(query_tokens & content_tokens)
+
+        query_parts = normalized_query.split()
+        for size in range(min(4, len(query_parts)), 1, -1):
+            for start in range(len(query_parts) - size + 1):
+                phrase = " ".join(query_parts[start : start + size])
+                if phrase in normalized_heading:
+                    score += size * 3.0
+        return score
 
     def _execute_read_tool(
         self,
