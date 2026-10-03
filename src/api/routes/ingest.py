@@ -45,6 +45,9 @@ def _enforce_ingest_limit(scope: str) -> None:
         RateLimitPolicy(
             limit=settings.agent_ingest_rate_limit_per_hour,
             window_seconds=3600,
-            fail_closed=True,
+            # Ingestion is already protected by AI_ADMIN_TOKEN. Keep the
+            # per-process limiter available when a deployment intentionally
+            # runs without Redis instead of blocking all maintenance calls.
+            fail_closed=False,
         ),
     )
