@@ -43,7 +43,7 @@ class ReadTool(AgentTool):
     def _execute_validated(self, context: ToolContext, arguments: BaseModel) -> ToolResult:
         del context, arguments
         self.calls += 1
-        return ToolResult(ok=True, tool=self.name, status="success", data={"items": ["Mon 1-3"]})
+        return self.outcome or ToolResult(ok=True, tool=self.name, status="success", data={"items": ["Mon 1-3"]})
 
 
 class ActionTool(AgentTool):
@@ -330,6 +330,80 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
         ("answer", "completed"),
     ]
     assert result.trace[1].tool == "get_current_schedule"
+
+
+def test_executor_filters_today_schedule_before_sending_result_to_model(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    read_tool = ReadTool()
+    read_tool.outcome = ToolResult(
+        ok=True,
+        tool=read_tool.name,
+        status="success",
+        data={
+            "id": "semester-current",
+            "sessions": [
+                {"id": "monday", "dayOfWeek": 1, "startTime": "07:30"},
+                {"id": "saturday", "dayOfWeek": 6, "startTime": "09:00"},
+            ],
+        },
+    )
+    registry = ToolRegistry()
+    registry.register(read_tool)
+    client = FakeClient([
+        _response_with_call("get_current_schedule", {}),
+        _response_with_text("Hôm nay bạn có một buổi học."),
+    ])
+    agent = SmartCampusAgent(
+        client=client,
+        registry=registry,
+        proposal_store=FakeStore(),
+        now_provider=lambda: datetime(2026, 10, 3, 2, 0, tzinfo=UTC),
+    )
+
+    result = agent.answer_query(user=_user(), message="Lịch học hôm nay?", session_id="s-today")
+
+    assert result.answer_type == "answer"
+    tool_payload = client.calls[1]["messages"][-1]["content"]
+    assert '"id":"saturday"' in tool_payload
+    assert '"id":"monday"' not in tool_payload
+    assert '"dayOfWeek":6' in tool_payload
+    assert '"date":"2026-10-03"' in tool_payload
+
+
+def test_executor_keeps_full_current_schedule_for_week_query(monkeypatch):
+    monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
+    read_tool = ReadTool()
+    read_tool.outcome = ToolResult(
+        ok=True,
+        tool=read_tool.name,
+        status="success",
+        data={
+            "sessions": [
+                {"id": "monday", "dayOfWeek": 1},
+                {"id": "saturday", "dayOfWeek": 6},
+            ],
+        },
+    )
+    registry = ToolRegistry()
+    registry.register(read_tool)
+    client = FakeClient([
+        _response_with_call("get_current_schedule", {}),
+        _response_with_text("Tuần này bạn có hai buổi học."),
+    ])
+    agent = SmartCampusAgent(
+        client=client,
+        registry=registry,
+        proposal_store=FakeStore(),
+        now_provider=lambda: datetime(2026, 10, 3, 2, 0, tzinfo=UTC),
+    )
+
+    result = agent.answer_query(user=_user(), message="Lịch học tuần này?", session_id="s-week")
+
+    assert result.answer_type == "answer"
+    tool_payload = client.calls[1]["messages"][-1]["content"]
+    assert '"id":"monday"' in tool_payload
+    assert '"id":"saturday"' in tool_payload
+    assert "scheduleScope" not in tool_payload
 
 
 def test_executor_returns_clarification_when_required_tool_argument_is_missing(monkeypatch):

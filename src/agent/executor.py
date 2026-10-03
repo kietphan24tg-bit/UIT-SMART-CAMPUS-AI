@@ -5,6 +5,8 @@ import logging
 import re
 import time
 import unicodedata
+from collections.abc import Callable
+from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -16,7 +18,7 @@ from src.agent.model_client import (
     create_agent_model_client,
 )
 from src.agent.models import AgentProposalExecutionResult, AgentQueryResult, AgentTraceStep, ProposalPreview
-from src.agent.prompt import build_agent_system_prompt
+from src.agent.prompt import AGENT_TIMEZONE, build_agent_system_prompt
 from src.agent.proposals import (
     AuditEvent,
     ProposalStore,
@@ -54,12 +56,14 @@ class SmartCampusAgent:
         client: AgentModelClient | None = None,
         registry: ToolRegistry | None = None,
         proposal_store: ProposalStore | None = None,
+        now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         # Build the configured provider lazily so application startup and
         # fixture-only tests do not require provider credentials.
         self.client = client
         self.registry = registry or build_tool_registry()
         self.proposal_store = proposal_store or ProposalStore()
+        self._now_provider = now_provider or (lambda: datetime.now(AGENT_TIMEZONE))
 
     def answer_query(
         self,
@@ -93,7 +97,8 @@ class SmartCampusAgent:
             session_id=session_id,
         )
         messages = self._build_messages(normalized_history, normalized_message)
-        system_prompt = build_agent_system_prompt()
+        current_time = self._now_provider()
+        system_prompt = build_agent_system_prompt(current_time)
         trace = [
             AgentTraceStep(
                 type="analysis",
@@ -270,6 +275,12 @@ class SmartCampusAgent:
                     )
 
                 result = self._execute_read_tool(tool, context, validated, deadline)
+                if tool.name == "get_current_schedule":
+                    result = self._scope_current_schedule_result(
+                        result,
+                        message=normalized_message,
+                        now=current_time,
+                    )
                 if tool.name == "search_university_policies":
                     if not result.ok:
                         return self._simple_answer(
@@ -575,6 +586,54 @@ class SmartCampusAgent:
             if time.monotonic() < deadline:
                 result = tool.execute(context, arguments)
         return result
+
+    @staticmethod
+    def _scope_current_schedule_result(
+        result: ToolResult,
+        *,
+        message: str,
+        now: datetime,
+    ) -> ToolResult:
+        """Reduce today's schedule before exposing it to the model."""
+        if not result.ok or not isinstance(result.data, dict):
+            return result
+
+        normalized = (
+            unicodedata.normalize("NFKD", message)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+            .lower()
+        )
+        if not any(phrase in normalized for phrase in ("hom nay", "today")):
+            return result
+
+        sessions = result.data.get("sessions")
+        if not isinstance(sessions, list):
+            return result
+
+        if now.tzinfo is None:
+            local_now = now.replace(tzinfo=AGENT_TIMEZONE)
+        else:
+            local_now = now.astimezone(AGENT_TIMEZONE)
+        day_of_week = (local_now.weekday() + 1) % 7
+        scoped_sessions = [
+            session
+            for session in sessions
+            if isinstance(session, dict) and session.get("dayOfWeek") == day_of_week
+        ]
+        return result.model_copy(
+            update={
+                "data": {
+                    **result.data,
+                    "sessions": scoped_sessions,
+                    "scheduleScope": {
+                        "kind": "today",
+                        "date": local_now.date().isoformat(),
+                        "dayOfWeek": day_of_week,
+                    },
+                }
+            }
+        )
 
     def _is_action_enabled(self, tool: AgentTool) -> bool:
         allowed_risk_levels = {
