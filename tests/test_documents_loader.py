@@ -36,3 +36,24 @@ def test_load_markdown_document_parses_frontmatter(tmp_path):
     assert document.metadata.source_file == "doc.pdf"
     assert document.metadata.source_unit == "DAA"
     assert document.body.startswith("# Title")
+
+
+def test_load_markdown_document_fills_known_official_source_url(tmp_path):
+    path = tmp_path / "policy.md"
+    path.write_text(
+        "---\n"
+        "source_file: daa-159-qd-dhcntt_05-03-2024_ban_hanh_quy_dinh_kltn.pdf\n"
+        "source_url: null\n"
+        "source_unit: DAA\n"
+        "category: policy\n"
+        "extraction_status: ok\n"
+        "---\nPolicy",
+        encoding="utf-8",
+    )
+
+    document = load_markdown_document(path)
+
+    assert document.metadata.source_url == (
+        "https://student.uit.edu.vn/sites/daa/files/202410/"
+        "159-qd-dhcntt_05-03-2024_ban_hanh_quy_dinh_kltn.pdf"
+    )

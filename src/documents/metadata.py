@@ -4,6 +4,8 @@ from typing import Any
 
 import yaml
 
+from src.documents.source_catalog import official_source_url
+
 
 FRONTMATTER_DELIMITER = "---"
 
@@ -82,7 +84,7 @@ def metadata_from_dict(data: dict[str, Any], fallback_path: Path | None = None) 
         title=repair_mojibake(data.get("title")),
         source_file=source_file,
         source_path=data.get("source_path"),
-        source_url=data.get("source_url"),
+        source_url=data.get("source_url") or official_source_url(source_file),
         source_unit=str(data.get("source_unit") or "unknown"),
         source_type=data.get("source_type"),
         category=str(data.get("category") or "unknown"),
