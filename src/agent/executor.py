@@ -16,7 +16,7 @@ from src.agent.model_client import (
     create_agent_model_client,
 )
 from src.agent.models import AgentProposalExecutionResult, AgentQueryResult, AgentTraceStep, ProposalPreview
-from src.agent.prompt import AGENT_SYSTEM_PROMPT
+from src.agent.prompt import build_agent_system_prompt
 from src.agent.proposals import (
     AuditEvent,
     ProposalStore,
@@ -93,6 +93,7 @@ class SmartCampusAgent:
             session_id=session_id,
         )
         messages = self._build_messages(normalized_history, normalized_message)
+        system_prompt = build_agent_system_prompt()
         trace = [
             AgentTraceStep(
                 type="analysis",
@@ -117,7 +118,7 @@ class SmartCampusAgent:
                 _, orchestration_model = agent_orchestration_contract(settings)
                 response = self.client.generate(
                     model=orchestration_model,
-                    system_prompt=AGENT_SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
                     messages=messages,
                     tools=self.registry.definitions_for_query(user.role, normalized_message),
                     require_tool_call=require_tool_call,

@@ -317,6 +317,8 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
     assert "Mon 1-3" in result.answer
     assert read_tool.calls == 1
     assert len(client.calls) == 2
+    assert "Asia/Ho_Chi_Minh" in client.calls[0]["system_prompt"]
+    assert "Never ask the user what today's date" in client.calls[0]["system_prompt"]
     follow_up_messages = client.calls[1]["messages"]
     assert follow_up_messages[-1]["role"] == "tool"
     assert follow_up_messages[-1]["tool_call_id"] == "call-1"

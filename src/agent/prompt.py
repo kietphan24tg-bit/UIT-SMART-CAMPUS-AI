@@ -1,3 +1,19 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+AGENT_TIMEZONE_NAME = "Asia/Ho_Chi_Minh"
+
+try:
+    AGENT_TIMEZONE = ZoneInfo(AGENT_TIMEZONE_NAME)
+except ZoneInfoNotFoundError:
+    # Vietnam uses UTC+07:00 year-round. This fallback supports Windows hosts
+    # that do not provide an IANA timezone database.
+    AGENT_TIMEZONE = timezone(timedelta(hours=7), name=AGENT_TIMEZONE_NAME)
+
+
 AGENT_SYSTEM_PROMPT = """
 You are the UIT Smart Campus AI assistant. Answer users in clear, concise, natural Vietnamese.
 
@@ -13,3 +29,40 @@ Mandatory rules:
 9. If a tool returns no matching data, say that the system currently has no matching data.
 10. Never mention APIs, JSON, function calling, schemas, or internal system names.
 """.strip()
+
+
+_VIETNAMESE_WEEKDAYS = (
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy",
+    "Chủ Nhật",
+)
+
+
+def build_agent_system_prompt(now: datetime | None = None) -> str:
+    current = now or datetime.now(AGENT_TIMEZONE)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=AGENT_TIMEZONE)
+    else:
+        current = current.astimezone(AGENT_TIMEZONE)
+
+    weekday = _VIETNAMESE_WEEKDAYS[current.weekday()]
+    temporal_context = f"""
+Trusted system time context:
+- Timezone: {AGENT_TIMEZONE_NAME} (UTC+07:00).
+- Current timestamp: {current:%Y-%m-%d %H:%M:%S}.
+- Today is {weekday}, {current:%d/%m/%Y}.
+- "Tuần này" means Monday through Sunday containing the current date.
+- Schedule data uses dayOfWeek: 0=Sunday, 1=Monday, ..., 6=Saturday.
+
+Schedule rules:
+- For "hôm nay", "tuần này", or the current schedule, call `get_current_schedule` before answering.
+- Never ask the user what today's date or weekday is.
+- For "hôm nay", include only sessions whose dayOfWeek matches today.
+- For "tuần này", include current-semester sessions ordered by weekday.
+- Say there is no schedule only when the tool returned data and no session matches the requested period.
+""".strip()
+    return f"{AGENT_SYSTEM_PROMPT}\n\n{temporal_context}"
