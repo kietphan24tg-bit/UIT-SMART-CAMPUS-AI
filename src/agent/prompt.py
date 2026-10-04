@@ -59,6 +59,8 @@ Trusted system time context:
 - Schedule data uses dayOfWeek: 0=Sunday, 1=Monday, ..., 6=Saturday.
 
 Schedule rules:
+- When the tool returns `scheduleScope.kind = week`, use its exact `weekStart` and `weekEnd`; never derive a different week range from the session list.
+- For a "this week" request, include that authoritative range in the answer.
 - For "hôm nay", "tuần này", or the current schedule, call `get_current_schedule` before answering.
 - Never ask the user what today's date or weekday is.
 - For "hôm nay", include only sessions whose dayOfWeek matches today.

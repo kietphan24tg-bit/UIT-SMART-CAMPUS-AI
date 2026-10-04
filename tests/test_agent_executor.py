@@ -571,7 +571,10 @@ def test_executor_keeps_full_current_schedule_for_week_query(monkeypatch):
     tool_payload = client.calls[1]["messages"][-1]["content"]
     assert '"id":"monday"' in tool_payload
     assert '"id":"saturday"' in tool_payload
-    assert "scheduleScope" not in tool_payload
+    assert '"kind":"week"' in tool_payload
+    assert '"weekStart":"2026-09-28"' in tool_payload
+    assert '"weekEnd":"2026-10-04"' in tool_payload
+    assert '"timezone":"Asia/Ho_Chi_Minh"' in tool_payload
 
 
 def test_executor_returns_clarification_when_required_tool_argument_is_missing(monkeypatch):

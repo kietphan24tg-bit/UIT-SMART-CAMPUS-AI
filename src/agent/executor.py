@@ -6,7 +6,7 @@ import re
 import time
 import unicodedata
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -19,7 +19,7 @@ from src.agent.model_client import (
     create_agent_model_client,
 )
 from src.agent.models import AgentProposalExecutionResult, AgentQueryResult, AgentTraceStep, ProposalPreview
-from src.agent.prompt import AGENT_TIMEZONE, build_agent_system_prompt
+from src.agent.prompt import AGENT_TIMEZONE, AGENT_TIMEZONE_NAME, build_agent_system_prompt
 from src.agent.proposals import (
     AuditEvent,
     ProposalStore,
@@ -878,13 +878,32 @@ class SmartCampusAgent:
             .decode("ascii")
             .lower()
         )
-        if not any(phrase in normalized for phrase in ("hom nay", "today")):
-            return result.model_copy(update={"data": {**result.data, "sessions": normalized_sessions}})
-
         if now.tzinfo is None:
             local_now = now.replace(tzinfo=AGENT_TIMEZONE)
         else:
             local_now = now.astimezone(AGENT_TIMEZONE)
+
+        if any(phrase in normalized for phrase in ("tuan nay", "this week")):
+            week_start = local_now.date() - timedelta(days=local_now.weekday())
+            week_end = week_start + timedelta(days=6)
+            return result.model_copy(
+                update={
+                    "data": {
+                        **result.data,
+                        "sessions": normalized_sessions,
+                        "scheduleScope": {
+                            "kind": "week",
+                            "weekStart": week_start.isoformat(),
+                            "weekEnd": week_end.isoformat(),
+                            "timezone": AGENT_TIMEZONE_NAME,
+                        },
+                    }
+                }
+            )
+
+        if not any(phrase in normalized for phrase in ("hom nay", "today")):
+            return result.model_copy(update={"data": {**result.data, "sessions": normalized_sessions}})
+
         day_of_week = (local_now.weekday() + 1) % 7
         scoped_sessions = [
             session
