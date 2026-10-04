@@ -65,4 +65,11 @@ Schedule rules:
 - For "tuần này", include current-semester sessions ordered by weekday.
 - Say there is no schedule only when the tool returned data and no session matches the requested period.
 """.strip()
-    return f"{AGENT_SYSTEM_PROMPT}\n\n{temporal_context}"
+    structured_data_policy = """
+Structured live-data rules:
+- For schedules, the structured `instructor` field is authoritative. Never infer or replace it from `note`; notes may be stale or descriptive.
+- For grades, distinguish courses with any published component score from courses with no scores. Do not say that no scores exist when the structured grade summary reports published components.
+- For attendance, use the normalized effective status and local Vietnam timestamps supplied by the tool. If an `active` source record has an expiry time in the past, report it as expired.
+- Do not add facts that are absent from the tool result. When a summary and individual rows disagree, follow the structured summary and rows, and state the inconsistency briefly instead of guessing.
+""".strip()
+    return f"{AGENT_SYSTEM_PROMPT}\n\n{structured_data_policy}\n\n{temporal_context}"

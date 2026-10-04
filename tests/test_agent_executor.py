@@ -482,6 +482,62 @@ def test_executor_filters_today_schedule_before_sending_result_to_model(monkeypa
     assert '"date":"2026-10-03"' in tool_payload
 
 
+def test_executor_prefers_structured_instructor_over_legacy_note():
+    result = ToolResult(
+        ok=True,
+        tool="get_current_schedule",
+        status="success",
+        data={"sessions": [{"instructor": "Nguyen Hoang Phuc", "note": "Giang vien: Old Name", "dayOfWeek": 1}]},
+    )
+    normalized = SmartCampusAgent._scope_current_schedule_result(
+        result,
+        message="Lich hoc tuan nay",
+        now=datetime(2026, 10, 4, tzinfo=UTC),
+    )
+    session = normalized.data["sessions"][0]
+    assert session["instructor"] == "Nguyen Hoang Phuc"
+    assert "note" not in session
+    assert "authoritative" in session["dataPolicy"]
+
+
+def test_executor_adds_grade_summary_for_component_and_final_scores():
+    result = ToolResult(
+        ok=True,
+        tool="get_current_grades",
+        status="success",
+        data={"grades": [{"course": {"code": "SE104"}, "assignment": 10, "totalScore": None}, {"course": {"code": "SE105"}}]},
+    )
+    normalized = SmartCampusAgent._normalize_grade_result(result)
+    assert normalized.data["gradeSummary"] == {
+        "totalCourses": 2,
+        "coursesWithPublishedComponents": 1,
+        "coursesWithFinalGrade": 0,
+        "coursesPendingFinalGrade": 2,
+        "dataPolicy": "published component scores are not the same as a finalized course grade",
+    }
+
+
+def test_executor_normalizes_expired_attendance_and_local_time():
+    result = ToolResult(
+        ok=True,
+        tool="get_my_attendance_history",
+        status="success",
+        data={"items": [{
+            "checkinTime": "2026-04-27T06:00:00Z",
+            "session": {"status": "active", "expiresAt": "2026-04-27T07:00:00Z"},
+        }]},
+    )
+    normalized = SmartCampusAgent._normalize_attendance_result(
+        result,
+        now=datetime(2026, 10, 4, tzinfo=UTC),
+    )
+    item = normalized.data["items"][0]
+    assert item["session"]["status"] == "expired"
+    assert item["session"]["sourceStatus"] == "active"
+    assert item["checkinTimeLocal"].endswith("+07:00")
+    assert normalized.data["displayTimezone"] == "Asia/Ho_Chi_Minh (UTC+07:00)"
+
+
 def test_executor_keeps_full_current_schedule_for_week_query(monkeypatch):
     monkeypatch.setattr("src.agent.executor.settings.agent_model", "gemini-test")
     read_tool = ReadTool()

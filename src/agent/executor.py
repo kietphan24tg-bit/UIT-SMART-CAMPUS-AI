@@ -346,6 +346,10 @@ class SmartCampusAgent:
                         message=normalized_message,
                         now=current_time,
                     )
+                if tool.name == "get_current_grades":
+                    result = self._normalize_grade_result(result)
+                if tool.name == "get_my_attendance_history":
+                    result = self._normalize_attendance_result(result, now=current_time)
                 if mandatory_tool_name == "get_all_grades" and tool.name == "get_all_grades":
                     result = self._scope_latest_grade_result(result)
                 if tool.name == "search_university_policies":
@@ -849,6 +853,25 @@ class SmartCampusAgent:
         if not result.ok or not isinstance(result.data, dict):
             return result
 
+        sessions = result.data.get("sessions")
+        if not isinstance(sessions, list):
+            return result
+
+        normalized_sessions = []
+        for session in sessions:
+            if not isinstance(session, dict):
+                continue
+            normalized_session = {
+                key: value
+                for key, value in session.items()
+                if not (key == "note" and session.get("instructor"))
+            }
+            if session.get("instructor"):
+                normalized_session["dataPolicy"] = (
+                    "instructor field is authoritative; do not infer it from note"
+                )
+            normalized_sessions.append(normalized_session)
+
         normalized = (
             unicodedata.normalize("NFKD", message)
             .encode("ascii", "ignore")
@@ -856,11 +879,7 @@ class SmartCampusAgent:
             .lower()
         )
         if not any(phrase in normalized for phrase in ("hom nay", "today")):
-            return result
-
-        sessions = result.data.get("sessions")
-        if not isinstance(sessions, list):
-            return result
+            return result.model_copy(update={"data": {**result.data, "sessions": normalized_sessions}})
 
         if now.tzinfo is None:
             local_now = now.replace(tzinfo=AGENT_TIMEZONE)
@@ -869,7 +888,7 @@ class SmartCampusAgent:
         day_of_week = (local_now.weekday() + 1) % 7
         scoped_sessions = [
             session
-            for session in sessions
+            for session in normalized_sessions
             if isinstance(session, dict) and session.get("dayOfWeek") == day_of_week
         ]
         return result.model_copy(
@@ -885,6 +904,90 @@ class SmartCampusAgent:
                 }
             }
         )
+
+    @staticmethod
+    def _normalize_grade_result(result: ToolResult) -> ToolResult:
+        """Add deterministic grade counts so the model cannot contradict rows."""
+        if not result.ok or not isinstance(result.data, dict):
+            return result
+        grades = result.data.get("grades")
+        if not isinstance(grades, list):
+            return result
+
+        component_fields = (
+            "totalScore", "finalScore", "gradePoint", "letterGrade",
+            "midterm", "finalExam", "assignment", "processScore", "practiceScore",
+        )
+        component_count = sum(
+            1 for grade in grades
+            if isinstance(grade, dict) and any(grade.get(field) is not None for field in component_fields)
+        )
+        final_count = sum(
+            1 for grade in grades
+            if isinstance(grade, dict)
+            and any(grade.get(field) is not None for field in ("totalScore", "finalScore", "gradePoint", "letterGrade"))
+        )
+        summary = {
+            "totalCourses": len(grades),
+            "coursesWithPublishedComponents": component_count,
+            "coursesWithFinalGrade": final_count,
+            "coursesPendingFinalGrade": max(len(grades) - final_count, 0),
+            "dataPolicy": "published component scores are not the same as a finalized course grade",
+        }
+        return result.model_copy(update={"data": {**result.data, "gradeSummary": summary}})
+
+    @staticmethod
+    def _normalize_attendance_result(result: ToolResult, *, now: datetime) -> ToolResult:
+        """Normalize expired records and provide Vietnam-local display timestamps."""
+        if not result.ok or not isinstance(result.data, dict):
+            return result
+        items = result.data.get("items")
+        if not isinstance(items, list):
+            return result
+
+        local_now = now.replace(tzinfo=AGENT_TIMEZONE) if now.tzinfo is None else now.astimezone(AGENT_TIMEZONE)
+
+        def parse_datetime(value: object) -> datetime | None:
+            if not isinstance(value, str) or not value:
+                return None
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            return parsed.replace(tzinfo=AGENT_TIMEZONE) if parsed.tzinfo is None else parsed
+
+        normalized_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            normalized_item = dict(item)
+            session = item.get("session")
+            if isinstance(session, dict):
+                normalized_session = dict(session)
+                expires_at = parse_datetime(session.get("expiresAt"))
+                source_status = session.get("status")
+                effective_status = source_status
+                if source_status == "active" and expires_at and expires_at.astimezone(AGENT_TIMEZONE) <= local_now:
+                    effective_status = "expired"
+                if source_status != effective_status:
+                    normalized_session["sourceStatus"] = source_status
+                normalized_session["status"] = effective_status
+                normalized_session["statusPolicy"] = "status is effective at query time"
+                if expires_at:
+                    normalized_session["expiresAtLocal"] = expires_at.astimezone(AGENT_TIMEZONE).isoformat()
+                normalized_item["session"] = normalized_session
+            checkin = parse_datetime(item.get("checkinTime"))
+            if checkin:
+                normalized_item["checkinTimeLocal"] = checkin.astimezone(AGENT_TIMEZONE).isoformat()
+            normalized_items.append(normalized_item)
+
+        return result.model_copy(update={
+            "data": {
+                **result.data,
+                "items": normalized_items,
+                "displayTimezone": "Asia/Ho_Chi_Minh (UTC+07:00)",
+            }
+        })
 
     @staticmethod
     def _scope_latest_grade_result(result: ToolResult) -> ToolResult:
