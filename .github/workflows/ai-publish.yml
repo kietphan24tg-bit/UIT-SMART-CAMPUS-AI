@@ -13,6 +13,7 @@ env:
   COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
   COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
   AI_ADMIN_TOKEN: ${{ secrets.AI_ADMIN_TOKEN }}
+  GROQ_KEY: ${{ secrets.GROQ_KEY }}
 
 jobs:
   staging:
@@ -80,6 +81,10 @@ jobs:
             echo "Missing AI_ADMIN_TOKEN"
             exit 1
           fi
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ] && [ -n "$COOLIFY_DEPLOY_WEBHOOK" ] && [ -z "$GROQ_KEY" ]; then
+            echo "Missing GROQ_KEY"
+            exit 1
+          fi
         shell: bash
 
       - name: Set up Docker Buildx
@@ -114,7 +119,7 @@ jobs:
           curl --fail --show-error --silent --request POST "$RENDER_DEPLOY_HOOK_URL"
         shell: bash
 
-      - name: Configure AI admin token in Coolify
+      - name: Configure AI secrets in Coolify
         if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' && env.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
           COOLIFY_BASE_URL="$(python -c 'import sys; from urllib.parse import urlsplit; value=urlsplit(sys.argv[1]); print(f"{value.scheme}://{value.netloc}")' "$COOLIFY_DEPLOY_WEBHOOK")"
@@ -129,18 +134,28 @@ jobs:
             "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
             --output "$ENVS_FILE"
 
-          PAYLOAD="$(jq -nc --arg value "$AI_ADMIN_TOKEN" '{key:"AI_ADMIN_TOKEN",value:$value,is_preview:false,is_literal:true,is_shown_once:true}')"
-          if jq -e '.[]? | select(.key == "AI_ADMIN_TOKEN")' "$ENVS_FILE" >/dev/null; then
-            METHOD=PATCH
-          else
-            METHOD=POST
-          fi
-          curl --fail --show-error --silent --request "$METHOD" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD" \
-            "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
-            >/dev/null
+          upsert_env() {
+            local key="$1"
+            local value="$2"
+            local payload
+            local method
+
+            payload="$(jq -nc --arg key "$key" --arg value "$value" '{key:$key,value:$value,is_preview:false,is_literal:true,is_shown_once:true}')"
+            if jq -e --arg key "$key" '.[]? | select(.key == $key)' "$ENVS_FILE" >/dev/null; then
+              method=PATCH
+            else
+              method=POST
+            fi
+            curl --fail --show-error --silent --request "$method" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload" \
+              "$COOLIFY_BASE_URL/api/v1/applications/$COOLIFY_APP_UUID/envs" \
+              >/dev/null
+          }
+
+          upsert_env "AI_ADMIN_TOKEN" "$AI_ADMIN_TOKEN"
+          upsert_env "GROQ_KEY" "$GROQ_KEY"
 
           IMAGE_PAYLOAD="$(jq -nc \
             --arg name "$IMAGE_NAME" \
