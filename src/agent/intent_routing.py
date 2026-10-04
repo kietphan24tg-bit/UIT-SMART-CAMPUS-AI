@@ -36,7 +36,7 @@ def route_personal_read_intent(message: str) -> str | None:
     asks_current_time = any(phrase in text for phrase in ("hom nay", "tuan nay", "hien tai"))
     asks_schedule = any(
         phrase in text
-        for phrase in ("lich hoc", "thoi khoa bieu", "toi hoc mon gi", "hoc mon gi")
+        for phrase in ("lich hoc", "thoi khoa bieu", "toi hoc mon gi", "hoc mon gi", "phong hoc")
     )
     if asks_current_time and asks_schedule:
         return "get_current_schedule"

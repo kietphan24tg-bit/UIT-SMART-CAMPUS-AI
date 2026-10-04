@@ -1,6 +1,10 @@
 from src.agent.intent_routing import route_personal_read_intent
 
 
+def test_routes_today_room_question_to_current_schedule() -> None:
+    assert route_personal_read_intent("Phong hoc hom nay o dau?") == "get_current_schedule"
+
+
 def test_routes_current_week_schedule_paraphrases() -> None:
     assert route_personal_read_intent("Tuần này tôi học môn gì?") == "get_current_schedule"
     assert route_personal_read_intent("Lịch học tuần này của tôi gồm gì?") == "get_current_schedule"
