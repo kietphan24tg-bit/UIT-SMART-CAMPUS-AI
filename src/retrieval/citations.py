@@ -23,10 +23,13 @@ def score_from_distance(distance: float | None) -> float:
 def citation_from_result(result: dict, index: int | None = None) -> Citation:
     metadata = result.get("metadata") or {}
     distance = result.get("distance")
+    source_type = result.get("source_type") or metadata.get("source_type")
+    source_url = result.get("source_url") or metadata.get("source_url")
     return Citation(
         index=index,
+        source_type="system" if source_type == "system" else "rag",
         source_file=result.get("source_file") or metadata.get("source_file") or "unknown",
-        source_url=result.get("source_url") or metadata.get("source_url"),
+        source_url=source_url if isinstance(source_url, str) and source_url.strip() else None,
         source_unit=result.get("source_unit") or metadata.get("source_unit"),
         category=result.get("category") or metadata.get("category"),
         heading_path=result.get("heading_path") or metadata.get("heading_path"),

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,7 @@ class RagQueryRequest(BaseModel):
 
 class Citation(BaseModel):
     index: int | None = None
+    source_type: Literal["rag", "system"] = "rag"
     source_file: str
     source_url: str | None = None
     source_unit: str | None = None

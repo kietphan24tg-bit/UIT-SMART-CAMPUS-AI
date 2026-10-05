@@ -384,6 +384,11 @@ def test_executor_executes_read_tool_and_returns_final_answer(monkeypatch):
 
     assert result.answer_type == "answer"
     assert "Mon 1-3" in result.answer
+    assert result.confidence == 0.95
+    assert len(result.citations) == 1
+    assert result.citations[0].source_type == "system"
+    assert result.citations[0].source_file == "Dữ liệu UIT Smart Campus"
+    assert result.citations[0].heading_path == read_tool.display_name
     assert read_tool.calls == 1
     assert len(client.calls) == 2
     assert "Asia/Ho_Chi_Minh" in client.calls[0]["system_prompt"]
@@ -818,6 +823,8 @@ def test_executor_uses_rag_evidence_and_returns_citations(monkeypatch):
     assert result.citations is not None
     assert len(result.citations) == 1
     assert result.citations[0].index == 1
+    assert result.citations[0].source_type == "rag"
+    assert result.confidence == 0.91
     assert "[9]" not in result.answer
     assert rag_tool.calls == 1
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -36,7 +36,7 @@ class AgentQueryResult:
     answer_type: str
     answer: str
     proposal: ProposalPreview | None = None
-    citations: list[Citation] | None = None
+    citations: list[Citation] = field(default_factory=list)
     trace: list[AgentTraceStep] | None = None
     fallback_reason: str | None = None
     confidence: float | None = None

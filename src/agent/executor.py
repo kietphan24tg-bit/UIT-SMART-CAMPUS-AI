@@ -40,6 +40,9 @@ logger = logging.getLogger(__name__)
 
 AGENT_HISTORY_LIMIT = 10
 AGENT_HISTORY_MAX_CHARS = 16_000
+DIRECT_READ_CONFIDENCE = 0.95
+SYSTEM_SOURCE_FILE = "Dữ liệu UIT Smart Campus"
+SYSTEM_SOURCE_UNIT = "Hệ thống UIT Smart Campus"
 
 
 class AgentProviderError(RuntimeError):
@@ -110,6 +113,8 @@ class SmartCampusAgent:
         read_calls = 0
         rag_calls = 0
         rag_citations: list[Citation] = []
+        evidence_citations: list[Citation] = []
+        evidence_confidences: list[float] = []
         rag_result: ToolResult | None = None
         seen_fingerprints: set[str] = set()
         action_routing_retry_used = False
@@ -277,7 +282,8 @@ class SmartCampusAgent:
                 return AgentQueryResult(
                     answer_type="answer",
                     answer=text,
-                    citations=citations,
+                    citations=self._finalize_evidence_citations(evidence_citations),
+                    confidence=self._combined_evidence_confidence(evidence_confidences),
                     trace=[*trace, AgentTraceStep(type="answer", label="Đã tổng hợp câu trả lời", status="completed")],
                 )
 
@@ -369,6 +375,13 @@ class SmartCampusAgent:
                         )
                     rag_result = result
                     rag_citations = self._rag_citations(result)
+                    evidence_citations.extend(rag_citations)
+                    confidence = self._result_confidence(result)
+                    if confidence is not None:
+                        evidence_confidences.append(confidence)
+                elif result.ok:
+                    evidence_citations.append(self._tool_evidence_citation(tool))
+                    evidence_confidences.append(DIRECT_READ_CONFIDENCE)
                 trace.append(
                     AgentTraceStep(
                         type="tool",
@@ -1090,6 +1103,64 @@ class SmartCampusAgent:
         if isinstance(value, (int, float)):
             return float(value)
         return None
+
+    @staticmethod
+    def _result_confidence(result: ToolResult) -> float | None:
+        data = result.data if isinstance(result.data, dict) else {}
+        value = data.get("confidence")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        confidence = float(value)
+        return confidence if 0 < confidence <= 1 else None
+
+    @staticmethod
+    def _tool_evidence_citation(tool: AgentTool) -> Citation:
+        return Citation(
+            source_type="system",
+            source_file=SYSTEM_SOURCE_FILE,
+            source_unit=SYSTEM_SOURCE_UNIT,
+            heading_path=tool.display_name,
+        )
+
+    @staticmethod
+    def _combined_evidence_confidence(confidences: list[float]) -> float | None:
+        return round(min(confidences), 4) if confidences else None
+
+    @staticmethod
+    def _finalize_evidence_citations(citations: list[Citation]) -> list[Citation]:
+        unique: list[Citation] = []
+        seen: set[tuple[str, str, str | None, int | None, int | None]] = set()
+        reserved_indices = {
+            citation.index
+            for citation in citations
+            if isinstance(citation.index, int) and citation.index > 0
+        }
+
+        for citation in citations:
+            key = (
+                citation.source_type,
+                citation.source_file,
+                citation.heading_path,
+                citation.page_start,
+                citation.page_end,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(citation)
+
+        next_index = 1
+        normalized: list[Citation] = []
+        for citation in unique:
+            index = citation.index if isinstance(citation.index, int) and citation.index > 0 else None
+            if index is None:
+                while next_index in reserved_indices:
+                    next_index += 1
+                index = next_index
+                reserved_indices.add(index)
+                next_index += 1
+            normalized.append(citation.model_copy(update={"index": index}))
+        return normalized
 
     @staticmethod
     def _rag_citations(result: ToolResult) -> list[Citation]:
